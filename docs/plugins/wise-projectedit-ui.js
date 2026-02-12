@@ -1,19 +1,20 @@
 (function () {
   "use strict";
 
-  // ============================================================
-  // Wise HireHop plugin — Project Edit dialog tidy + theme
-  // ============================================================
+  var WISE_VERSION = "v2"; // update this text when you bump ?v= and commit
 
-  // ===== PROOF OF LIFE (VISIBLE + CONSOLE + GLOBAL FLAG) =====
+  // =========================
+  // PROOF OF LIFE
+  // =========================
   (function proofOfLife() {
     window.__WISE_PLUGIN_LOADED__ = (window.__WISE_PLUGIN_LOADED__ || 0) + 1;
 
     try {
       console.warn(
         "[WiseHireHop] plugin executed",
-        window.__WISE_PLUGIN_LOADED__,
-        location.href
+        "count=" + window.__WISE_PLUGIN_LOADED__,
+        "path=" + location.pathname,
+        "ver=" + WISE_VERSION
       );
     } catch (e) {}
 
@@ -21,14 +22,14 @@
       if (document.getElementById("wise-plugin-badge")) return;
       var b = document.createElement("div");
       b.id = "wise-plugin-badge";
-      b.textContent = "Wise plugin loaded (v2)";
+      b.textContent = "Wise plugin loaded (" + WISE_VERSION + ")";
       b.style.cssText =
         "position:fixed;top:8px;left:8px;z-index:2147483647;" +
         "background:#0B1B2B;color:#F6F2EA;padding:6px 10px;border-radius:10px;" +
         "font:12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;";
       (document.body || document.documentElement).appendChild(b);
       setTimeout(function () {
-        try { b.remove(); } catch (e) {}
+        if (b && b.parentNode) b.parentNode.removeChild(b);
       }, 4000);
     }
 
@@ -43,23 +44,16 @@
     } catch (e) {}
   })();
 
-  // ------------------------------------------------------------
-  // Guards
-  // ------------------------------------------------------------
+  // =========================
+  // GUARDS
+  // =========================
   if (typeof user === "undefined") return;
-  if (!location.pathname.endsWith("/project.php")) return;
-
-  if (typeof window.jQuery === "undefined" || typeof window.$ === "undefined") {
-    try { console.warn("[WiseHireHop] jQuery not ready - abort"); } catch (e) {}
-    return;
-  }
+  if (location.pathname !== "/project.php") return;
 
   document.documentElement.classList.add("wise-theme");
 
-  // ------------------------------------------------------------
-  // CSS injection
-  // ------------------------------------------------------------
-  injectCSS(`
+  injectCSS(
+    `
 /* ------------------------------
    Wise: Project Edit Dialog
    ------------------------------ */
@@ -67,22 +61,27 @@
   border-radius: 12px;
   overflow: hidden;
 }
+
 .wise-theme .wise-proj-edit-dialog .ui-dialog-titlebar{
   background: #0B1B2B;
   border: none;
   color: #F6F2EA;
 }
+
 .wise-theme .wise-proj-edit-dialog .ui-dialog-titlebar .ui-dialog-title{
   color: #F6F2EA;
 }
+
 .wise-theme .wise-proj-edit-dialog .ui-dialog-titlebar .ui-dialog-titlebar-close{
   background: transparent;
   border: none;
 }
+
 .wise-theme .wise-proj-edit-dialog .ui-dialog-content{
   border: none;
   background: #F6F2EA;
 }
+
 .wise-theme .wise-proj-edit-dialog input.data_cell,
 .wise-theme .wise-proj-edit-dialog textarea.data_cell,
 .wise-theme .wise-proj-edit-dialog select.data_cell{
@@ -91,183 +90,157 @@
   padding: 6px 8px;
   background: #fff;
 }
+
 .wise-theme .wise-proj-edit-dialog td.label{
   font-weight: 600;
 }
-`);
 
-  // ------------------------------------------------------------
-  // Main hook: dialog open
-  // ------------------------------------------------------------
-  $(document).on("dialogopen", ".ui-dialog-content", function () {
-    var $content = $(this);
+.wise-theme .wise-proj-edit-dialog .redborder{
+  outline: 2px solid rgba(200, 30, 60, 0.35);
+}
 
-    // The project edit dialog content is usually an iframe with this id/class
-    if (!$content.is("#edit_dialog.custom_projEditFrame")) return;
+/* Optional: soften divider borders inside the dialog */
+.wise-theme .wise-proj-edit-dialog [style*="border-top:1px solid #a1a1a1"]{
+  border-top: 1px solid rgba(17,24,39,.18) !important;
+}
+.wise-theme .wise-proj-edit-dialog [style*="border-left:1px solid #a1a1a1"]{
+  border-left: 1px solid rgba(17,24,39,.18) !important;
+}
+.wise-theme .wise-proj-edit-dialog [style*="border-right:1px solid #a1a1a1"]{
+  border-right: 1px solid rgba(17,24,39,.18) !important;
+}
+`
+  );
 
-    // Style wrapper (titlebar sits outside iframe)
+  // =========================
+  // APPLY LOGIC (NO dialogopen)
+  // =========================
+  var applyScheduled = false;
+
+  function scheduleApply() {
+    if (applyScheduled) return;
+    applyScheduled = true;
+    (window.requestAnimationFrame || window.setTimeout)(function () {
+      applyScheduled = false;
+      applyIfProjectEditDialogOpen();
+    }, 0);
+  }
+
+  function applyIfProjectEditDialogOpen() {
+    // Primary target based on your DOM dump
+    var $content = window.jQuery
+      ? window.jQuery("#edit_dialog.custom_projEditFrame")
+      : null;
+
+    if (!$content || !$content.length) return;
+
+    // Consider it "open" if either the content or its wrapper dialog is visible
     var $wrapper = $content.closest(".ui-dialog");
-    if (!$wrapper.hasClass("wise-proj-edit-dialog")) {
+    var isOpen =
+      $content.is(":visible") || ($wrapper.length && $wrapper.is(":visible"));
+
+    if (!isOpen) return;
+
+    // Add wrapper class once (titlebar is on wrapper)
+    if ($wrapper.length && !$wrapper.hasClass("wise-proj-edit-dialog")) {
       $wrapper.addClass("wise-proj-edit-dialog");
     }
 
-    // Apply rules inside iframe DOM
-    applyRulesWithinDialogContent($content);
-  });
+    // Apply rules
+    hideRowByDataField($content, "TELEPHONE");
+    hideRowByDataField($content, "MOBILE");
+    hideRowByDataField($content, "EMAIL");
+    hideRowContainingButtonText($content, "Add to address book");
 
-  // ============================================================
-  // Core: apply rules inside iframe (or direct DOM fallback)
-  // ============================================================
-  function applyRulesWithinDialogContent($dialogContent) {
-    var el = $dialogContent.get(0);
-    var iframe = null;
+    forceDeliveryOnlyKeepAddress($content);
+    hideDeliveryTelephoneRow($content);
 
-    if (el && el.tagName && el.tagName.toUpperCase() === "IFRAME") {
-      iframe = el;
-    } else {
-      // Fallback: look for an iframe inside the content
-      iframe = $dialogContent.find("iframe").get(0);
-    }
+    blankNALabels($content);
 
-    if (!iframe) {
-      // Non-iframe case (rare): apply directly
-      try { console.warn("[WiseHireHop] No iframe found; applying directly"); } catch (e) {}
-      applyProjectEditRules($dialogContent);
-      return;
-    }
-
-    // Wait until iframe document is ready, then apply
-    waitForIframeReady(iframe, function ($root) {
-      applyProjectEditRules($root);
-    });
-  }
-
-  function waitForIframeReady(iframe, cb) {
-    var tries = 0;
-    var maxTries = 40;      // ~4s at 100ms
-    var intervalMs = 100;
-
-    function attempt() {
-      tries++;
-
-      var doc = null;
-      try {
-        doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
-      } catch (e) {
-        doc = null;
-      }
-
-      if (doc && doc.body) {
-        var $root = $(doc);
-
-        // Optional: ensure some expected structure exists before applying
-        // If it doesn't exist yet, keep waiting a bit.
-        var hasAnyDataFields = $root.find("[data-field]").length > 0;
-        var hasEditDialog = $root.find("#edit_dialog").length > 0 || true; // doc itself may be the frame
-
-        if (hasEditDialog) {
-          try {
-            console.warn(
-              "[WiseHireHop] iframe ready; data-field count:",
-              $root.find("[data-field]").length
-            );
-          } catch (e) {}
-          cb($root);
-
-          // Re-apply shortly after in case HireHop hydrates/rewrites the DOM after open
-          setTimeout(function () { cb($root); }, 200);
-          setTimeout(function () { cb($root); }, 800);
-
-          return true;
-        }
-      }
-
-      if (tries >= maxTries) {
-        try { console.warn("[WiseHireHop] iframe not ready after retries"); } catch (e) {}
-        return false;
-      }
-
-      setTimeout(attempt, intervalMs);
-      return false;
-    }
-
-    attempt();
-  }
-
-  // ============================================================
-  // Rules (run INSIDE the iframe document)
-  // Pass in $root = $(iframeDocument)
-  // ============================================================
-  function applyProjectEditRules($rootDoc) {
-    // Work against the iframe's body
-    var $root = $rootDoc.find("body").length ? $rootDoc.find("body") : $rootDoc;
-
-    // -----------------------------
-    // KILL: client contact rows
-    // -----------------------------
-    hideRowByDataField($root, "TELEPHONE");
-    hideRowByDataField($root, "MOBILE");
-    hideRowByDataField($root, "EMAIL");
-    hideRowContainingButtonText($root, "Add to address book");
-
-    // -----------------------------
-    // KEEP: Deliver to + Delivery address ONLY
-    // -----------------------------
-    forceDeliveryOnlyKeepAddress($root);
-
-    // -----------------------------
-    // KILL: Delivery phone number row
-    // -----------------------------
-    hideDeliveryTelephoneRow($root);
-
-    // Cosmetic
-    blankNALabels($root);
-
-    // Logging: prove we actually found fields
     try {
-      console.warn(
-        "[WiseHireHop] Applied rules. Visible TELEPHONE fields now:",
-        $root.find('[data-field="TELEPHONE"]:visible').length,
-        "DELIVERY_TELEPHONE now:",
-        $root.find('[data-field="DELIVERY_TELEPHONE"]:visible').length
-      );
+      console.info("[WiseHireHop] Applied project edit UI rules", WISE_VERSION);
     } catch (e) {}
   }
 
-  // ============================================================
-  // Helpers
-  // ============================================================
+  // =========================
+  // WATCHERS / TRIGGERS
+  // =========================
+
+  // 1) MutationObserver: catches dialog appearing + being shown
+  if (typeof MutationObserver !== "undefined") {
+    var obs = new MutationObserver(function (mutations) {
+      // Any DOM change may indicate the dialog opened, content injected, or display toggled.
+      // Throttle to one apply per frame.
+      scheduleApply();
+    });
+
+    // Observe subtree changes and class/style flips (dialogs often toggle these)
+    obs.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class", "style"]
+    });
+  }
+
+  // 2) Clicks often precede opening the edit popup
+  document.addEventListener(
+    "click",
+    function () {
+      // a tiny delay gives HireHop time to open/toggle the dialog
+      setTimeout(scheduleApply, 50);
+      setTimeout(scheduleApply, 250);
+    },
+    true
+  );
+
+  // 3) Timed retries on load (covers delayed initialisation)
+  setTimeout(scheduleApply, 0);
+  setTimeout(scheduleApply, 250);
+  setTimeout(scheduleApply, 1000);
+  setTimeout(scheduleApply, 2000);
+
+  // =========================
+  // HELPERS
+  // =========================
+
   function hideRowByDataField($root, field) {
-    var $hits = $root.find('[data-field="' + field + '"]');
-    $hits.each(function () {
-      var $tr = $(this).closest("tr");
+    $root.find('[data-field="' + field + '"]').each(function () {
+      var $tr = window.jQuery(this).closest("tr");
       if ($tr.length) $tr.hide();
     });
   }
 
   function hideRowContainingButtonText($root, text) {
     $root.find("button").each(function () {
-      var btnText = $(this).text().trim();
+      var btnText = window.jQuery(this).text().trim();
       if (btnText === text) {
-        var $tr = $(this).closest("tr");
+        var $tr = window.jQuery(this).closest("tr");
         if ($tr.length) $tr.hide();
       }
     });
   }
 
   function forceDeliveryOnlyKeepAddress($root) {
+    // Name line: keep DELIVER_TO only
     $root.find(".name_container input.delivery").show();
-    $root.find(".name_container input.use_at, .name_container input.collection").hide();
+    $root
+      .find(".name_container input.use_at, .name_container input.collection")
+      .hide();
 
+    // Address block: keep delivery address only
     $root.find(".address_container textarea.delivery").show();
-    $root.find(".address_container textarea.use_at, .address_container textarea.collection").hide();
+    $root
+      .find(
+        ".address_container textarea.use_at, .address_container textarea.collection"
+      )
+      .hide();
 
-    $root.find(".telephone_container input.delivery").show();
-    $root.find(".telephone_container input.use_at, .telephone_container input.collection").hide();
-
+    // Hide mode switchers for use_at/collection; keep delivery visible
     $root.find(".label_container .label.use_at, .label_container .label.collection").hide();
     $root.find(".label_container .label.delivery").show();
 
+    // Ensure selected state looks correct
     $root
       .find(".label_container .label")
       .addClass("ui-state-disabled")
@@ -278,12 +251,16 @@
       .removeClass("ui-state-disabled")
       .addClass("ui-state-selected");
 
+    // Ensure the left-hand heading reads "Deliver to"
     $root.find(".delivery_label").text("Deliver to");
   }
 
   function hideDeliveryTelephoneRow($root) {
+    // Delivery/use_at/collection telephone inputs live in one <tr> in your DOM dump.
+    // Hide that whole row.
     var $anyPhoneInRow = $root
-      .find('[data-field="DELIVERY_TELEPHONE"]').first()
+      .find('[data-field="DELIVERY_TELEPHONE"]')
+      .first()
       .add($root.find('[data-field="USE_AT_TELEPHONE"]').first())
       .add($root.find('[data-field="COLLECTION_TELEPHONE"]').first())
       .filter(":first");
@@ -296,8 +273,8 @@
 
   function blankNALabels($root) {
     $root.find("td.label").each(function () {
-      var t = $(this).text().trim().toLowerCase();
-      if (t === "n/a") $(this).text("");
+      var t = window.jQuery(this).text().trim().toLowerCase();
+      if (t === "n/a") window.jQuery(this).text("");
     });
   }
 
