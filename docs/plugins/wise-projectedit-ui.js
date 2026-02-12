@@ -7,10 +7,8 @@
 
   // ===== PROOF OF LIFE (VISIBLE + CONSOLE + GLOBAL FLAG) =====
   (function proofOfLife() {
-    // 1) global flag
     window.__WISE_PLUGIN_LOADED__ = (window.__WISE_PLUGIN_LOADED__ || 0) + 1;
 
-    // 2) console (use warn so it isn't hidden by "Info" filters)
     try {
       console.warn(
         "[WiseHireHop] plugin executed",
@@ -19,7 +17,6 @@
       );
     } catch (e) {}
 
-    // 3) visible badge (hardest to miss)
     function addBadge() {
       if (document.getElementById("wise-plugin-badge")) return;
       var b = document.createElement("div");
@@ -31,9 +28,7 @@
         "font:12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;";
       (document.body || document.documentElement).appendChild(b);
       setTimeout(function () {
-        try {
-          b.remove();
-        } catch (e) {}
+        try { b.remove(); } catch (e) {}
       }, 4000);
     }
 
@@ -43,7 +38,6 @@
       addBadge();
     }
 
-    // 4) DOM marker for checking in Elements panel
     try {
       document.documentElement.setAttribute("data-wise-plugin", "loaded");
     } catch (e) {}
@@ -52,58 +46,43 @@
   // ------------------------------------------------------------
   // Guards
   // ------------------------------------------------------------
-
-  // IMPORTANT: HireHop exposes global `user` (not window.user).
   if (typeof user === "undefined") return;
-
-  // Only run on project pages (use endsWith to avoid strict path issues)
   if (!location.pathname.endsWith("/project.php")) return;
 
-  // Ensure jQuery is available before we bind events / use `$`
   if (typeof window.jQuery === "undefined" || typeof window.$ === "undefined") {
-    try {
-      console.warn("[WiseHireHop] jQuery not ready yet - aborting");
-    } catch (e) {}
+    try { console.warn("[WiseHireHop] jQuery not ready - abort"); } catch (e) {}
     return;
   }
 
-  // Add a stable class to scope any future CSS
   document.documentElement.classList.add("wise-theme");
 
   // ------------------------------------------------------------
-  // CSS injection (scoped to Wise wrapper class)
+  // CSS injection
   // ------------------------------------------------------------
-  injectCSS(
-    `
+  injectCSS(`
 /* ------------------------------
    Wise: Project Edit Dialog
    ------------------------------ */
-
 .wise-theme .wise-proj-edit-dialog{
   border-radius: 12px;
   overflow: hidden;
 }
-
 .wise-theme .wise-proj-edit-dialog .ui-dialog-titlebar{
   background: #0B1B2B;
   border: none;
   color: #F6F2EA;
 }
-
 .wise-theme .wise-proj-edit-dialog .ui-dialog-titlebar .ui-dialog-title{
   color: #F6F2EA;
 }
-
 .wise-theme .wise-proj-edit-dialog .ui-dialog-titlebar .ui-dialog-titlebar-close{
   background: transparent;
   border: none;
 }
-
 .wise-theme .wise-proj-edit-dialog .ui-dialog-content{
   border: none;
   background: #F6F2EA;
 }
-
 .wise-theme .wise-proj-edit-dialog input.data_cell,
 .wise-theme .wise-proj-edit-dialog textarea.data_cell,
 .wise-theme .wise-proj-edit-dialog select.data_cell{
@@ -112,85 +91,155 @@
   padding: 6px 8px;
   background: #fff;
 }
-
 .wise-theme .wise-proj-edit-dialog td.label{
   font-weight: 600;
 }
-
-.wise-theme .wise-proj-edit-dialog .redborder{
-  outline: 2px solid rgba(200, 30, 60, 0.35);
-}
-
-/* Optional: soften hard divider borders inside the dialog
-   (HireHop uses inline styles, so we match fragments) */
-.wise-theme .wise-proj-edit-dialog [style*="border-top:1px solid #a1a1a1"]{
-  border-top: 1px solid rgba(17,24,39,.18) !important;
-}
-.wise-theme .wise-proj-edit-dialog [style*="border-left:1px solid #a1a1a1"]{
-  border-left: 1px solid rgba(17,24,39,.18) !important;
-}
-.wise-theme .wise-proj-edit-dialog [style*="border-right:1px solid #a1a1a1"]{
-  border-right: 1px solid rgba(17,24,39,.18) !important;
-}
-`
-  );
+`);
 
   // ------------------------------------------------------------
-  // Main hook: run each time the jQuery UI dialog opens
+  // Main hook: dialog open
   // ------------------------------------------------------------
   $(document).on("dialogopen", ".ui-dialog-content", function () {
     var $content = $(this);
 
-    // Project edit popup instance (from your markup)
+    // The project edit dialog content is usually an iframe with this id/class
     if (!$content.is("#edit_dialog.custom_projEditFrame")) return;
 
-    // Titlebar sits outside #edit_dialog, so style the wrapper dialog element
+    // Style wrapper (titlebar sits outside iframe)
     var $wrapper = $content.closest(".ui-dialog");
     if (!$wrapper.hasClass("wise-proj-edit-dialog")) {
       $wrapper.addClass("wise-proj-edit-dialog");
     }
 
+    // Apply rules inside iframe DOM
+    applyRulesWithinDialogContent($content);
+  });
+
+  // ============================================================
+  // Core: apply rules inside iframe (or direct DOM fallback)
+  // ============================================================
+  function applyRulesWithinDialogContent($dialogContent) {
+    var el = $dialogContent.get(0);
+    var iframe = null;
+
+    if (el && el.tagName && el.tagName.toUpperCase() === "IFRAME") {
+      iframe = el;
+    } else {
+      // Fallback: look for an iframe inside the content
+      iframe = $dialogContent.find("iframe").get(0);
+    }
+
+    if (!iframe) {
+      // Non-iframe case (rare): apply directly
+      try { console.warn("[WiseHireHop] No iframe found; applying directly"); } catch (e) {}
+      applyProjectEditRules($dialogContent);
+      return;
+    }
+
+    // Wait until iframe document is ready, then apply
+    waitForIframeReady(iframe, function ($root) {
+      applyProjectEditRules($root);
+    });
+  }
+
+  function waitForIframeReady(iframe, cb) {
+    var tries = 0;
+    var maxTries = 40;      // ~4s at 100ms
+    var intervalMs = 100;
+
+    function attempt() {
+      tries++;
+
+      var doc = null;
+      try {
+        doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+      } catch (e) {
+        doc = null;
+      }
+
+      if (doc && doc.body) {
+        var $root = $(doc);
+
+        // Optional: ensure some expected structure exists before applying
+        // If it doesn't exist yet, keep waiting a bit.
+        var hasAnyDataFields = $root.find("[data-field]").length > 0;
+        var hasEditDialog = $root.find("#edit_dialog").length > 0 || true; // doc itself may be the frame
+
+        if (hasEditDialog) {
+          try {
+            console.warn(
+              "[WiseHireHop] iframe ready; data-field count:",
+              $root.find("[data-field]").length
+            );
+          } catch (e) {}
+          cb($root);
+
+          // Re-apply shortly after in case HireHop hydrates/rewrites the DOM after open
+          setTimeout(function () { cb($root); }, 200);
+          setTimeout(function () { cb($root); }, 800);
+
+          return true;
+        }
+      }
+
+      if (tries >= maxTries) {
+        try { console.warn("[WiseHireHop] iframe not ready after retries"); } catch (e) {}
+        return false;
+      }
+
+      setTimeout(attempt, intervalMs);
+      return false;
+    }
+
+    attempt();
+  }
+
+  // ============================================================
+  // Rules (run INSIDE the iframe document)
+  // Pass in $root = $(iframeDocument)
+  // ============================================================
+  function applyProjectEditRules($rootDoc) {
+    // Work against the iframe's body
+    var $root = $rootDoc.find("body").length ? $rootDoc.find("body") : $rootDoc;
+
     // -----------------------------
     // KILL: client contact rows
     // -----------------------------
-    hideRowByDataField($content, "TELEPHONE");
-    hideRowByDataField($content, "MOBILE");
-    hideRowByDataField($content, "EMAIL");
-    hideRowContainingButtonText($content, "Add to address book");
+    hideRowByDataField($root, "TELEPHONE");
+    hideRowByDataField($root, "MOBILE");
+    hideRowByDataField($root, "EMAIL");
+    hideRowContainingButtonText($root, "Add to address book");
 
     // -----------------------------
     // KEEP: Deliver to + Delivery address ONLY
     // -----------------------------
-    forceDeliveryOnlyKeepAddress($content);
+    forceDeliveryOnlyKeepAddress($root);
 
     // -----------------------------
-    // KILL: Delivery phone number row (whole telephone row in delivery section)
+    // KILL: Delivery phone number row
     // -----------------------------
-    hideDeliveryTelephoneRow($content);
+    hideDeliveryTelephoneRow($root);
 
-    // Cosmetic: remove visible "n/a" labels
-    blankNALabels($content);
+    // Cosmetic
+    blankNALabels($root);
 
-    // Proof-of-life for the dialog rule application
+    // Logging: prove we actually found fields
     try {
-      console.warn("[WiseHireHop] Applied project edit UI rules");
+      console.warn(
+        "[WiseHireHop] Applied rules. Visible TELEPHONE fields now:",
+        $root.find('[data-field="TELEPHONE"]:visible').length,
+        "DELIVERY_TELEPHONE now:",
+        $root.find('[data-field="DELIVERY_TELEPHONE"]:visible').length
+      );
     } catch (e) {}
-  });
-
-  // If the dialog is already open when this plugin loads, apply once
-  try {
-    var $open = $("#edit_dialog.custom_projEditFrame:visible");
-    if ($open.length) {
-      $open.trigger("dialogopen");
-    }
-  } catch (e) {}
+  }
 
   // ============================================================
   // Helpers
   // ============================================================
-
   function hideRowByDataField($root, field) {
-    $root.find('[data-field="' + field + '"]').each(function () {
+    var $hits = $root.find('[data-field="' + field + '"]');
+    $hits.each(function () {
       var $tr = $(this).closest("tr");
       if ($tr.length) $tr.hide();
     });
@@ -207,23 +256,18 @@
   }
 
   function forceDeliveryOnlyKeepAddress($root) {
-    // Name line: keep DELIVER_TO only
     $root.find(".name_container input.delivery").show();
     $root.find(".name_container input.use_at, .name_container input.collection").hide();
 
-    // Address block: keep delivery address only
     $root.find(".address_container textarea.delivery").show();
     $root.find(".address_container textarea.use_at, .address_container textarea.collection").hide();
 
-    // Telephone block: keep state consistent (we hide the entire row later)
     $root.find(".telephone_container input.delivery").show();
     $root.find(".telephone_container input.use_at, .telephone_container input.collection").hide();
 
-    // Hide mode switchers for use_at/collection; keep delivery visible
     $root.find(".label_container .label.use_at, .label_container .label.collection").hide();
     $root.find(".label_container .label.delivery").show();
 
-    // Ensure selected state looks correct
     $root
       .find(".label_container .label")
       .addClass("ui-state-disabled")
@@ -234,13 +278,10 @@
       .removeClass("ui-state-disabled")
       .addClass("ui-state-selected");
 
-    // Ensure the left-hand heading reads "Deliver to"
     $root.find(".delivery_label").text("Deliver to");
   }
 
   function hideDeliveryTelephoneRow($root) {
-    // In the rendered HTML, the delivery/use_at/collection telephone inputs live in one <tr>.
-    // Hiding the <tr> removes the phone fields without affecting the delivery address block.
     var $anyPhoneInRow = $root
       .find('[data-field="DELIVERY_TELEPHONE"]').first()
       .add($root.find('[data-field="USE_AT_TELEPHONE"]').first())
