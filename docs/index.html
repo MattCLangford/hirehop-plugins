@@ -32,6 +32,31 @@
     <ul>
       <li><code>https://mattclangford.github.io/hirehop-plugins/plugins/wise-projectedit-ui.js?v=1</code></li>
     </ul>
+    <ul>
+  <li><a href="plugins/wise-proj-edit.js" data-view>wise-proj-edit.js</a></li>
+  <li><a href="plugins/wise-job-edit.js" data-view>wise-job-edit.js</a></li>
+</ul>
+
+<pre id="code" style="white-space:pre; overflow:auto; border:1px solid #ddd; padding:12px; border-radius:8px;"></pre>
+
+<script>
+  const pre = document.getElementById("code");
+
+  document.querySelectorAll("a[data-view]").forEach(a => {
+    a.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const url = a.getAttribute("href");
+      pre.textContent = "Loading " + url + " …";
+
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) {
+        pre.textContent = `Failed to load: ${url} (HTTP ${r.status})`;
+        return;
+      }
+      pre.textContent = await r.text();
+    });
+  });
+</script>
   </div>
 </body>
 </html>
