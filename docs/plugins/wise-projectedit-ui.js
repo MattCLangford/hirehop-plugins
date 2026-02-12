@@ -1,185 +1,278 @@
 (function () {
   "use strict";
 
-  // =========================
-  // Wise HireHop Project Edit - Hide Fields Only (NO STYLING)
-  // =========================
-  var WISE_PLUGIN_VERSION = "v4";
+  // ---- proof of life (console only; remove if you want) ----
+  try { console.warn("[WiseHireHop] project edit layout plugin loaded"); } catch (e) {}
 
-  // Prevent double-init
-  if (window.__WISE_PROJECT_EDIT_HIDE_ONLY_INIT__) return;
-  window.__WISE_PROJECT_EDIT_HIDE_ONLY_INIT__ = true;
+  var $ = window.jQuery;
+  if (!$) return;
 
-  // Proof of life (minimal)
-  try {
-    console.warn("[WiseHireHop] hide-only plugin executed", WISE_PLUGIN_VERSION, location.href);
-  } catch (e) {}
+  // Only on the project page
+  if (!/\/project\.php(\?|$)/.test(location.pathname)) return;
 
-  // Boot: wait for jQuery + edit dialog
-  var bootTries = 0;
-  (function boot() {
-    bootTries++;
-
-    var hasJQ = !!window.jQuery && !!window.jQuery.fn;
-    var hasEditDialog = !!document.getElementById("edit_dialog");
-
-    if (hasJQ && hasEditDialog) {
-      init();
-      return;
-    }
-
-    if (bootTries < 200) setTimeout(boot, 50);
-  })();
-
-  function init() {
-    var $ = window.jQuery;
-
-    // Apply rules when dialog opens
-    $(document).on("dialogopen.wiseHideOnly", "#edit_dialog", function () {
-      scheduleApply("dialogopen");
-      setTimeout(function () { scheduleApply("dialogopen+150"); }, 150);
-      setTimeout(function () { scheduleApply("dialogopen+450"); }, 450);
-    });
-
-    // Observe re-renders inside the dialog
-    attachObserver();
-
-    // Run once in case dialog is already open
-    scheduleApply("init");
-  }
-
-  // -------------------------
-  // Rule application
-  // -------------------------
-  var _applyTimer = null;
-  function scheduleApply(reason) {
-    if (_applyTimer) return;
-    _applyTimer = setTimeout(function () {
-      _applyTimer = null;
-      applyRules(reason);
+  // Debounced apply (because HireHop can re-render parts of the dialog)
+  var applyTimer = null;
+  function scheduleApply() {
+    clearTimeout(applyTimer);
+    applyTimer = setTimeout(function () {
+      var $dlg = $("#edit_dialog.custom_projEditFrame:visible");
+      if ($dlg.length) applyToProjectEditDialog($dlg);
     }, 50);
   }
 
-  function applyRules(reason) {
-    var $ = window.jQuery;
-    if (!$) return;
+  // Primary hook (when the dialog opens)
+  $(document).on("dialogopen", "#edit_dialog.custom_projEditFrame", function () {
+    applyToProjectEditDialog($(this));
+  });
 
-    var $dlg = $("#edit_dialog");
-    if (!$dlg.length) return;
+  // Fallback hook (covers cases where dialogopen isn’t fired / late DOM updates)
+  var obs = new MutationObserver(function () {
+    scheduleApply();
+  });
+  obs.observe(document.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["class", "style"]
+  });
 
-    // Only act when visible (or wrapper visible)
-    var isVisible = $dlg.is(":visible") || $dlg.closest(".ui-dialog").is(":visible");
-    if (!isVisible) return;
+  // Initial attempt after load
+  $(scheduleApply);
 
-    var inst = getProjectEditInstance($dlg);
-    if (inst) {
-      applyUsingInstance(inst);
+  // -------------------------
+  // Main apply
+  // -------------------------
+  function applyToProjectEditDialog($dlg) {
+    if (!$dlg || !$dlg.length) return;
+
+    // Idempotency markers: remove our previous section rows so re-apply is safe
+    var $table = findMainTable($dlg);
+    if ($table && $table.length) {
+      $table.find("tr.wise-group-row, tr.wise-custom-fields-row").remove();
+    }
+
+    // 1) Hide unwanted contact rows (these are your “kill” fields)
+    hideRowByDataField($dlg, "TELEPHONE");
+    hideRowByDataField($dlg, "MOBILE");
+    hideRowByDataField($dlg, "EMAIL");
+    hideRowContainingButtonText($dlg, "Add to address book");
+
+    // 2) Force delivery only (keeps delivery address; hides use_at/collection)
+    forceDeliveryOnlyKeepAddress($dlg);
+
+    // 3) Kill delivery phone number row
+    hideDeliveryTelephoneRow($dlg);
+
+    // 4) Clean up visible n/a labels (including the repeated n/an/an/a case)
+    blankNALabels($dlg);
+
+    // 5) Rearrange into sections (without CSS)
+    rearrangeIntoSections($dlg);
+
+    try { console.info("[WiseHireHop] Project edit layout applied"); } catch (e) {}
+  }
+
+  // -------------------------
+  // Rearrangement
+  // -------------------------
+  function rearrangeIntoSections($dlg) {
+    var $table = findMainTable($dlg);
+    if (!$table || !$table.length) return;
+
+    // Collect the rows we want to manage
+    var $rProjectManager  = rowByDataField($dlg, "NAME");            // your “Project Manager”
+    var $rWiseJobNumber   = rowByDataField($dlg, "COMPANY");         // your “Wise Job Number”
+    var $rClient          = rowByDataField($dlg, "ADDRESS");         // your “Client”
+    var $rProjectType     = rowByDataField($dlg, "JOB_TYPE");
+    var $rProjectName     = rowByDataField($dlg, "PROJECT_NAME");
+    var $rWarehouseName   = rowByDataField($dlg, "DEPOT_ID");
+    var $rMemo            = rowByDataField($dlg, "DETAILS");
+    var $rVenue           = rowByDataField($dlg, "DELIVER_TO");      // your “Venue”
+    var $rDeliveryAddress = rowByDataField($dlg, "DELIVERY_ADDRESS");
+    var $rStatus          = rowByDataField($dlg, "STATUS");
+
+    // Date/time rows (no data-field). Keep in the order you showed.
+    var $rPrep            = rowByLabelText($dlg, "Prep");
+    var $rInstallStart    = rowByLabelText($dlg, "Job/Install Start");
+    var $rRemovalFinish   = rowByLabelText($dlg, "Job/Removal Finish");
+    var $rDePreppedBy     = rowByLabelText($dlg, "De-Prepped By");
+
+    // Build new section header rows (no CSS; uses existing table structure)
+    var nodes = [];
+
+    // --- Project information ---
+    nodes.push(groupRow("Project information")[0]);
+    pushIfRow(nodes, $rWiseJobNumber);
+    pushIfRow(nodes, $rClient);
+    pushIfRow(nodes, $rProjectName);
+    pushIfRow(nodes, $rVenue);
+    pushIfRow(nodes, $rDeliveryAddress);
+    pushIfRow(nodes, $rMemo);
+    pushIfRow(nodes, $rProjectType);
+
+    // Custom fields (move the whole section into a placeholder table row if present)
+    var $customFieldsSection = findCustomFieldsSection($dlg);
+    if ($customFieldsSection && $customFieldsSection.length) {
+      var $cfRow = customFieldsRow("Custom fields");
+      // Detach and place into the right-hand cell to keep layout consistent
+      $cfRow.find("td").last().append($customFieldsSection.detach());
+      nodes.push($cfRow[0]);
+    }
+
+    // --- People assigned ---
+    nodes.push(groupRow("People assigned")[0]);
+    pushIfRow(nodes, $rProjectManager);
+
+    // --- HireHop information ---
+    nodes.push(groupRow("HireHop information")[0]);
+    pushIfRow(nodes, $rWarehouseName);
+    pushIfRow(nodes, $rPrep);
+    pushIfRow(nodes, $rInstallStart);
+    pushIfRow(nodes, $rRemovalFinish);
+    pushIfRow(nodes, $rDePreppedBy);
+    pushIfRow(nodes, $rStatus);
+
+    // Insert at the top of the table (keeps all existing styling)
+    var $firstRow = $table.find("tr").first();
+    if ($firstRow.length) {
+      $(nodes).insertBefore($firstRow);
     } else {
-      applyUsingDOM($dlg);
-    }
-
-    try {
-      console.info("[WiseHireHop] hide-only rules applied", reason, { hasInstance: !!inst });
-    } catch (e) {}
-  }
-
-  function getProjectEditInstance($dlg) {
-    return (
-      $dlg.data("custom-project_edit") ||
-      $dlg.data("customProject_edit") ||
-      null
-    );
-  }
-
-  function applyUsingInstance(inst) {
-    // -----------------------------
-    // KILL: client contact rows
-    // -----------------------------
-    hideRow(inst.telephone);
-    hideRow(inst.mobile);
-    hideRow(inst.email);
-    hideRow(inst.add_contact_btn);
-
-    // -----------------------------
-    // KEEP: Deliver to + Delivery address ONLY
-    // -----------------------------
-    try {
-      // hide mode buttons (use_at / collection)
-      inst.use_at_btn && inst.use_at_btn.hide();
-      inst.collect_btn && inst.collect_btn.hide();
-
-      // ensure delivery is the visible mode
-      inst.delivery_btn && inst.delivery_btn.show();
-
-      // hide non-delivery name inputs
-      inst.use_at && inst.use_at.hide();
-      inst.collection_from && inst.collection_from.hide();
-      inst.deliver_to && inst.deliver_to.show();
-
-      // hide non-delivery addresses
-      inst.use_at_address && inst.use_at_address.hide();
-      inst.collection_address && inst.collection_address.hide();
-      inst.delivery_address && inst.delivery_address.show();
-    } catch (e) {}
-
-    // -----------------------------
-    // KILL: delivery phone number row
-    // -----------------------------
-    // These telephone inputs typically share a single <tr>.
-    if (inst.delivery_telephone && inst.delivery_telephone.length) {
-      hideRow(inst.delivery_telephone);
-    } else if (inst.del_telephone_label && inst.del_telephone_label.length) {
-      hideRow(inst.del_telephone_label);
-    } else if (inst.use_at_tel && inst.use_at_tel.length) {
-      hideRow(inst.use_at_tel);
-    } else if (inst.collection_tel && inst.collection_tel.length) {
-      hideRow(inst.collection_tel);
+      $table.append(nodes);
     }
   }
 
-  function applyUsingDOM($root) {
-    // fallback (best-effort only)
-    hideRow($root.find("[data-field='TELEPHONE']").first());
-    hideRow($root.find("[data-field='MOBILE']").first());
-    hideRow($root.find("[data-field='EMAIL']").first());
-
-    // hide non-delivery mode labels if present
-    $root.find(".label_container .label.use_at, .label_container .label.collection").hide();
-
-    // kill phone row if present
-    var $tel =
-      $root.find("[data-field='DELIVERY_TELEPHONE']").first()
-        .add($root.find(".telephone_container input.delivery").first())
-        .filter(":first");
-    if ($tel.length) hideRow($tel);
+  function pushIfRow(arr, $row) {
+    if ($row && $row.length) arr.push($row.detach()[0]);
   }
 
-  // -------------------------
-  // Helpers
-  // -------------------------
-  function hideRow($elOrJq) {
-    if (!$elOrJq) return;
-    var $ = window.jQuery;
-    var $el = ($elOrJq.jquery ? $elOrJq : $($elOrJq));
-    if (!$el.length) return;
-    var $tr = $el.closest("tr");
-    if ($tr.length) $tr.hide();
+  function groupRow(title) {
+    var $tr = $('<tr class="wise-group-row"></tr>');
+    $tr.append('<td class="label">' + escapeHtml(title) + "</td>");
+    $tr.append("<td></td>");
+    return $tr;
   }
 
-  function attachObserver() {
-    var el = document.getElementById("edit_dialog");
-    if (!el || !window.MutationObserver) return;
+  function customFieldsRow(title) {
+    var $tr = $('<tr class="wise-custom-fields-row"></tr>');
+    $tr.append('<td class="label">' + escapeHtml(title) + "</td>");
+    $tr.append("<td></td>");
+    return $tr;
+  }
 
-    var obs = new MutationObserver(function () {
-      var $ = window.jQuery;
-      if (!$) return;
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
+    });
+  }
 
-      var $dlg = $("#edit_dialog");
-      if ($dlg.length && ($dlg.is(":visible") || $dlg.closest(".ui-dialog").is(":visible"))) {
-        scheduleApply("mutation");
+  function findMainTable($dlg) {
+    // Prefer the table containing one of our known fields
+    var $seed = $dlg.find('[data-field="PROJECT_NAME"]').first();
+    if (!$seed.length) $seed = $dlg.find('[data-field="COMPANY"]').first();
+    if (!$seed.length) $seed = $dlg.find("input.hh_date").first();
+    var $table = $seed.length ? $seed.closest("table") : $dlg.find("table").first();
+    return $table;
+  }
+
+  function rowByDataField($root, field) {
+    return $root.find('[data-field="' + field + '"]').first().closest("tr");
+  }
+
+  function rowByLabelText($root, labelText) {
+    var wanted = String(labelText || "").trim().toLowerCase();
+    if (!wanted) return $();
+
+    var $found = $();
+    $root.find("tr").each(function () {
+      var $tr = $(this);
+      var label = $tr.find("td.label").first().text().trim().toLowerCase();
+      if (label === wanted) {
+        $found = $tr;
+        return false; // break
       }
     });
+    return $found;
+  }
 
-    obs.observe(el, { childList: true, subtree: true, attributes: true });
+  function findCustomFieldsSection($dlg) {
+    // Locate the custom fields container, then lift the nearest “section” wrapper
+    var $cf = $dlg.find(".hh_custom_fields").first();
+    if (!$cf.length) return $();
+
+    // Walk up until we reach something that’s a direct-ish block inside the dialog,
+    // but stop before we hit the dialog root.
+    var $cur = $cf;
+    for (var i = 0; i < 6; i++) {
+      var $p = $cur.parent();
+      if (!$p.length) break;
+      if ($p.is("#edit_dialog") || $p.is(".ui-dialog-content")) break;
+      $cur = $p;
+    }
+    return $cur;
+  }
+
+  // -------------------------
+  // Existing behaviour (hide / force delivery)
+  // -------------------------
+  function hideRowByDataField($root, field) {
+    $root.find('[data-field="' + field + '"]').each(function () {
+      var $tr = $(this).closest("tr");
+      if ($tr.length) $tr.hide();
+    });
+  }
+
+  function hideRowContainingButtonText($root, text) {
+    $root.find("button").each(function () {
+      if ($(this).text().trim() === text) {
+        var $tr = $(this).closest("tr");
+        if ($tr.length) $tr.hide();
+      }
+    });
+  }
+
+  function forceDeliveryOnlyKeepAddress($root) {
+    // Keep delivery; hide use_at + collection controls
+    $root.find(".name_container input.delivery").show();
+    $root.find(".name_container input.use_at, .name_container input.collection").hide();
+
+    $root.find(".address_container textarea.delivery").show();
+    $root.find(".address_container textarea.use_at, .address_container textarea.collection").hide();
+
+    $root.find(".telephone_container input.delivery").show();
+    $root.find(".telephone_container input.use_at, .telephone_container input.collection").hide();
+
+    $root.find(".label_container .label.use_at, .label_container .label.collection").hide();
+    $root.find(".label_container .label.delivery").show();
+
+    // Keep selected state consistent (no styling changes; just state classes HireHop already uses)
+    $root.find(".label_container .label")
+      .addClass("ui-state-disabled")
+      .removeClass("ui-state-selected");
+
+    $root.find(".label_container .label.delivery")
+      .removeClass("ui-state-disabled")
+      .addClass("ui-state-selected");
+
+    // Don’t rename labels here (leave your current wording alone)
+  }
+
+  function hideDeliveryTelephoneRow($root) {
+    // Hide the whole row containing the delivery telephone input
+    var $deliveryPhone = $root.find('[data-field="DELIVERY_TELEPHONE"]').first();
+    if ($deliveryPhone.length) {
+      var $tr = $deliveryPhone.closest("tr");
+      if ($tr.length) $tr.hide();
+    }
+  }
+
+  function blankNALabels($root) {
+    $root.find("td.label").each(function () {
+      var raw = $(this).text().trim().toLowerCase();
+      var compact = raw.replace(/\s+/g, "");
+      // Matches: "n/a" or "n/an/an/a" etc
+      if (/^(n\/a)+$/.test(compact) || compact === "n/a") {
+        $(this).text("");
+      }
+    });
   }
 })();
