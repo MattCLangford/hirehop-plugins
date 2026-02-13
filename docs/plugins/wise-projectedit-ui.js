@@ -3,42 +3,33 @@
 
   // =========================
   // Wise HireHop Project Edit
-  // v5 - Hide fields + optional Wise theme + optional layout
+  // v6 - Hide fields + Wise theme + optional layout
+  // Fixes:
+  //  - Close button no longer "black on black"
+  //  - Dialog constrained to viewport + scrollable content
+  //  - Section headers: Nightfall Navy bg, white text, ~2x size
+  //  - Layout uses responsive columns to reduce height
   // =========================
-  var WISE_PLUGIN_VERSION = "v5";
+  var WISE_PLUGIN_VERSION = "v6";
 
   // ---- CONFIG (edit these) ----
   var CONFIG = {
-    // Keep your existing behaviour
     hideUnusedFields: true,
-
-    // Wise brand theme (scoped to the project edit dialog only)
     enableWiseTheme: true,
-
-    // Rebuild the dialog into 1-column sections (Salesforce / People / HireHop)
-    // This DOES move existing DOM nodes (via detach), but avoids the hierarchy error you hit previously.
     enableLayout: true,
-
-    // Creates a slim action bar under the titlebar and puts Save/Cancel there (cloned buttons)
     enableActionBar: true,
-
-    // Safety: if layout throws once, disable it for this session
     disableLayoutOnError: true
   };
 
-  // Prevent double-init
-  if (window.__WISE_PROJECT_EDIT_V5_INIT__) return;
-  window.__WISE_PROJECT_EDIT_V5_INIT__ = true;
+  if (window.__WISE_PROJECT_EDIT_V6_INIT__) return;
+  window.__WISE_PROJECT_EDIT_V6_INIT__ = true;
 
-  // Only on project page
   if (location.pathname !== "/project.php") return;
 
-  // Proof of life (minimal)
   try {
     console.warn("[WiseHireHop] project edit plugin loaded", WISE_PLUGIN_VERSION, location.href);
   } catch (e) {}
 
-  // Boot: wait for jQuery + edit dialog
   var bootTries = 0;
   (function boot() {
     bootTries++;
@@ -57,23 +48,16 @@
   function init() {
     var $ = window.jQuery;
 
-    // Apply rules when dialog opens
     $(document).on("dialogopen.wiseProjEdit", "#edit_dialog", function () {
       scheduleApply("dialogopen");
       setTimeout(function () { scheduleApply("dialogopen+150"); }, 150);
       setTimeout(function () { scheduleApply("dialogopen+450"); }, 450);
     });
 
-    // Observe re-renders inside the dialog
     attachObserver();
-
-    // Run once in case dialog is already open
     scheduleApply("init");
   }
 
-  // -------------------------
-  // Scheduler
-  // -------------------------
   var _applyTimer = null;
   function scheduleApply(reason) {
     if (_applyTimer) return;
@@ -93,7 +77,6 @@
     var isVisible = $dlg.is(":visible") || $dlg.closest(".ui-dialog").is(":visible");
     if (!isVisible) return;
 
-    // Tag wrapper so CSS scopes cleanly (even if you disable theme later)
     var $wrapper = $dlg.closest(".ui-dialog");
     if ($wrapper.length && !$wrapper.hasClass("wise-projedit")) $wrapper.addClass("wise-projedit");
 
@@ -131,9 +114,6 @@
     } catch (e) {}
   }
 
-  // -------------------------
-  // Instance detection
-  // -------------------------
   function getProjectEditInstance($dlg) {
     return (
       $dlg.data("custom-project_edit") ||
@@ -143,16 +123,14 @@
   }
 
   // -------------------------
-  // Hide rules (your existing logic, unchanged in intent)
+  // Hide rules
   // -------------------------
   function applyHideUsingInstance(inst) {
-    // KILL: client contact rows
     hideRow(inst.telephone);
     hideRow(inst.mobile);
     hideRow(inst.email);
     hideRow(inst.add_contact_btn);
 
-    // KEEP: Deliver to + Delivery address ONLY
     try {
       inst.use_at_btn && inst.use_at_btn.hide();
       inst.collect_btn && inst.collect_btn.hide();
@@ -167,7 +145,6 @@
       inst.delivery_address && inst.delivery_address.show();
     } catch (e) {}
 
-    // KILL: delivery phone number row
     if (inst.delivery_telephone && inst.delivery_telephone.length) {
       hideRow(inst.delivery_telephone);
     } else if (inst.del_telephone_label && inst.del_telephone_label.length) {
@@ -194,8 +171,7 @@
   }
 
   // -------------------------
-  // Action bar (subtitle bar under titlebar)
-  // Keeps original buttons in place (hidden), uses clones that click originals.
+  // Action bar under titlebar
   // -------------------------
   function ensureActionBar($dlg) {
     var $wrapper = $dlg.closest(".ui-dialog");
@@ -211,7 +187,6 @@
 
     if (!$origSave.length || !$origCancel.length) return;
 
-    // Build bar
     var $bar = window.jQuery(
       '<div class="wise-projedit-subbar" data-wise-subbar="1">' +
         '<div class="wise-projedit-subbar-inner">' +
@@ -221,7 +196,6 @@
       "</div>"
     );
 
-    // Clone buttons (type=button), wire to originals
     var $saveClone = $origSave.clone(false);
     $saveClone.attr("type", "button");
     $saveClone.off("click").on("click", function (e) {
@@ -236,22 +210,15 @@
       $origCancel.trigger("click");
     });
 
-    // Insert bar after titlebar
     $bar.insertAfter($titlebar);
-
-    // Put clones in the bar
     $bar.find(".wise-projedit-subbar-right").append($saveClone).append(" ").append($cancelClone);
 
-    // Hide originals visually but keep them in DOM
     $origSave.css({ position: "absolute", left: "-99999px", top: "-99999px" });
     $origCancel.css({ position: "absolute", left: "-99999px", top: "-99999px" });
   }
 
   // -------------------------
-  // Layout rebuild (1-column sections)
-  // Salesforce: COMPANY + ADDRESS(+rowspan mate) + PROJECT_NAME + Venue block + Custom fields
-  // People: NAME
-  // HireHop: DEPOT_ID + JOB_TYPE + DETAILS + Dates + STATUS
+  // Layout rebuild into sections
   // -------------------------
   function buildWiseLayout($dlg) {
     var $ = window.jQuery;
@@ -259,15 +226,12 @@
     var $form = $dlg.find("form").first();
     if (!$form.length) return;
 
-    // Guard: build once per rendered form
     if ($form.attr("data-wise-layout-built") === "1") return;
     $form.attr("data-wise-layout-built", "1");
 
-    // Find the top grid container (first child div that uses display:grid)
     var $topGrid = $form.children("div").first();
     if (!$topGrid.length) return;
 
-    // Create new layout container at top of form
     var $layout = $(
       '<div class="wise-projedit-layout" data-wise-layout="1">' +
         sectionHTML("Salesforce") +
@@ -276,14 +240,12 @@
       "</div>"
     );
 
-    // Insert layout before the existing content
     $topGrid.before($layout);
 
     var $sales = $layout.find('[data-wise-section="Salesforce"] .wise-projedit-section-body');
     var $people = $layout.find('[data-wise-section="People"] .wise-projedit-section-body');
     var $hh = $layout.find('[data-wise-section="HireHop"] .wise-projedit-section-body');
 
-    // Helper: create a table in a section
     function ensureTable($sec) {
       var $t = $sec.find("table.wise-projedit-table").first();
       if ($t.length) return $t;
@@ -292,44 +254,34 @@
       return $t;
     }
 
-    // Pull from original tables
     var $leftTable = $topGrid.children("div").first().find("table").first();
     var $rightTable = $topGrid.children("div").eq(1).find("table").first();
 
-    // People: Project Manager row (NAME)
     var $pmTr = $leftTable.find('input[data-field="NAME"]').first().closest("tr");
     if ($pmTr.length) ensureTable($people).append($pmTr.detach());
 
-    // Salesforce: Wise Job Number row (COMPANY)
     var $jobNoTr = $leftTable.find('input[data-field="COMPANY"]').first().closest("tr");
     if ($jobNoTr.length) ensureTable($sales).append($jobNoTr.detach());
 
-    // Salesforce: Client row (ADDRESS) + its rowspan companion row
     var $clientTr = $leftTable.find('textarea[data-field="ADDRESS"]').first().closest("tr");
     if ($clientTr.length) {
-      var $clientTr2 = $clientTr.next("tr"); // companion row for rowspan=2
+      var $clientTr2 = $clientTr.next("tr");
       ensureTable($sales).append($clientTr.detach());
       if ($clientTr2.length) ensureTable($sales).append($clientTr2.detach());
     }
 
-    // Salesforce: Project name (PROJECT_NAME) lives on the right table in your HTML sample
     var $projNameTr = $rightTable.find('input[data-field="PROJECT_NAME"]').first().closest("tr");
     if ($projNameTr.length) ensureTable($sales).append($projNameTr.detach());
 
-    // HireHop: Warehouse name (DEPOT_ID)
     var $depotTr = $rightTable.find('select[data-field="DEPOT_ID"]').first().closest("tr");
     if ($depotTr.length) ensureTable($hh).append($depotTr.detach());
 
-    // HireHop: Project type (JOB_TYPE)
     var $jobTypeTr = $rightTable.find('select[data-field="JOB_TYPE"]').first().closest("tr");
     if ($jobTypeTr.length) ensureTable($hh).append($jobTypeTr.detach());
 
-    // HireHop: Memo/details (DETAILS) (single tr with colspan in your sample)
     var $memoTr = $rightTable.find('textarea[data-field="DETAILS"]').first().closest("tr");
     if ($memoTr.length) ensureTable($hh).append($memoTr.detach());
 
-    // Salesforce: Venue block (Deliver to + address block)
-    // Move the entire table that contains DELIVER_TO (keeps its internal structure intact)
     var $venueTable = $form.find('input[data-field="DELIVER_TO"]').first().closest("table");
     if ($venueTable.length) {
       var $venueWrap = $('<div class="wise-projedit-block"></div>');
@@ -337,7 +289,6 @@
       $sales.append($venueWrap);
     }
 
-    // Salesforce: Custom fields block (keep the container intact)
     var $custom = $form.find(".hh_custom_fields").first();
     if ($custom.length) {
       var $cfWrap = $('<div class="wise-projedit-block"></div>');
@@ -345,7 +296,6 @@
       $sales.append($cfWrap);
     }
 
-    // HireHop: Dates container
     var $dates = $form.find(".hh_dates_container").first();
     if ($dates.length) {
       var $dWrap = $('<div class="wise-projedit-block"></div>');
@@ -353,20 +303,15 @@
       $hh.append($dWrap);
     }
 
-    // HireHop: Status select
     var $statusSelect = $form.find('select[data-field="STATUS"]').first();
     if ($statusSelect.length) {
-      // Move the label wrapper if present (keeps "Status" text and select together)
       var $statusLabel = $statusSelect.closest("label");
       var $sWrap = $('<div class="wise-projedit-block"></div>');
       $sWrap.append($statusLabel.length ? $statusLabel.detach() : $statusSelect.detach());
       $hh.append($sWrap);
     }
 
-    // Hide the original top grid (we’ve moved what we need out of it)
     $topGrid.hide();
-
-    // NOTE: We deliberately DO NOT remove anything else; we only detach specific nodes.
   }
 
   function sectionHTML(title) {
@@ -380,8 +325,7 @@
 
   // -------------------------
   // Wise theme CSS (scoped)
-  // Nightfall Navy: #0D1226
-  // Heritage Rose: #EC9797
+  // Fixes: close button, scroll, columns, heading style
   // -------------------------
   function injectWiseThemeCSS() {
     var id = "wise-projedit-css-" + WISE_PLUGIN_VERSION;
@@ -396,10 +340,23 @@
   --paper-warm: #F6F2EA;
   --ink: #0D1226;
   --line: rgba(13,18,38,.16);
-  --line-strong: rgba(13,18,38,.26);
 }
 
-/* Titlebar (structure unchanged, only colour/font) */
+/* --- Constrain dialog to viewport and allow scroll --- */
+.wise-projedit{
+  display:flex;
+  flex-direction:column;
+  max-height: calc(100vh - 24px) !important;
+}
+.wise-projedit .ui-dialog-titlebar{ flex: 0 0 auto; }
+.wise-projedit-subbar{ flex: 0 0 auto; }
+.wise-projedit .ui-dialog-content{
+  flex: 1 1 auto;
+  min-height: 0 !important;         /* allows flex child to scroll */
+  overflow: auto !important;        /* key: enable scrolling */
+}
+
+/* --- Titlebar (Nightfall Navy) --- */
 .wise-projedit .ui-dialog-titlebar{
   background: var(--nightfall);
   border: none;
@@ -411,37 +368,34 @@
   letter-spacing: .2px;
 }
 
-/* Close button: keep position/shape; just align colour */
+/* --- Close button: make it visible, not black-on-black --- */
 .wise-projedit .ui-dialog-titlebar-close{
-  background: transparent;
-  border: 1px solid rgba(246,242,234,.30);
-  border-radius: 10px;
+  background: var(--rose) !important;
+  border: 1px solid rgba(255,255,255,.35) !important;
+  border-radius: 12px !important;
 }
 .wise-projedit .ui-dialog-titlebar-close:hover{
-  background: rgba(246,242,234,.10);
+  filter: brightness(0.98);
 }
 .wise-projedit .ui-dialog-titlebar-close .ui-icon{
   filter: invert(1);
   opacity: .95;
 }
 
-/* Subtitle/action bar */
+/* --- Subtitle/action bar --- */
 .wise-projedit-subbar{
   background: rgba(236,151,151,.12);
-  border-bottom: 1px solid rgba(236,151,151,.45);
+  border-bottom: 1px solid rgba(236,151,151,.55);
   padding: 8px 10px;
 }
 .wise-projedit-subbar-inner{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.wise-projedit-subbar-right button{
-  margin-left: 6px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
 }
 
-/* Content base */
+/* --- Content base --- */
 .wise-projedit #edit_dialog{
   background: var(--paper);
   color: var(--ink);
@@ -465,35 +419,45 @@
 .wise-projedit #edit_dialog textarea.data_cell:focus,
 .wise-projedit #edit_dialog select.data_cell:focus,
 .wise-projedit #edit_dialog .custom_field:focus{
-  outline: none;
+  outline:none;
   border-color: var(--rose);
   box-shadow: 0 0 0 3px var(--rose-soft);
 }
 
-/* Section layout */
+/* --- Layout: responsive columns to reduce height --- */
 .wise-projedit #edit_dialog .wise-projedit-layout{
   padding: 10px;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
   gap: 10px;
 }
+.wise-projedit #edit_dialog .wise-projedit-section[data-wise-section="Salesforce"]{
+  grid-column: 1 / -1; /* Salesforce spans full width */
+}
+
+/* --- Sections: Nightfall header + white text (2x size) --- */
 .wise-projedit #edit_dialog .wise-projedit-section{
-  border: 1px solid rgba(236,151,151,.45);
+  border: 1px solid var(--nightfall);
   border-radius: 14px;
   overflow: hidden;
   background: #fff;
 }
 .wise-projedit #edit_dialog .wise-projedit-section-title{
-  background: rgba(236,151,151,.12);
-  border-bottom: 1px solid rgba(236,151,151,.45);
-  padding: 10px 12px;
+  background: var(--nightfall);
+  border-bottom: 1px solid var(--nightfall);
+  padding: 12px 14px;
   font-family: "Albra Sans", "Albra", system-ui, -apple-system, Segoe UI, Roboto, Arial;
   font-weight: 400;
-  color: var(--nightfall);
+  color: #fff;
+  font-size: 2em;      /* ~2x */
+  line-height: 1.1;
+  letter-spacing: .2px;
 }
 .wise-projedit #edit_dialog .wise-projedit-section-body{
   padding: 10px 12px;
 }
+
+/* Tables inside sections */
 .wise-projedit #edit_dialog table.wise-projedit-table{
   width: 100%;
 }
@@ -507,11 +471,8 @@
   font-weight: 400;
   color: var(--nightfall);
 }
-.wise-projedit #edit_dialog .wise-projedit-block{
-  margin-top: 8px;
-}
 
-/* Make dates + custom fields feel like clean blocks */
+/* Dates + custom fields as clean blocks */
 .wise-projedit #edit_dialog .hh_dates_container,
 .wise-projedit #edit_dialog .hh_custom_fields{
   background: rgba(236,151,151,.08);
@@ -549,7 +510,7 @@
   }
 
   // -------------------------
-  // Utilities
+  // Utils
   // -------------------------
   function hideRow($elOrJq) {
     if (!$elOrJq) return;
