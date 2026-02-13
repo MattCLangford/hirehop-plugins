@@ -1,43 +1,34 @@
 (function () {
   "use strict";
 
-  // =========================
+  // ============================================================
   // Wise HireHop Project Edit
-  // v6 - Hide fields + Wise theme + optional layout
-  // Fixes:
-  //  - Close button no longer "black on black"
-  //  - Dialog constrained to viewport + scrollable content
-  //  - Section headers: Nightfall Navy bg, white text, ~2x size
-  //  - Layout uses responsive columns to reduce height
-  // =========================
-  var WISE_PLUGIN_VERSION = "v6";
+  // - Re-layout into 3 sections (Salesforce / People / HireHop)
+  // - Apply Wise styling (nightfall + heritage accent)
+  // - Hide unused fields (delivery address, phones, etc.)
+  // ============================================================
+  var WISE_PLUGIN_VERSION = "v5-layout-theme";
 
-  // ---- CONFIG (edit these) ----
-  var CONFIG = {
-    hideUnusedFields: true,
-    enableWiseTheme: true,
-    enableLayout: true,
-    enableActionBar: true,
-    disableLayoutOnError: true
-  };
-
-  if (window.__WISE_PROJECT_EDIT_V6_INIT__) return;
-  window.__WISE_PROJECT_EDIT_V6_INIT__ = true;
-
-  if (location.pathname !== "/project.php") return;
+  // Prevent double-init
+  if (window.__WISE_PROJECT_EDIT_V5_INIT__) return;
+  window.__WISE_PROJECT_EDIT_V5_INIT__ = true;
 
   try {
     console.warn("[WiseHireHop] project edit plugin loaded", WISE_PLUGIN_VERSION, location.href);
   } catch (e) {}
 
+  // Only relevant on project page
+  if (location.pathname !== "/project.php") return;
+
+  // Boot: wait for jQuery + edit_dialog
   var bootTries = 0;
   (function boot() {
     bootTries++;
 
     var hasJQ = !!window.jQuery && !!window.jQuery.fn;
-    var hasEditDialog = !!document.getElementById("edit_dialog");
+    var hasDlg = !!document.getElementById("edit_dialog");
 
-    if (hasJQ && hasEditDialog) {
+    if (hasJQ && hasDlg) {
       init();
       return;
     }
@@ -45,453 +36,354 @@
     if (bootTries < 200) setTimeout(boot, 50);
   })();
 
+  // ------------------------------------------------------------
+  // Init
+  // ------------------------------------------------------------
   function init() {
     var $ = window.jQuery;
 
-    $(document).on("dialogopen.wiseProjEdit", "#edit_dialog", function () {
+    injectCSS(getWiseCSS());
+
+    // Apply each time dialog opens (content is often re-rendered)
+    $(document).on("dialogopen.wiseProjEditV5", "#edit_dialog", function () {
       scheduleApply("dialogopen");
       setTimeout(function () { scheduleApply("dialogopen+150"); }, 150);
       setTimeout(function () { scheduleApply("dialogopen+450"); }, 450);
     });
 
+    // Observe rerenders inside dialog
     attachObserver();
+
+    // In case it's already open
     scheduleApply("init");
   }
 
+  // ------------------------------------------------------------
+  // Apply (debounced)
+  // ------------------------------------------------------------
   var _applyTimer = null;
   function scheduleApply(reason) {
     if (_applyTimer) return;
     _applyTimer = setTimeout(function () {
       _applyTimer = null;
-      applyAll(reason);
+      apply(reason);
     }, 50);
   }
 
-  function applyAll(reason) {
+  function apply(reason) {
     var $ = window.jQuery;
     if (!$) return;
 
     var $dlg = $("#edit_dialog");
     if (!$dlg.length) return;
 
-    var isVisible = $dlg.is(":visible") || $dlg.closest(".ui-dialog").is(":visible");
-    if (!isVisible) return;
-
     var $wrapper = $dlg.closest(".ui-dialog");
-    if ($wrapper.length && !$wrapper.hasClass("wise-projedit")) $wrapper.addClass("wise-projedit");
+    var visible = $dlg.is(":visible") || $wrapper.is(":visible");
+    if (!visible) return;
 
-    if (CONFIG.enableWiseTheme) {
-      injectWiseThemeCSS();
+    // Mark / scope styling to this dialog only
+    if (!$wrapper.hasClass("wise-projedit-dialog")) $wrapper.addClass("wise-projedit-dialog");
+    if (!$dlg.hasClass("wise-projedit")) $dlg.addClass("wise-projedit");
+
+    // Try to use the HireHop widget instance (more reliable element refs)
+    var inst =
+      $dlg.data("custom-project_edit") ||
+      $dlg.data("customProject_edit") ||
+      null;
+
+    // Build layout if not present (or if HireHop rebuilt the form)
+    var $form = $dlg.find("form").first();
+    if ($form.length && !$form.find(".wise-projedit-shell").length) {
+      buildLayout($dlg, $form, inst);
     }
 
-    if (CONFIG.enableActionBar) {
-      ensureActionBar($dlg);
+    // Enforce hide rules (idempotent)
+    applyHideRules($dlg, inst);
+
+    try {
+      console.info("[WiseHireHop] project edit applied", reason, { hasInstance: !!inst });
+    } catch (e) {}
+  }
+
+  // ------------------------------------------------------------
+  // Layout build
+  // ------------------------------------------------------------
+  function buildLayout($dlg, $form, inst) {
+    var $ = window.jQuery;
+
+    // Shell (sticky actions + 3-column grid)
+    var $shell = $('<div class="wise-projedit-shell"></div>');
+    var $actions = $('<div class="wise-actions-bar" aria-label="Actions"></div>');
+    var $grid = $('<div class="wise-projedit-grid"></div>');
+
+    // Sections
+    var $sf = makeSection("Salesforce");
+    var $people = makeSection("People");
+    var $hh = makeSection("HireHop");
+
+    $grid.append($sf.section, $people.section, $hh.section);
+    $shell.append($actions, $grid);
+
+    // Insert shell at top of the form
+    $form.prepend($shell);
+
+    // -------- Actions: move Save / Cancel and centre them
+    var $saveBtn = $form.find('button[type="submit"]').first();
+    var $cancelBtn = $form.find('button[type="reset"]').first();
+
+    var $actionWrap = $('<div class="wise-actions-wrap"></div>');
+    if ($saveBtn.length) $actionWrap.append($saveBtn.detach());
+    if ($cancelBtn.length) $actionWrap.append($cancelBtn.detach());
+    $actions.append($actionWrap);
+
+    // -------- Salesforce section order:
+    // 1. Custom Status (custom field)
+    // 2. Custom Tier (custom field)
+    // 3. Wise Job Number (COMPANY)
+    // 4. Client (ADDRESS) — forced single-line
+    // 5. Venue (DELIVER_TO)
+    // 6. Project name (PROJECT_NAME)
+    // 7. Type (JOB_TYPE)
+    // + then: any remaining custom fields (if present)
+    var $sfTable = $('<table class="wise-projedit-table" cellspacing="0" border="0"></table>');
+    $sf.body.append($sfTable);
+
+    // Move custom fields container into Salesforce section (and reorder inside it)
+    var $custom = $form.find(".hh_custom_fields").first();
+    if ($custom.length) {
+      reorderCustomFields($custom);
+
+      // Keep container, but style it to look like native rows
+      var $customWrap = $('<div class="wise-customfields"></div>');
+      $customWrap.append($custom.detach());
+      $sf.body.prepend($customWrap);
     }
 
-    var inst = getProjectEditInstance($dlg);
-
-    if (CONFIG.hideUnusedFields) {
-      if (inst) applyHideUsingInstance(inst);
-      else applyHideUsingDOM($dlg);
+    // Helper: append a <tr> (detached from legacy tables) into our table
+    function appendTr($tr) {
+      if ($tr && $tr.length) $sfTable.append($tr.detach());
     }
 
-    if (CONFIG.enableLayout) {
-      try {
-        buildWiseLayout($dlg);
-      } catch (e) {
-        try { console.error("[WiseHireHop] layout error", e); } catch (_) {}
-        if (CONFIG.disableLayoutOnError) CONFIG.enableLayout = false;
+    // Wise Job Number
+    appendTr(findTrByField($form, inst, "COMPANY"));
+
+    // Client (ADDRESS textarea) — remove rowspan + make single-line look
+    var $clientTr = findTrByField($form, inst, "ADDRESS");
+    if ($clientTr && $clientTr.length) {
+      // Remove any rowspan that causes the next field to slide alongside
+      $clientTr.find("td[rowspan]").removeAttr("rowspan");
+
+      // Remove the (now redundant) "Add to address book" row if it follows
+      var $next = $clientTr.next("tr");
+      if ($next.length) $next.remove();
+
+      appendTr($clientTr);
+
+      // Force single-line behaviour
+      var $clientTa = $sfTable.find('textarea[data-field="ADDRESS"]').first();
+      if ($clientTa.length) {
+        $clientTa.attr("rows", "1");
+        $clientTa.on("input.wiseSingleLine", function () {
+          var v = String(this.value || "");
+          if (v.indexOf("\n") !== -1) this.value = v.replace(/\s*\n+\s*/g, " ");
+        });
       }
     }
 
-    try {
-      console.info("[WiseHireHop] applied", reason, {
-        hasInstance: !!inst,
-        theme: !!CONFIG.enableWiseTheme,
-        actionBar: !!CONFIG.enableActionBar,
-        layout: !!CONFIG.enableLayout
-      });
-    } catch (e) {}
-  }
-
-  function getProjectEditInstance($dlg) {
-    return (
-      $dlg.data("custom-project_edit") ||
-      $dlg.data("customProject_edit") ||
-      null
-    );
-  }
-
-  // -------------------------
-  // Hide rules
-  // -------------------------
-  function applyHideUsingInstance(inst) {
-    hideRow(inst.telephone);
-    hideRow(inst.mobile);
-    hideRow(inst.email);
-    hideRow(inst.add_contact_btn);
-
-    try {
-      inst.use_at_btn && inst.use_at_btn.hide();
-      inst.collect_btn && inst.collect_btn.hide();
-      inst.delivery_btn && inst.delivery_btn.show();
-
-      inst.use_at && inst.use_at.hide();
-      inst.collection_from && inst.collection_from.hide();
-      inst.deliver_to && inst.deliver_to.show();
-
-      inst.use_at_address && inst.use_at_address.hide();
-      inst.collection_address && inst.collection_address.hide();
-      inst.delivery_address && inst.delivery_address.show();
-    } catch (e) {}
-
-    if (inst.delivery_telephone && inst.delivery_telephone.length) {
-      hideRow(inst.delivery_telephone);
-    } else if (inst.del_telephone_label && inst.del_telephone_label.length) {
-      hideRow(inst.del_telephone_label);
-    } else if (inst.use_at_tel && inst.use_at_tel.length) {
-      hideRow(inst.use_at_tel);
-    } else if (inst.collection_tel && inst.collection_tel.length) {
-      hideRow(inst.collection_tel);
-    }
-  }
-
-  function applyHideUsingDOM($root) {
-    hideRow($root.find("[data-field='TELEPHONE']").first());
-    hideRow($root.find("[data-field='MOBILE']").first());
-    hideRow($root.find("[data-field='EMAIL']").first());
-
-    $root.find(".label_container .label.use_at, .label_container .label.collection").hide();
-
-    var $tel =
-      $root.find("[data-field='DELIVERY_TELEPHONE']").first()
-        .add($root.find(".telephone_container input.delivery").first())
-        .filter(":first");
-    if ($tel.length) hideRow($tel);
-  }
-
-  // -------------------------
-  // Action bar under titlebar
-  // -------------------------
-  function ensureActionBar($dlg) {
-    var $wrapper = $dlg.closest(".ui-dialog");
-    if (!$wrapper.length) return;
-
-    if ($wrapper.find(".wise-projedit-subbar").length) return;
-
-    var $titlebar = $wrapper.children(".ui-dialog-titlebar").first();
-    if (!$titlebar.length) return;
-
-    var $origSave = $dlg.find("button[type='submit']").first();
-    var $origCancel = $dlg.find("button[type='reset']").first();
-
-    if (!$origSave.length || !$origCancel.length) return;
-
-    var $bar = window.jQuery(
-      '<div class="wise-projedit-subbar" data-wise-subbar="1">' +
-        '<div class="wise-projedit-subbar-inner">' +
-          '<div class="wise-projedit-subbar-left"></div>' +
-          '<div class="wise-projedit-subbar-right"></div>' +
-        "</div>" +
-      "</div>"
-    );
-
-    var $saveClone = $origSave.clone(false);
-    $saveClone.attr("type", "button");
-    $saveClone.off("click").on("click", function (e) {
-      e.preventDefault();
-      $origSave.trigger("click");
-    });
-
-    var $cancelClone = $origCancel.clone(false);
-    $cancelClone.attr("type", "button");
-    $cancelClone.off("click").on("click", function (e) {
-      e.preventDefault();
-      $origCancel.trigger("click");
-    });
-
-    $bar.insertAfter($titlebar);
-    $bar.find(".wise-projedit-subbar-right").append($saveClone).append(" ").append($cancelClone);
-
-    $origSave.css({ position: "absolute", left: "-99999px", top: "-99999px" });
-    $origCancel.css({ position: "absolute", left: "-99999px", top: "-99999px" });
-  }
-
-  // -------------------------
-  // Layout rebuild into sections
-  // -------------------------
-  function buildWiseLayout($dlg) {
-    var $ = window.jQuery;
-
-    var $form = $dlg.find("form").first();
-    if (!$form.length) return;
-
-    if ($form.attr("data-wise-layout-built") === "1") return;
-    $form.attr("data-wise-layout-built", "1");
-
-    var $topGrid = $form.children("div").first();
-    if (!$topGrid.length) return;
-
-    var $layout = $(
-      '<div class="wise-projedit-layout" data-wise-layout="1">' +
-        sectionHTML("Salesforce") +
-        sectionHTML("People") +
-        sectionHTML("HireHop") +
-      "</div>"
-    );
-
-    $topGrid.before($layout);
-
-    var $sales = $layout.find('[data-wise-section="Salesforce"] .wise-projedit-section-body');
-    var $people = $layout.find('[data-wise-section="People"] .wise-projedit-section-body');
-    var $hh = $layout.find('[data-wise-section="HireHop"] .wise-projedit-section-body');
-
-    function ensureTable($sec) {
-      var $t = $sec.find("table.wise-projedit-table").first();
-      if ($t.length) return $t;
-      $t = $('<table class="wise-projedit-table" cellspacing="0" border="0"></table>');
-      $sec.append($t);
-      return $t;
+    // Venue (DELIVER_TO row) - rename label consistently
+    var $venueTr = findTrByField($form, inst, "DELIVER_TO");
+    if ($venueTr && $venueTr.length) {
+      // Ensure label reads "Venue" (and matches non-bold label style via CSS)
+      $venueTr.find("td.label").first().text("Venue");
+      appendTr($venueTr);
     }
 
-    var $leftTable = $topGrid.children("div").first().find("table").first();
-    var $rightTable = $topGrid.children("div").eq(1).find("table").first();
+    // Project name
+    appendTr(findTrByField($form, inst, "PROJECT_NAME"));
 
-    var $pmTr = $leftTable.find('input[data-field="NAME"]').first().closest("tr");
-    if ($pmTr.length) ensureTable($people).append($pmTr.detach());
+    // Type (job type)
+    appendTr(findTrByField($form, inst, "JOB_TYPE"));
 
-    var $jobNoTr = $leftTable.find('input[data-field="COMPANY"]').first().closest("tr");
-    if ($jobNoTr.length) ensureTable($sales).append($jobNoTr.detach());
+    // -------- People section: Project Manager (NAME)
+    var $peopleTable = $('<table class="wise-projedit-table" cellspacing="0" border="0"></table>');
+    $people.body.append($peopleTable);
+    var $pmTr = findTrByField($form, inst, "NAME");
+    if ($pmTr && $pmTr.length) $peopleTable.append($pmTr.detach());
 
-    var $clientTr = $leftTable.find('textarea[data-field="ADDRESS"]').first().closest("tr");
-    if ($clientTr.length) {
-      var $clientTr2 = $clientTr.next("tr");
-      ensureTable($sales).append($clientTr.detach());
-      if ($clientTr2.length) ensureTable($sales).append($clientTr2.detach());
-    }
+    // -------- HireHop section: Warehouse, Dates, HireHop Status, Memo
+    var $hhTable = $('<table class="wise-projedit-table" cellspacing="0" border="0"></table>');
+    $hh.body.append($hhTable);
 
-    var $projNameTr = $rightTable.find('input[data-field="PROJECT_NAME"]').first().closest("tr");
-    if ($projNameTr.length) ensureTable($sales).append($projNameTr.detach());
+    // Warehouse Name (DEPOT_ID)
+    var $depotTr = findTrByField($form, inst, "DEPOT_ID");
+    if ($depotTr && $depotTr.length) $hhTable.append($depotTr.detach());
 
-    var $depotTr = $rightTable.find('select[data-field="DEPOT_ID"]').first().closest("tr");
-    if ($depotTr.length) ensureTable($hh).append($depotTr.detach());
-
-    var $jobTypeTr = $rightTable.find('select[data-field="JOB_TYPE"]').first().closest("tr");
-    if ($jobTypeTr.length) ensureTable($hh).append($jobTypeTr.detach());
-
-    var $memoTr = $rightTable.find('textarea[data-field="DETAILS"]').first().closest("tr");
-    if ($memoTr.length) ensureTable($hh).append($memoTr.detach());
-
-    var $venueTable = $form.find('input[data-field="DELIVER_TO"]').first().closest("table");
-    if ($venueTable.length) {
-      var $venueWrap = $('<div class="wise-projedit-block"></div>');
-      $venueWrap.append($venueTable.detach());
-      $sales.append($venueWrap);
-    }
-
-    var $custom = $form.find(".hh_custom_fields").first();
-    if ($custom.length) {
-      var $cfWrap = $('<div class="wise-projedit-block"></div>');
-      $cfWrap.append($custom.detach());
-      $sales.append($cfWrap);
-    }
-
+    // Dates container
     var $dates = $form.find(".hh_dates_container").first();
     if ($dates.length) {
-      var $dWrap = $('<div class="wise-projedit-block"></div>');
-      $dWrap.append($dates.detach());
-      $hh.append($dWrap);
+      var $datesWrap = $('<div class="wise-dates-wrap"></div>');
+      $datesWrap.append($dates.detach());
+      $hh.body.append($datesWrap);
     }
 
-    var $statusSelect = $form.find('select[data-field="STATUS"]').first();
-    if ($statusSelect.length) {
-      var $statusLabel = $statusSelect.closest("label");
-      var $sWrap = $('<div class="wise-projedit-block"></div>');
-      $sWrap.append($statusLabel.length ? $statusLabel.detach() : $statusSelect.detach());
-      $hh.append($sWrap);
+    // HireHop Status dropdown (data-field=STATUS) — build clean row
+    var $statusSel = $form.find('select[data-field="STATUS"]').first();
+    if ($statusSel.length) {
+      var $tr = $('<tr></tr>');
+      $tr.append('<td class="label">Status</td>');
+      var $td = $('<td class="field"></td>');
+      $td.append($statusSel.detach());
+      $tr.append($td);
+      $hhTable.append($tr);
     }
 
-    $topGrid.hide();
+    // Memo (DETAILS) — build clean row (keep multiline)
+    var $detailsTa = $form.find('textarea[data-field="DETAILS"]').first();
+    if ($detailsTa.length) {
+      var $mtr = $('<tr></tr>');
+      $mtr.append('<td class="label">Memo</td>');
+      var $mtd = $('<td class="field"></td>');
+      $mtd.append($detailsTa.detach());
+      $mtr.append($mtd);
+      $hhTable.append($mtr);
+    }
+
+    // Hide remaining legacy layout blocks (keep hidden inputs + proj_fields)
+    $form.children().each(function () {
+      var $c = $(this);
+
+      if ($c.hasClass("wise-projedit-shell")) return;
+      if ($c.is("#proj_fields")) return;
+      if ($c.is('input[type="hidden"]')) return;
+
+      // The original layout is typically a big grid div + the old footer table etc.
+      // Hide it so only our new layout shows.
+      $c.hide();
+    });
+
+    // Make sure the dialog content scrolls when needed
+    $dlg.css({ overflow: "auto" });
   }
 
-  function sectionHTML(title) {
-    return (
-      '<section class="wise-projedit-section" data-wise-section="' + escAttr(title) + '">' +
-        '<div class="wise-projedit-section-title">' + escHtml(title) + "</div>" +
-        '<div class="wise-projedit-section-body"></div>' +
-      "</section>"
-    );
+  function makeSection(title) {
+    var $section = $('<section class="wise-section"></section>');
+    var $hd = $('<div class="wise-section-hd"></div>').text(title);
+    var $body = $('<div class="wise-section-bd"></div>');
+    $section.append($hd, $body);
+    return { section: $section, body: $body };
   }
 
-  // -------------------------
-  // Wise theme CSS (scoped)
-  // Fixes: close button, scroll, columns, heading style
-  // -------------------------
-  function injectWiseThemeCSS() {
-    var id = "wise-projedit-css-" + WISE_PLUGIN_VERSION;
-    if (document.getElementById(id)) return;
+  function findTrByField($form, inst, dataField) {
+    var $ = window.jQuery;
 
-    var css = `
-.wise-projedit{
-  --nightfall: #0D1226;
-  --rose: #EC9797;
-  --rose-soft: rgba(236,151,151,.14);
-  --paper: #FFFFFF;
-  --paper-warm: #F6F2EA;
-  --ink: #0D1226;
-  --line: rgba(13,18,38,.16);
-}
+    // Prefer instance refs when available
+    if (inst) {
+      var map = {
+        NAME: inst.name,
+        COMPANY: inst.company,
+        ADDRESS: inst.address,
+        JOB_TYPE: inst.proj_type,
+        PROJECT_NAME: inst.proj_name,
+        DEPOT_ID: inst.depot,
+        DETAILS: inst.details,
+        DELIVER_TO: inst.deliver_to
+      };
 
-/* --- Constrain dialog to viewport and allow scroll --- */
-.wise-projedit{
-  display:flex;
-  flex-direction:column;
-  max-height: calc(100vh - 24px) !important;
-}
-.wise-projedit .ui-dialog-titlebar{ flex: 0 0 auto; }
-.wise-projedit-subbar{ flex: 0 0 auto; }
-.wise-projedit .ui-dialog-content{
-  flex: 1 1 auto;
-  min-height: 0 !important;         /* allows flex child to scroll */
-  overflow: auto !important;        /* key: enable scrolling */
-}
+      var $el = map[dataField];
+      if ($el && $el.length) return $el.closest("tr");
+    }
 
-/* --- Titlebar (Nightfall Navy) --- */
-.wise-projedit .ui-dialog-titlebar{
-  background: var(--nightfall);
-  border: none;
-}
-.wise-projedit .ui-dialog-title{
-  color: var(--paper-warm);
-  font-family: "Albra Sans", "Albra", system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  font-weight: 400;
-  letter-spacing: .2px;
-}
-
-/* --- Close button: make it visible, not black-on-black --- */
-.wise-projedit .ui-dialog-titlebar-close{
-  background: var(--rose) !important;
-  border: 1px solid rgba(255,255,255,.35) !important;
-  border-radius: 12px !important;
-}
-.wise-projedit .ui-dialog-titlebar-close:hover{
-  filter: brightness(0.98);
-}
-.wise-projedit .ui-dialog-titlebar-close .ui-icon{
-  filter: invert(1);
-  opacity: .95;
-}
-
-/* --- Subtitle/action bar --- */
-.wise-projedit-subbar{
-  background: rgba(236,151,151,.12);
-  border-bottom: 1px solid rgba(236,151,151,.55);
-  padding: 8px 10px;
-}
-.wise-projedit-subbar-inner{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-}
-
-/* --- Content base --- */
-.wise-projedit #edit_dialog{
-  background: var(--paper);
-  color: var(--ink);
-  font-family: "Lato", system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  font-weight: 300;
-}
-
-/* Inputs */
-.wise-projedit #edit_dialog input.data_cell,
-.wise-projedit #edit_dialog textarea.data_cell,
-.wise-projedit #edit_dialog select.data_cell,
-.wise-projedit #edit_dialog .custom_field{
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  padding: 7px 9px;
-  background: #fff;
-  font-family: "Lato", system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  font-weight: 300;
-}
-.wise-projedit #edit_dialog input.data_cell:focus,
-.wise-projedit #edit_dialog textarea.data_cell:focus,
-.wise-projedit #edit_dialog select.data_cell:focus,
-.wise-projedit #edit_dialog .custom_field:focus{
-  outline:none;
-  border-color: var(--rose);
-  box-shadow: 0 0 0 3px var(--rose-soft);
-}
-
-/* --- Layout: responsive columns to reduce height --- */
-.wise-projedit #edit_dialog .wise-projedit-layout{
-  padding: 10px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-  gap: 10px;
-}
-.wise-projedit #edit_dialog .wise-projedit-section[data-wise-section="Salesforce"]{
-  grid-column: 1 / -1; /* Salesforce spans full width */
-}
-
-/* --- Sections: Nightfall header + white text (2x size) --- */
-.wise-projedit #edit_dialog .wise-projedit-section{
-  border: 1px solid var(--nightfall);
-  border-radius: 14px;
-  overflow: hidden;
-  background: #fff;
-}
-.wise-projedit #edit_dialog .wise-projedit-section-title{
-  background: var(--nightfall);
-  border-bottom: 1px solid var(--nightfall);
-  padding: 12px 14px;
-  font-family: "Albra Sans", "Albra", system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  font-weight: 400;
-  color: #fff;
-  font-size: 2em;      /* ~2x */
-  line-height: 1.1;
-  letter-spacing: .2px;
-}
-.wise-projedit #edit_dialog .wise-projedit-section-body{
-  padding: 10px 12px;
-}
-
-/* Tables inside sections */
-.wise-projedit #edit_dialog table.wise-projedit-table{
-  width: 100%;
-}
-.wise-projedit #edit_dialog table.wise-projedit-table td{
-  padding: 2px 4px;
-  vertical-align: top;
-}
-.wise-projedit #edit_dialog table.wise-projedit-table td.label,
-.wise-projedit #edit_dialog label.label{
-  font-family: "Albra Sans", "Albra", system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  font-weight: 400;
-  color: var(--nightfall);
-}
-
-/* Dates + custom fields as clean blocks */
-.wise-projedit #edit_dialog .hh_dates_container,
-.wise-projedit #edit_dialog .hh_custom_fields{
-  background: rgba(236,151,151,.08);
-  border: 1px solid rgba(236,151,151,.35);
-  border-radius: 14px;
-  padding: 10px;
-}
-    `;
-
-    var style = document.createElement("style");
-    style.id = id;
-    style.type = "text/css";
-    style.appendChild(document.createTextNode(css));
-    document.head.appendChild(style);
+    // Fallback: DOM lookup by data-field
+    var $node = $form.find('[data-field="' + dataField + '"]').first();
+    if ($node.length) return $node.closest("tr");
+    return null;
   }
 
-  // -------------------------
-  // Observer
-  // -------------------------
+  function reorderCustomFields($custom) {
+    // Move "Status" then "Tier" to the top, keep the rest afterwards.
+    // (Label texts like "Status :" / "Tier of event :")
+    var $ = window.jQuery;
+
+    var $containers = $custom.find(".custom_field_container");
+    if (!$containers.length) return;
+
+    function labelText($c) {
+      var $lab = $c.find("label.label").first();
+      if (!$lab.length) return "";
+      var t = $lab.clone().children().remove().end().text();
+      return String(t || "").replace(/\s+/g, " ").trim().toLowerCase();
+    }
+
+    var status = [];
+    var tier = [];
+    var rest = [];
+
+    $containers.each(function () {
+      var $c = $(this);
+      var t = labelText($c);
+
+      if (t.indexOf("status") === 0) status.push($c);
+      else if (t.indexOf("tier") === 0) tier.push($c);
+      else rest.push($c);
+    });
+
+    // Re-append in desired order
+    var ordered = status.concat(tier).concat(rest);
+    for (var i = 0; i < ordered.length; i++) {
+      $custom.append(ordered[i].detach());
+    }
+  }
+
+  // ------------------------------------------------------------
+  // Hide rules (idempotent)
+  // ------------------------------------------------------------
+  function applyHideRules($dlg, inst) {
+    var $ = window.jQuery;
+    var $form = $dlg.find("form").first();
+
+    // Hide client contact rows (TELEPHONE/MOBILE/EMAIL + add to address book)
+    hideRow(inst && inst.telephone);
+    hideRow(inst && inst.mobile);
+    hideRow(inst && inst.email);
+    hideRow(inst && inst.add_contact_btn);
+
+    // Venue address field (DELIVERY_ADDRESS) must be hidden
+    hideRow($form.find('[data-field="DELIVERY_ADDRESS"]').first());
+    // Also hide the address mode labels row (delivery/use_at/collection) if it’s the one containing DELIVERY_ADDRESS
+    // (In case it survived in legacy content)
+    $form.find('[data-field="DELIVERY_ADDRESS"]').closest("tr").hide();
+
+    // Delivery phone row (and any telephone container row)
+    hideRow($form.find('[data-field="DELIVERY_TELEPHONE"]').first());
+    hideRow($form.find(".telephone_container").first());
+
+    // Force delivery mode inputs only (hide use_at/collection inputs if present)
+    if (inst) {
+      try {
+        inst.use_at_btn && inst.use_at_btn.hide();
+        inst.collect_btn && inst.collect_btn.hide();
+        inst.use_at && inst.use_at.hide();
+        inst.collection_from && inst.collection_from.hide();
+      } catch (e) {}
+    } else {
+      $form.find(".label_container .label.use_at, .label_container .label.collection").hide();
+      $form.find("input.use_at, input.collection, textarea.use_at, textarea.collection").hide();
+    }
+  }
+
+  function hideRow($elOrJq) {
+    if (!$elOrJq) return;
+    var $ = window.jQuery;
+    var $el = ($elOrJq.jquery ? $elOrJq : $($elOrJq));
+    if (!$el.length) return;
+
+    var $tr = $el.closest("tr");
+    if ($tr.length) $tr.hide();
+  }
+
+  // ------------------------------------------------------------
+  // Mutation observer (rerenders)
+  // ------------------------------------------------------------
   function attachObserver() {
     var el = document.getElementById("edit_dialog");
     if (!el || !window.MutationObserver) return;
@@ -509,24 +401,232 @@
     obs.observe(el, { childList: true, subtree: true, attributes: true });
   }
 
-  // -------------------------
-  // Utils
-  // -------------------------
-  function hideRow($elOrJq) {
-    if (!$elOrJq) return;
-    var $ = window.jQuery;
-    var $el = ($elOrJq.jquery ? $elOrJq : $($elOrJq));
-    if (!$el.length) return;
-    var $tr = $el.closest("tr");
-    if ($tr.length) $tr.hide();
+  // ------------------------------------------------------------
+  // CSS
+  // ------------------------------------------------------------
+  function injectCSS(cssText) {
+    var id = "wise-projedit-v5-css";
+    if (document.getElementById(id)) return;
+
+    var style = document.createElement("style");
+    style.id = id;
+    style.type = "text/css";
+    style.appendChild(document.createTextNode(cssText));
+    document.head.appendChild(style);
   }
 
-  function escHtml(s) {
-    return String(s).replace(/[&<>"']/g, function (m) {
-      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m];
-    });
+  function getWiseCSS() {
+    // Nightfall Navy: #0D1226
+    // Heritage Rose:  #EC9797
+    return `
+/* =========================
+   Wise Project Edit (scoped)
+   ========================= */
+
+.wise-projedit-dialog{
+  width: min(92vw, 1200px) !important;
+  max-width: 92vw !important;
+}
+
+/* Keep dialog within viewport and allow scrolling */
+.wise-projedit-dialog.ui-dialog{
+  top: 6vh !important;
+  max-height: 88vh !important;
+}
+
+.wise-projedit-dialog .ui-dialog-content{
+  background: #fff !important;
+  color: #0D1226;
+  overflow: auto !important;
+  max-height: calc(88vh - 56px) !important; /* account for titlebar */
+}
+
+/* 1) Title bar: white background, nightfall text */
+.wise-projedit-dialog .ui-dialog-titlebar{
+  background: #fff !important;
+  color: #0D1226 !important;
+  border: 1px solid rgba(13,18,38,0.5) !important;
+  border-bottom: none !important;
+}
+
+.wise-projedit-dialog .ui-dialog-title{
+  color: #0D1226 !important;
+  font-family: "Albra Sans", "Lato", system-ui, -apple-system, Segoe UI, Roboto, Arial !important;
+  font-weight: 400 !important;
+}
+
+/* Close button: remove dark box + show a clean × */
+.wise-projedit-dialog .ui-dialog-titlebar-close{
+  background: transparent !important;
+  border: 1px solid rgba(13,18,38,0.25) !important;
+  border-radius: 10px !important;
+  width: 34px !important;
+  height: 34px !important;
+}
+
+.wise-projedit-dialog .ui-dialog-titlebar-close .ui-icon{
+  background-image: none !important;
+  text-indent: 0 !important;
+  overflow: visible !important;
+}
+
+.wise-projedit-dialog .ui-dialog-titlebar-close .ui-icon:before{
+  content: "×";
+  display: inline-block;
+  font-size: 20px;
+  line-height: 20px;
+  color: #0D1226;
+  position: relative;
+  top: 6px;
+  left: 10px;
+}
+
+/* Core font */
+.wise-projedit #edit_dialog,
+.wise-projedit #edit_dialog input,
+.wise-projedit #edit_dialog textarea,
+.wise-projedit #edit_dialog select{
+  font-family: "Lato", system-ui, -apple-system, Segoe UI, Roboto, Arial !important;
+}
+
+/* 2) Actions bar (Save/Cancel) - white background, centred */
+.wise-projedit .wise-actions-bar{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #fff;
+  border-bottom: 1px solid rgba(13,18,38,0.5);
+  padding: 10px 12px;
+  display: flex;
+  justify-content: center;
+}
+
+.wise-projedit .wise-actions-wrap{
+  display: inline-flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* 7) 3-column layout (responsive) */
+.wise-projedit .wise-projedit-grid{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1100px){
+  .wise-projedit .wise-projedit-grid{
+    grid-template-columns: 1fr;
   }
-  function escAttr(s) {
-    return String(s).replace(/"/g, "&quot;");
+}
+
+/* 5) Section titles: white background, nightfall text; border nightfall @ 50% */
+.wise-projedit .wise-section{
+  border: 1px solid rgba(13,18,38,0.5);
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.wise-projedit .wise-section-hd{
+  background: #fff;
+  color: #0D1226;
+  border-bottom: 1px solid rgba(13,18,38,0.5);
+  padding: 10px 12px;
+  font-family: "Albra Sans", "Lato", system-ui, -apple-system, Segoe UI, Roboto, Arial !important;
+  font-size: 1.8em; /* ~2x default */
+  font-weight: 400;
+}
+
+.wise-projedit .wise-section-bd{
+  padding: 10px 12px 12px 12px;
+}
+
+/* Tables */
+.wise-projedit table.wise-projedit-table{
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.wise-projedit table.wise-projedit-table td{
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+/* 3) Labels not bold (Wise Job Number / Client / Project name / Venue all match) */
+.wise-projedit table.wise-projedit-table td.label{
+  width: 190px !important;
+  white-space: nowrap;
+  font-weight: 300 !important;
+  color: #0D1226 !important;
+}
+
+/* Inputs span width */
+.wise-projedit input.data_cell,
+.wise-projedit select.data_cell,
+.wise-projedit textarea.data_cell,
+.wise-projedit input.custom_field,
+.wise-projedit select.custom_field,
+.wise-projedit textarea.custom_field{
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  border: 1px solid rgba(13,18,38,0.25) !important;
+  border-radius: 12px !important;
+  padding: 8px 10px !important;
+  background: #fff !important;
+  color: #0D1226 !important;
+  font-weight: 300 !important;
+}
+
+/* Heritage accent on focus (subtle) */
+.wise-projedit input.data_cell:focus,
+.wise-projedit select.data_cell:focus,
+.wise-projedit textarea.data_cell:focus,
+.wise-projedit input.custom_field:focus,
+.wise-projedit textarea.custom_field:focus{
+  outline: none !important;
+  border-color: rgba(236,151,151,0.9) !important;
+  box-shadow: 0 0 0 3px rgba(236,151,151,0.25) !important;
+}
+
+/* 3) Client forced to single-line visual */
+.wise-projedit textarea[data-field="ADDRESS"]{
+  height: 2.45em !important;
+  min-height: 2.45em !important;
+  resize: none !important;
+  overflow: hidden !important;
+}
+
+/* Custom fields: remove “bubble” feel and align like normal rows */
+.wise-projedit .wise-customfields .hh_custom_fields{
+  display: block !important;
+  gap: 0 !important;
+}
+
+.wise-projedit .wise-customfields .custom_field_container{
+  display: block !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  margin: 0 0 8px 0 !important;
+}
+
+.wise-projedit .wise-customfields label.label{
+  display: grid !important;
+  grid-template-columns: 190px 1fr !important;
+  gap: 8px !important;
+  align-items: center !important;
+  font-weight: 300 !important;
+  color: #0D1226 !important;
+}
+
+/* Dates block spacing */
+.wise-projedit .wise-dates-wrap{
+  margin-top: 8px;
+}
+`;
   }
 })();
