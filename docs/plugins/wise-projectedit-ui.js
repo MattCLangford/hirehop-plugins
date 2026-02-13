@@ -6,12 +6,13 @@
   // - Re-layout into 3 sections (Salesforce / People / HireHop)
   // - Apply Wise styling (nightfall + heritage accent)
   // - Hide unused fields (delivery address, phones, etc.)
+  // - Unify label/input alignment for ALL fields (standard + custom)
   // ============================================================
-  var WISE_PLUGIN_VERSION = "v5-layout-theme";
+  var WISE_PLUGIN_VERSION = "v6-unified-field-layout";
 
   // Prevent double-init
-  if (window.__WISE_PROJECT_EDIT_V5_INIT__) return;
-  window.__WISE_PROJECT_EDIT_V5_INIT__ = true;
+  if (window.__WISE_PROJECT_EDIT_V6_INIT__) return;
+  window.__WISE_PROJECT_EDIT_V6_INIT__ = true;
 
   try {
     console.warn("[WiseHireHop] project edit plugin loaded", WISE_PLUGIN_VERSION, location.href);
@@ -45,7 +46,7 @@
     injectCSS(getWiseCSS());
 
     // Apply each time dialog opens (content is often re-rendered)
-    $(document).on("dialogopen.wiseProjEditV5", "#edit_dialog", function () {
+    $(document).on("dialogopen.wiseProjEditV6", "#edit_dialog", function () {
       scheduleApply("dialogopen");
       setTimeout(function () { scheduleApply("dialogopen+150"); }, 150);
       setTimeout(function () { scheduleApply("dialogopen+450"); }, 450);
@@ -136,27 +137,15 @@
     if ($cancelBtn.length) $actionWrap.append($cancelBtn.detach());
     $actions.append($actionWrap);
 
-    // -------- Salesforce section order:
-    // 1. Custom Status (custom field)
-    // 2. Custom Tier (custom field)
-    // 3. Wise Job Number (COMPANY)
-    // 4. Client (ADDRESS) — forced single-line
-    // 5. Venue (DELIVER_TO)
-    // 6. Project name (PROJECT_NAME)
-    // 7. Type (JOB_TYPE)
-    // + then: any remaining custom fields (if present)
+    // -------- Salesforce section table
     var $sfTable = $('<table class="wise-projedit-table" cellspacing="0" border="0"></table>');
     $sf.body.append($sfTable);
 
-    // Move custom fields container into Salesforce section (and reorder inside it)
+    // 1) Custom fields FIRST (Status, Tier, then rest) - converted into table rows
     var $custom = $form.find(".hh_custom_fields").first();
     if ($custom.length) {
       reorderCustomFields($custom);
-
-      // Keep container, but style it to look like native rows
-      var $customWrap = $('<div class="wise-customfields"></div>');
-      $customWrap.append($custom.detach());
-      $sf.body.prepend($customWrap);
+      appendCustomFieldsToTable($custom, $sfTable);
     }
 
     // Helper: append a <tr> (detached from legacy tables) into our table
@@ -164,10 +153,10 @@
       if ($tr && $tr.length) $sfTable.append($tr.detach());
     }
 
-    // Wise Job Number
+    // 2) Wise Job Number
     appendTr(findTrByField($form, inst, "COMPANY"));
 
-    // Client (ADDRESS textarea) — remove rowspan + make single-line look
+    // 3) Client (ADDRESS textarea) — remove rowspan + make single-line look
     var $clientTr = findTrByField($form, inst, "ADDRESS");
     if ($clientTr && $clientTr.length) {
       // Remove any rowspan that causes the next field to slide alongside
@@ -190,18 +179,17 @@
       }
     }
 
-    // Venue (DELIVER_TO row) - rename label consistently
+    // 4) Venue (DELIVER_TO row) - rename label consistently
     var $venueTr = findTrByField($form, inst, "DELIVER_TO");
     if ($venueTr && $venueTr.length) {
-      // Ensure label reads "Venue" (and matches non-bold label style via CSS)
       $venueTr.find("td.label").first().text("Venue");
       appendTr($venueTr);
     }
 
-    // Project name
+    // 5) Project name
     appendTr(findTrByField($form, inst, "PROJECT_NAME"));
 
-    // Type (job type)
+    // 6) Type (job type)
     appendTr(findTrByField($form, inst, "JOB_TYPE"));
 
     // -------- People section: Project Manager (NAME)
@@ -218,7 +206,7 @@
     var $depotTr = findTrByField($form, inst, "DEPOT_ID");
     if ($depotTr && $depotTr.length) $hhTable.append($depotTr.detach());
 
-    // Dates container
+    // Dates container (leave as-is per request)
     var $dates = $form.find(".hh_dates_container").first();
     if ($dates.length) {
       var $datesWrap = $('<div class="wise-dates-wrap"></div>');
@@ -334,6 +322,48 @@
     }
   }
 
+  // Convert custom fields into native <tr> rows in the same table
+  function appendCustomFieldsToTable($custom, $table) {
+    var $ = window.jQuery;
+
+    var $containers = $custom.find(".custom_field_container");
+    if (!$containers.length) return;
+
+    $containers.each(function () {
+      var $c = $(this);
+
+      // Extract label text (strip children + trailing colon)
+      var $lab = $c.find("label.label").first();
+      var label = "";
+      if ($lab.length) {
+        label = $lab.clone().children().remove().end().text();
+        label = String(label || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .replace(/:\s*$/, "");
+      }
+
+      // Find the input/select/textarea
+      var $input = $c.find("input.custom_field, select.custom_field, textarea.custom_field").first();
+      if (!$input.length) return;
+
+      // Build a standard row
+      var $tr = $('<tr class="wise-row wise-row-custom"></tr>');
+      $tr.append($('<td class="label"></td>').text(label || "Field"));
+      var $td = $('<td class="field"></td>');
+      $td.append($input.detach());
+      $tr.append($td);
+
+      $table.append($tr);
+
+      // Remove old container
+      $c.remove();
+    });
+
+    // Remove now-empty wrapper container
+    $custom.remove();
+  }
+
   // ------------------------------------------------------------
   // Hide rules (idempotent)
   // ------------------------------------------------------------
@@ -350,7 +380,6 @@
     // Venue address field (DELIVERY_ADDRESS) must be hidden
     hideRow($form.find('[data-field="DELIVERY_ADDRESS"]').first());
     // Also hide the address mode labels row (delivery/use_at/collection) if it’s the one containing DELIVERY_ADDRESS
-    // (In case it survived in legacy content)
     $form.find('[data-field="DELIVERY_ADDRESS"]').closest("tr").hide();
 
     // Delivery phone row (and any telephone container row)
@@ -405,7 +434,7 @@
   // CSS
   // ------------------------------------------------------------
   function injectCSS(cssText) {
-    var id = "wise-projedit-v5-css";
+    var id = "wise-projedit-v6-css";
     if (document.getElementById(id)) return;
 
     var style = document.createElement("style");
@@ -423,9 +452,10 @@
    Wise Project Edit (scoped)
    ========================= */
 
+/* Make dialog ~20% wider (was 1200px cap) */
 .wise-projedit-dialog{
-  width: min(92vw, 1200px) !important;
-  max-width: 92vw !important;
+  width: min(96vw, 1440px) !important;
+  max-width: 96vw !important;
 }
 
 /* Keep dialog within viewport and allow scrolling */
@@ -541,8 +571,9 @@
   font-weight: 400;
 }
 
+/* Section padding: 10px all around (gives right edge breathing room) */
 .wise-projedit .wise-section-bd{
-  padding: 10px 12px 12px 12px;
+  padding: 10px;
 }
 
 /* Tables */
@@ -551,20 +582,28 @@
   border-collapse: collapse;
 }
 
+/* Row rhythm */
 .wise-projedit table.wise-projedit-table td{
-  padding: 6px 8px;
+  padding: 6px 0;
   vertical-align: top;
 }
 
-/* 3) Labels not bold (Wise Job Number / Client / Project name / Venue all match) */
+/* Unified label column + 10px gap to field */
 .wise-projedit table.wise-projedit-table td.label{
-  width: 190px !important;
+  width: 190px !important;          /* consistent alignment for all fields */
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 10px;              /* the requested gap after label */
   font-weight: 300 !important;
   color: #0D1226 !important;
 }
 
-/* Inputs span width */
+.wise-projedit table.wise-projedit-table td.field{
+  width: 100%;
+}
+
+/* Inputs span remaining width */
 .wise-projedit input.data_cell,
 .wise-projedit select.data_cell,
 .wise-projedit textarea.data_cell,
@@ -587,40 +626,19 @@
 .wise-projedit select.data_cell:focus,
 .wise-projedit textarea.data_cell:focus,
 .wise-projedit input.custom_field:focus,
+.wise-projedit select.custom_field:focus,
 .wise-projedit textarea.custom_field:focus{
   outline: none !important;
   border-color: rgba(236,151,151,0.9) !important;
   box-shadow: 0 0 0 3px rgba(236,151,151,0.25) !important;
 }
 
-/* 3) Client forced to single-line visual */
+/* Client forced to single-line visual */
 .wise-projedit textarea[data-field="ADDRESS"]{
   height: 2.45em !important;
   min-height: 2.45em !important;
   resize: none !important;
   overflow: hidden !important;
-}
-
-/* Custom fields: remove “bubble” feel and align like normal rows */
-.wise-projedit .wise-customfields .hh_custom_fields{
-  display: block !important;
-  gap: 0 !important;
-}
-
-.wise-projedit .wise-customfields .custom_field_container{
-  display: block !important;
-  max-width: 100% !important;
-  width: 100% !important;
-  margin: 0 0 8px 0 !important;
-}
-
-.wise-projedit .wise-customfields label.label{
-  display: grid !important;
-  grid-template-columns: 190px 1fr !important;
-  gap: 8px !important;
-  align-items: center !important;
-  font-weight: 300 !important;
-  color: #0D1226 !important;
 }
 
 /* Dates block spacing */
