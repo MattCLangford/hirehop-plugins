@@ -6,13 +6,15 @@
   // - Re-layout into 3 sections (Salesforce / People / HireHop)
   // - Apply Wise styling (nightfall + heritage accent)
   // - Hide unused fields (delivery address, phones, etc.)
-  // - Unify label/input alignment for ALL fields (standard + custom)
+  // - Unified label/input alignment for ALL fields (standard + custom)
+  // - Dialog opens centred and is clamped within viewport (no off-screen)
+  // - Titlebar border removed + taller titlebar for close button
   // ============================================================
-  var WISE_PLUGIN_VERSION = "v6-unified-field-layout";
+  var WISE_PLUGIN_VERSION = "v7-dialog-position-titlebar";
 
   // Prevent double-init
-  if (window.__WISE_PROJECT_EDIT_V6_INIT__) return;
-  window.__WISE_PROJECT_EDIT_V6_INIT__ = true;
+  if (window.__WISE_PROJECT_EDIT_V7_INIT__) return;
+  window.__WISE_PROJECT_EDIT_V7_INIT__ = true;
 
   try {
     console.warn("[WiseHireHop] project edit plugin loaded", WISE_PLUGIN_VERSION, location.href);
@@ -46,10 +48,28 @@
     injectCSS(getWiseCSS());
 
     // Apply each time dialog opens (content is often re-rendered)
-    $(document).on("dialogopen.wiseProjEditV6", "#edit_dialog", function () {
+    $(document).on("dialogopen.wiseProjEditV7", "#edit_dialog", function () {
+      var $dlg = $("#edit_dialog");
+      var $wrapper = $dlg.closest(".ui-dialog");
+      if ($wrapper.length) $wrapper.data("wiseCenteredOnce", false);
+
       scheduleApply("dialogopen");
       setTimeout(function () { scheduleApply("dialogopen+150"); }, 150);
       setTimeout(function () { scheduleApply("dialogopen+450"); }, 450);
+
+      // Centre/clamp after open (and once more after layout settles)
+      setTimeout(function () { centerDialog($dlg); }, 0);
+      setTimeout(function () { centerDialog($dlg); }, 200);
+    });
+
+    // Clamp after dragging stops (prevents “lost off-screen”)
+    $(document).on("dialogdragstop.wiseProjEditV7", "#edit_dialog", function () {
+      clampDialogToViewport($("#edit_dialog"));
+    });
+
+    // Clamp on window resize
+    $(window).on("resize.wiseProjEditV7", function () {
+      clampDialogToViewport($("#edit_dialog"));
     });
 
     // Observe rerenders inside dialog
@@ -101,8 +121,98 @@
     // Enforce hide rules (idempotent)
     applyHideRules($dlg, inst);
 
+    // Ensure draggable is bounded, and never off-screen
+    ensureDialogDraggableContainment($dlg);
+    clampDialogToViewport($dlg);
+
     try {
       console.info("[WiseHireHop] project edit applied", reason, { hasInstance: !!inst });
+    } catch (e) {}
+  }
+
+  // ------------------------------------------------------------
+  // Dialog positioning helpers
+  // ------------------------------------------------------------
+  function centerDialog($dlg) {
+    var $ = window.jQuery;
+    if (!$dlg || !$dlg.length) return;
+
+    var $wrapper = $dlg.closest(".ui-dialog");
+    if (!$wrapper.length) return;
+
+    // Centre only once per open (unless it is currently off-screen)
+    var already = !!$wrapper.data("wiseCenteredOnce");
+    if (already) {
+      clampDialogToViewport($dlg);
+      return;
+    }
+
+    var vw = window.innerWidth || document.documentElement.clientWidth;
+    var vh = window.innerHeight || document.documentElement.clientHeight;
+
+    var w = $wrapper.outerWidth();
+    var h = $wrapper.outerHeight();
+
+    var pad = 8;
+    var desiredTop = Math.max(pad, Math.round(vh * 0.06)); // ~6vh down
+    var desiredLeft = Math.round((vw - w) / 2);
+
+    // Clamp desired position into viewport
+    var maxLeft = Math.max(pad, vw - w - pad);
+    var maxTop = Math.max(pad, vh - h - pad);
+
+    var left = Math.min(Math.max(desiredLeft, pad), maxLeft);
+    var top = Math.min(Math.max(desiredTop, pad), maxTop);
+
+    $wrapper.css({ left: left + "px", top: top + "px" });
+
+    $wrapper.data("wiseCenteredOnce", true);
+
+    // Final clamp in case sizes change right after
+    clampDialogToViewport($dlg);
+  }
+
+  function clampDialogToViewport($dlg) {
+    var $ = window.jQuery;
+    if (!$dlg || !$dlg.length) return;
+
+    var $wrapper = $dlg.closest(".ui-dialog");
+    if (!$wrapper.length) return;
+
+    var vw = window.innerWidth || document.documentElement.clientWidth;
+    var vh = window.innerHeight || document.documentElement.clientHeight;
+
+    var w = $wrapper.outerWidth();
+    var h = $wrapper.outerHeight();
+
+    var left = parseInt($wrapper.css("left"), 10);
+    var top = parseInt($wrapper.css("top"), 10);
+
+    if (isNaN(left)) left = 0;
+    if (isNaN(top)) top = 0;
+
+    var pad = 8;
+    var minLeft = pad;
+    var minTop = pad;
+    var maxLeft = Math.max(pad, vw - w - pad);
+    var maxTop = Math.max(pad, vh - h - pad);
+
+    left = Math.min(Math.max(left, minLeft), maxLeft);
+    top = Math.min(Math.max(top, minTop), maxTop);
+
+    $wrapper.css({ left: left + "px", top: top + "px" });
+  }
+
+  function ensureDialogDraggableContainment($dlg) {
+    var $ = window.jQuery;
+    if (!$dlg || !$dlg.length) return;
+
+    var $wrapper = $dlg.closest(".ui-dialog");
+    if (!$wrapper.length) return;
+
+    try {
+      // Constrain dragging to the window so it can't be lost off-screen
+      $wrapper.draggable("option", "containment", "window");
     } catch (e) {}
   }
 
@@ -206,7 +316,7 @@
     var $depotTr = findTrByField($form, inst, "DEPOT_ID");
     if ($depotTr && $depotTr.length) $hhTable.append($depotTr.detach());
 
-    // Dates container (leave as-is per request)
+    // Dates container (leave as-is)
     var $dates = $form.find(".hh_dates_container").first();
     if ($dates.length) {
       var $datesWrap = $('<div class="wise-dates-wrap"></div>');
@@ -244,8 +354,6 @@
       if ($c.is("#proj_fields")) return;
       if ($c.is('input[type="hidden"]')) return;
 
-      // The original layout is typically a big grid div + the old footer table etc.
-      // Hide it so only our new layout shows.
       $c.hide();
     });
 
@@ -289,7 +397,6 @@
 
   function reorderCustomFields($custom) {
     // Move "Status" then "Tier" to the top, keep the rest afterwards.
-    // (Label texts like "Status :" / "Tier of event :")
     var $ = window.jQuery;
 
     var $containers = $custom.find(".custom_field_container");
@@ -315,7 +422,6 @@
       else rest.push($c);
     });
 
-    // Re-append in desired order
     var ordered = status.concat(tier).concat(rest);
     for (var i = 0; i < ordered.length; i++) {
       $custom.append(ordered[i].detach());
@@ -347,7 +453,6 @@
       var $input = $c.find("input.custom_field, select.custom_field, textarea.custom_field").first();
       if (!$input.length) return;
 
-      // Build a standard row
       var $tr = $('<tr class="wise-row wise-row-custom"></tr>');
       $tr.append($('<td class="label"></td>').text(label || "Field"));
       var $td = $('<td class="field"></td>');
@@ -356,11 +461,9 @@
 
       $table.append($tr);
 
-      // Remove old container
       $c.remove();
     });
 
-    // Remove now-empty wrapper container
     $custom.remove();
   }
 
@@ -379,7 +482,6 @@
 
     // Venue address field (DELIVERY_ADDRESS) must be hidden
     hideRow($form.find('[data-field="DELIVERY_ADDRESS"]').first());
-    // Also hide the address mode labels row (delivery/use_at/collection) if it’s the one containing DELIVERY_ADDRESS
     $form.find('[data-field="DELIVERY_ADDRESS"]').closest("tr").hide();
 
     // Delivery phone row (and any telephone container row)
@@ -434,7 +536,7 @@
   // CSS
   // ------------------------------------------------------------
   function injectCSS(cssText) {
-    var id = "wise-projedit-v6-css";
+    var id = "wise-projedit-v7-css";
     if (document.getElementById(id)) return;
 
     var style = document.createElement("style");
@@ -452,63 +554,80 @@
    Wise Project Edit (scoped)
    ========================= */
 
-/* Make dialog ~20% wider (was 1200px cap) */
+/* Wider dialog (~20% wider than earlier cap) */
 .wise-projedit-dialog{
   width: min(96vw, 1440px) !important;
   max-width: 96vw !important;
 }
 
-/* Keep dialog within viewport and allow scrolling */
+/* Keep dialog within viewport and allow scrolling (NO fixed top here) */
 .wise-projedit-dialog.ui-dialog{
-  top: 6vh !important;
   max-height: 88vh !important;
 }
 
+/* Dialog content area */
 .wise-projedit-dialog .ui-dialog-content{
   background: #fff !important;
   color: #0D1226;
   overflow: auto !important;
-  max-height: calc(88vh - 56px) !important; /* account for titlebar */
+  max-height: calc(88vh - 72px) !important; /* account for taller titlebar */
 }
 
-/* 1) Title bar: white background, nightfall text */
+/* Titlebar: remove border + make taller */
 .wise-projedit-dialog .ui-dialog-titlebar{
   background: #fff !important;
   color: #0D1226 !important;
-  border: 1px solid rgba(13,18,38,0.5) !important;
-  border-bottom: none !important;
+  border: none !important;                 /* remove border as requested */
+  padding: 12px 54px 12px 14px !important; /* extra right space for close */
+  min-height: 60px !important;             /* taller bar */
+  box-sizing: border-box !important;
+  position: relative !important;
 }
 
+/* Title text */
 .wise-projedit-dialog .ui-dialog-title{
   color: #0D1226 !important;
   font-family: "Albra Sans", "Lato", system-ui, -apple-system, Segoe UI, Roboto, Arial !important;
   font-weight: 400 !important;
+  line-height: 1.2 !important;
+  margin: 0 !important;
 }
 
-/* Close button: remove dark box + show a clean × */
+/* Close button: centred vertically in the taller bar */
 .wise-projedit-dialog .ui-dialog-titlebar-close{
+  position: absolute !important;
+  right: 12px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+
   background: transparent !important;
   border: 1px solid rgba(13,18,38,0.25) !important;
   border-radius: 10px !important;
-  width: 34px !important;
-  height: 34px !important;
+  width: 38px !important;
+  height: 38px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
+/* Replace jQuery UI icon with a clean × */
 .wise-projedit-dialog .ui-dialog-titlebar-close .ui-icon{
   background-image: none !important;
   text-indent: 0 !important;
   overflow: visible !important;
+  width: auto !important;
+  height: auto !important;
 }
 
 .wise-projedit-dialog .ui-dialog-titlebar-close .ui-icon:before{
   content: "×";
   display: inline-block;
-  font-size: 20px;
-  line-height: 20px;
+  font-size: 22px;
+  line-height: 22px;
   color: #0D1226;
-  position: relative;
-  top: 6px;
-  left: 10px;
 }
 
 /* Core font */
@@ -519,7 +638,7 @@
   font-family: "Lato", system-ui, -apple-system, Segoe UI, Roboto, Arial !important;
 }
 
-/* 2) Actions bar (Save/Cancel) - white background, centred */
+/* Actions bar (Save/Cancel) - white background, centred */
 .wise-projedit .wise-actions-bar{
   position: sticky;
   top: 0;
@@ -537,7 +656,7 @@
   justify-content: center;
 }
 
-/* 7) 3-column layout (responsive) */
+/* 3-column layout (responsive) */
 .wise-projedit .wise-projedit-grid{
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -552,7 +671,7 @@
   }
 }
 
-/* 5) Section titles: white background, nightfall text; border nightfall @ 50% */
+/* Sections */
 .wise-projedit .wise-section{
   border: 1px solid rgba(13,18,38,0.5);
   border-radius: 14px;
@@ -567,11 +686,11 @@
   border-bottom: 1px solid rgba(13,18,38,0.5);
   padding: 10px 12px;
   font-family: "Albra Sans", "Lato", system-ui, -apple-system, Segoe UI, Roboto, Arial !important;
-  font-size: 1.8em; /* ~2x default */
+  font-size: 1.8em;
   font-weight: 400;
 }
 
-/* Section padding: 10px all around (gives right edge breathing room) */
+/* Section padding */
 .wise-projedit .wise-section-bd{
   padding: 10px;
 }
@@ -582,19 +701,18 @@
   border-collapse: collapse;
 }
 
-/* Row rhythm */
 .wise-projedit table.wise-projedit-table td{
   padding: 6px 0;
   vertical-align: top;
 }
 
-/* Unified label column + 10px gap to field */
+/* Unified label column + 10px gap */
 .wise-projedit table.wise-projedit-table td.label{
-  width: 190px !important;          /* consistent alignment for all fields */
+  width: 190px !important;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-right: 10px;              /* the requested gap after label */
+  padding-right: 10px;
   font-weight: 300 !important;
   color: #0D1226 !important;
 }
@@ -621,7 +739,7 @@
   font-weight: 300 !important;
 }
 
-/* Heritage accent on focus (subtle) */
+/* Heritage accent on focus */
 .wise-projedit input.data_cell:focus,
 .wise-projedit select.data_cell:focus,
 .wise-projedit textarea.data_cell:focus,
