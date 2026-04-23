@@ -662,27 +662,49 @@
   }
 
   function findAddHeadingTrigger() {
-    var $all = $('button, a, [role="button"], input[type="button"], input[type="submit"]')
-      .filter(":visible")
-      .filter(function () {
-        return $(this).closest(".ui-dialog").length === 0;
-      });
+  var $all = $('button, a, [role="button"], input[type="button"], input[type="submit"]')
+    .filter(":visible")
+    .filter(function () {
+      return $(this).closest(".ui-dialog").length === 0;
+    });
 
-    var exact = $all.filter(function () {
-      var txt = $.trim(getTriggerText($(this))).toLowerCase();
-      return txt === "add heading" || txt === "new heading";
-    }).first();
+  // Best match for your page based on the console result
+  var $classMatch = $all.filter(function () {
+    var $el = $(this);
+    var txt = $.trim(getTriggerText($el)).toLowerCase();
+    return $el.hasClass("items_func_btn") && txt === "new";
+  }).first();
 
-    if (exact.length) return exact;
-
-    var fuzzy = $all.filter(function () {
-      var txt = $.trim(getTriggerText($(this))).toLowerCase();
-      return /add heading|new heading|\+ heading|heading/.test(txt);
-    }).first();
-
-    return fuzzy;
+  if ($classMatch.length) {
+    console.log("[WiseHireHop] using class-based New trigger:", $classMatch.get(0));
+    return $classMatch;
   }
 
+  // Exact text matches
+  var $exact = $all.filter(function () {
+    var txt = $.trim(getTriggerText($(this))).toLowerCase();
+    return txt === "new" || txt === "add heading" || txt === "new heading";
+  }).first();
+
+  if ($exact.length) {
+    console.log("[WiseHireHop] using exact trigger:", $exact.get(0));
+    return $exact;
+  }
+
+  // Fallback fuzzy match
+  var $fuzzy = $all.filter(function () {
+    var txt = $.trim(getTriggerText($(this))).toLowerCase();
+    return /\bnew\b|\bheading\b/.test(txt);
+  }).first();
+
+  if ($fuzzy.length) {
+    console.log("[WiseHireHop] using fuzzy trigger:", $fuzzy.get(0));
+  } else {
+    console.warn("[WiseHireHop] no add-heading trigger found");
+  }
+
+  return $fuzzy;
+}
   function getTriggerText($el) {
     return $.trim($el.text() || $el.val() || $el.attr("title") || $el.attr("aria-label") || "");
   }
