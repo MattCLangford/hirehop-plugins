@@ -48,6 +48,18 @@
         { value: "dept",    label: "Group by Dept",    suffix: " - Dept" }
       ]
     }
+    {
+  key: "thank_you_variant",
+  renderType: "dept",
+  name: "thank you",
+  parentRenderType: "section",
+  parentName: "suffix",
+  label: "Thank you page style",
+  options: [
+    { value: "none", label: "Standard", suffix: "" },
+    { value: "alt",  label: "Alt",      suffix: " -Alt" }
+  ]
+}
   ];
 
   // =========================================================
