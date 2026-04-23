@@ -145,61 +145,89 @@
   // UI BUILD
   // =========================================================
   function ensureHeadingUi($form, $actualNameInput) {
-    var $ui = $form.find(".wise-docgen-ui").first();
+  var $ui = $form.find(".wise-docgen-ui").first();
 
-    if (!$ui.length) {
-      var width = $actualNameInput.outerWidth() || 450;
+  if (!$ui.length) {
+    var width = $actualNameInput.outerWidth() || 450;
 
-      $ui = $(
-        '<span class="wise-docgen-ui" style="display:inline-block; vertical-align:middle;">' +
+    neutraliseOriginalHeadingInlineLabel($actualNameInput);
+
+    $ui = $(
+      '<div class="wise-docgen-ui" style="display:block; margin:6px 0 10px 0;">' +
+
+        '<div class="wise-docgen-headingname-row" style="margin-bottom:10px;">' +
+          '<label class="wise-docgen-headingname-label" style="display:block; font-weight:600; margin-bottom:4px;">Heading name</label>' +
           '<input type="text" class="wise-docgen-display-name" maxlength="60" style="width:' + width + 'px;">' +
-          '<span class="wise-docgen-meta" style="display:block; margin-top:8px;">' +
+        '</div>' +
 
-            '<div style="margin-bottom:8px;">' +
-              '<label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; margin-right:16px;">' +
-                '<input type="checkbox" class="wise-docgen-hidden" style="margin:0;">' +
-                '<span>Hide this heading in doc generator</span>' +
-              '</label>' +
-            '</div>' +
+        '<div class="wise-docgen-meta" style="display:grid; grid-template-columns: 150px minmax(220px, 1fr); gap:8px 12px; align-items:center; max-width:700px;">' +
 
-            '<div style="margin-bottom:8px;">' +
-              '<label style="display:inline-flex; align-items:center; gap:8px;">' +
-                '<span>Render as</span>' +
-                '<select class="wise-docgen-render-type" style="min-width:180px;">' +
-                  '<option value="normal">Normal heading</option>' +
-                  '<option value="section">Section page</option>' +
-                  '<option value="dept">Dept page</option>' +
-                '</select>' +
-              '</label>' +
-            '</div>' +
+          '<div class="wise-docgen-setting-label">Hide in doc generator</div>' +
+          '<div class="wise-docgen-setting-control">' +
+            '<input type="checkbox" class="wise-docgen-hidden">' +
+          '</div>' +
 
-            '<div class="wise-docgen-modifier-row" style="display:none;">' +
-              '<label style="display:inline-flex; align-items:center; gap:8px;">' +
-                '<span class="wise-docgen-modifier-label">Modifier</span>' +
-                '<select class="wise-docgen-modifier" style="min-width:220px;"></select>' +
-              '</label>' +
-            '</div>' +
+          '<div class="wise-docgen-setting-label">Render as</div>' +
+          '<div class="wise-docgen-setting-control">' +
+            '<select class="wise-docgen-render-type" style="min-width:180px;">' +
+              '<option value="normal">Normal heading</option>' +
+              '<option value="section">Section page</option>' +
+              '<option value="dept">Dept page</option>' +
+            '</select>' +
+          '</div>' +
 
-          '</span>' +
-        '</span>'
-      );
+          '<div class="wise-docgen-setting-label wise-docgen-modifier-label-cell" style="display:none;">Modifier</div>' +
+          '<div class="wise-docgen-setting-control wise-docgen-modifier-row" style="display:none;">' +
+            '<select class="wise-docgen-modifier" style="min-width:220px;"></select>' +
+          '</div>' +
 
-      $actualNameInput.hide();
-      $actualNameInput.after($ui);
-    } else {
-      $actualNameInput.hide();
-    }
+        '</div>' +
+      '</div>'
+    );
 
-    return {
-      $ui: $ui,
-      $proxy: $ui.find(".wise-docgen-display-name").first(),
-      $hidden: $ui.find(".wise-docgen-hidden").first(),
-      $render: $ui.find(".wise-docgen-render-type").first(),
-      $modifier: $ui.find(".wise-docgen-modifier").first(),
-      $modifierRow: $ui.find(".wise-docgen-modifier-row").first(),
-      $modifierLabel: $ui.find(".wise-docgen-modifier-label").first()
-    };
+    $actualNameInput.hide();
+    $actualNameInput.after($ui);
+  } else {
+    $actualNameInput.hide();
+    neutraliseOriginalHeadingInlineLabel($actualNameInput);
   }
+
+  return {
+    $ui: $ui,
+    $proxy: $ui.find(".wise-docgen-display-name").first(),
+    $hidden: $ui.find(".wise-docgen-hidden").first(),
+    $render: $ui.find(".wise-docgen-render-type").first(),
+    $modifier: $ui.find(".wise-docgen-modifier").first(),
+    $modifierRow: $ui.find(".wise-docgen-modifier-row").first(),
+    $modifierLabel: $ui.find(".wise-docgen-modifier-label-cell").first()
+  };
+}
+
+ function neutraliseOriginalHeadingInlineLabel($actualNameInput) {
+  var inputEl = $actualNameInput.get(0);
+  if (!inputEl || inputEl._wiseHeadingLabelNeutralised) return;
+
+  var prev = inputEl.previousSibling;
+
+  while (prev && prev.nodeType === 3) { // text node
+    if ($.trim(prev.nodeValue).toLowerCase() === "heading:") {
+      prev.nodeValue = "";
+      break;
+    }
+    prev = prev.previousSibling;
+  }
+
+  var next = inputEl.nextSibling;
+  while (next && next.nodeType === 3 && $.trim(next.nodeValue) === "") {
+    next = next.nextSibling;
+  }
+
+  if (next && next.nodeType === 1 && next.tagName && next.tagName.toLowerCase() === "br") {
+    next.style.display = "none";
+  }
+
+  inputEl._wiseHeadingLabelNeutralised = true;
+} 
 
   // =========================================================
   // INITIAL SYNC
@@ -483,20 +511,21 @@
   // MODIFIER UI
   // =========================================================
   function refreshModifierState($dialog, ui, preferredValue) {
-    var profile = getModifierProfile($dialog, ui);
+  var profile = getModifierProfile($dialog, ui);
 
-    if (!profile) {
-      ui.$modifierRow.hide();
-      ui.$modifier.prop("disabled", true);
-      populateModifierOptions(ui, [{ value: "none", label: "None" }], "none");
-      return;
-    }
-
-    ui.$modifierLabel.text(profile.label);
-    ui.$modifierRow.show();
-    ui.$modifier.prop("disabled", false);
-    populateModifierOptions(ui, profile.options, preferredValue || "none");
+  if (!profile) {
+    ui.$modifierLabel.hide().text("Modifier");
+    ui.$modifierRow.hide();
+    ui.$modifier.prop("disabled", true);
+    populateModifierOptions(ui, [{ value: "none", label: "None" }], "none");
+    return;
   }
+
+  ui.$modifierLabel.text(profile.label).show();
+  ui.$modifierRow.show();
+  ui.$modifier.prop("disabled", false);
+  populateModifierOptions(ui, profile.options, preferredValue || "none");
+}
 
   function populateModifierOptions(ui, options, selectedValue) {
     var current = selectedValue || "none";
