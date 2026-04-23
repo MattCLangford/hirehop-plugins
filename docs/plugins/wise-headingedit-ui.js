@@ -1,12 +1,14 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-23.06"); } catch (e) {}
+  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-23.07"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
 
   var applyTimer = null;
+  var AUTO_CHILD_QUEUE = [];
+  var AUTO_CHILD_RUNNING = false;
 
   // =========================================================
   // MODIFIER RULES
@@ -106,6 +108,13 @@
     var $dialog = $(this).closest(".ui-dialog");
     if (!isHeadingDialog($dialog)) return;
 
+    var pendingPlan = $dialog.data("wisePendingAutoChildPlan");
+    if (pendingPlan) {
+      AUTO_CHILD_QUEUE.push(pendingPlan);
+      $dialog.removeData("wisePendingAutoChildPlan");
+      processAutoChildQueue();
+    }
+
     var $form = getVisibleHeadingForm($dialog);
     if ($form.length) {
       $form.removeData("wiseDocgenInitialised");
@@ -154,7 +163,8 @@
       !ui.$render.length ||
       !ui.$modifier.length ||
       !ui.$template.length ||
-      !ui.$additional.length
+      !ui.$additional.length ||
+      !ui.$autoChildren.length
     ) return;
 
     populateTemplateSelect(ui.$template, $dialog, ui.$template.val() || "");
@@ -162,6 +172,7 @@
     syncUiFromActual($form, $dialog, $actualNameInput, ui);
     bindUiHandlers($form, $dialog, $actualNameInput, ui);
     refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
+    refreshAutoCreateState($dialog, ui);
   }
 
   // =========================================================
@@ -172,6 +183,12 @@
 
     var title = $.trim($dialog.find(".ui-dialog-title").first().text()).toLowerCase();
     return title === "edit heading" || title === "add heading" || title === "new heading";
+  }
+
+  function isNewHeadingDialog($dialog) {
+    if (!$dialog || !$dialog.length || !$dialog.is(":visible")) return false;
+    var title = $.trim($dialog.find(".ui-dialog-title").first().text()).toLowerCase();
+    return title === "add heading" || title === "new heading";
   }
 
   function getVisibleHeadingForm($dialog) {
@@ -190,8 +207,31 @@
     }).first();
   }
 
+  function getCancelButton($dialog) {
+    return $dialog.find(".ui-dialog-buttonpane button").filter(function () {
+      return $.trim($(this).text()).toLowerCase() === "cancel";
+    }).first();
+  }
+
   function getParentSelect($dialog) {
     return $dialog.find("select.hh_base_select").first();
+  }
+
+  function getUiRefsFromDialog($dialog) {
+    return {
+      $ui: $dialog.find(".wise-docgen-ui").first(),
+      $proxy: $dialog.find(".wise-docgen-display-name").first(),
+      $hidden: $dialog.find(".wise-docgen-hidden").first(),
+      $additional: $dialog.find(".wise-docgen-additional").first(),
+      $render: $dialog.find(".wise-docgen-render-type").first(),
+      $modifier: $dialog.find(".wise-docgen-modifier").first(),
+      $modifierRow: $dialog.find(".wise-docgen-modifier-row").first(),
+      $modifierLabel: $dialog.find(".wise-docgen-modifier-label-cell").first(),
+      $template: $dialog.find(".wise-docgen-template").first(),
+      $autoChildren: $dialog.find(".wise-docgen-auto-children").first(),
+      $autoChildrenRow: $dialog.find(".wise-docgen-autocreate-row").first(),
+      $autoChildrenLabel: $dialog.find(".wise-docgen-autocreate-label-cell").first()
+    };
   }
 
   // =========================================================
@@ -208,11 +248,19 @@
       $ui = $(
         '<div class="wise-docgen-ui" style="display:block; margin:6px 0 10px 0;">' +
 
-          '<div class="wise-docgen-meta" style="display:grid; grid-template-columns: 170px minmax(220px, 1fr); gap:8px 12px; align-items:center; max-width:760px; margin-bottom:12px;">' +
+          '<div class="wise-docgen-meta" style="display:grid; grid-template-columns: 190px minmax(220px, 1fr); gap:8px 12px; align-items:center; max-width:780px; margin-bottom:12px;">' +
 
             '<div class="wise-docgen-setting-label">Page template</div>' +
             '<div class="wise-docgen-setting-control">' +
               '<select class="wise-docgen-template" style="min-width:320px;"></select>' +
+            '</div>' +
+
+            '<div class="wise-docgen-setting-label wise-docgen-autocreate-label-cell" style="display:none;">Default dept pages</div>' +
+            '<div class="wise-docgen-setting-control wise-docgen-autocreate-row" style="display:none;">' +
+              '<label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">' +
+                '<input type="checkbox" class="wise-docgen-auto-children" style="margin:0;">' +
+                '<span>Auto-create approved dept pages</span>' +
+              '</label>' +
             '</div>' +
 
           '</div>' +
@@ -222,7 +270,7 @@
             '<input type="text" class="wise-docgen-display-name" maxlength="60" style="width:' + width + 'px;">' +
           '</div>' +
 
-          '<div class="wise-docgen-meta" style="display:grid; grid-template-columns: 170px minmax(220px, 1fr); gap:8px 12px; align-items:center; max-width:760px;">' +
+          '<div class="wise-docgen-meta" style="display:grid; grid-template-columns: 190px minmax(220px, 1fr); gap:8px 12px; align-items:center; max-width:780px;">' +
 
             '<div class="wise-docgen-setting-label">Hide in doc generator</div>' +
             '<div class="wise-docgen-setting-control">' +
@@ -268,7 +316,10 @@
       $modifier: $ui.find(".wise-docgen-modifier").first(),
       $modifierRow: $ui.find(".wise-docgen-modifier-row").first(),
       $modifierLabel: $ui.find(".wise-docgen-modifier-label-cell").first(),
-      $template: $ui.find(".wise-docgen-template").first()
+      $template: $ui.find(".wise-docgen-template").first(),
+      $autoChildren: $ui.find(".wise-docgen-auto-children").first(),
+      $autoChildrenRow: $ui.find(".wise-docgen-autocreate-row").first(),
+      $autoChildrenLabel: $ui.find(".wise-docgen-autocreate-label-cell").first()
     };
   }
 
@@ -310,10 +361,12 @@
     ui.$hidden.prop("checked", meta.hidden);
     ui.$additional.prop("checked", meta.additionalOptions);
     ui.$render.val(meta.renderType);
+    ui.$autoChildren.prop("checked", false);
 
     syncTemplateControl($dialog, ui, meta);
     refreshRenderTypeState($dialog, ui);
     refreshModifierState($dialog, ui, meta.modifier || "none");
+    refreshAutoCreateState($dialog, ui);
     syncActualFromUi($dialog, $actualNameInput, ui);
 
     $form.data("wiseDocgenInitialised", "1");
@@ -329,6 +382,7 @@
         populateTemplateSelect(ui.$template, $dialog, ui.$template.val() || "");
         refreshRenderTypeState($dialog, ui);
         refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
+        refreshAutoCreateState($dialog, ui);
         syncActualFromUi($dialog, $actualNameInput, ui);
       });
 
@@ -336,6 +390,7 @@
         syncTemplateControl($dialog, ui);
         refreshRenderTypeState($dialog, ui);
         refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
+        refreshAutoCreateState($dialog, ui);
         syncActualFromUi($dialog, $actualNameInput, ui);
       });
 
@@ -351,6 +406,7 @@
         syncTemplateControl($dialog, ui);
         refreshRenderTypeState($dialog, ui);
         refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
+        refreshAutoCreateState($dialog, ui);
         syncActualFromUi($dialog, $actualNameInput, ui);
       });
 
@@ -358,11 +414,16 @@
         syncActualFromUi($dialog, $actualNameInput, ui);
       });
 
+      ui.$autoChildren.on("change.wiseDocgen", function () {
+        // purely UI state; no stored value
+      });
+
       ui.$proxy.on("keydown.wiseDocgen", function (e) {
         if (e.key === "Enter") {
           syncTemplateControl($dialog, ui);
           refreshRenderTypeState($dialog, ui);
           refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
+          refreshAutoCreateState($dialog, ui);
           syncActualFromUi($dialog, $actualNameInput, ui);
         }
       });
@@ -377,6 +438,7 @@
         syncTemplateControl($dialog, ui);
         refreshRenderTypeState($dialog, ui);
         refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
+        refreshAutoCreateState($dialog, ui);
         syncActualFromUi($dialog, $actualNameInput, ui);
       });
       $parentSelect.data("wiseDocgenBound", "1");
@@ -397,7 +459,9 @@
         syncTemplateControl($dialog, ui);
         refreshRenderTypeState($dialog, ui);
         refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
+        refreshAutoCreateState($dialog, ui);
         syncActualFromUi($dialog, $actualNameInput, ui);
+        maybeStorePendingAutoChildPlan($dialog, $actualNameInput, ui);
       }
 
       btn.addEventListener("pointerdown", ensureLatestActualValue, true);
@@ -412,6 +476,295 @@
 
       btn._wiseDocgenBound = true;
     }
+  }
+
+  // =========================================================
+  // AUTO CREATE CHILD DEPTS
+  // =========================================================
+  function refreshAutoCreateState($dialog, ui) {
+    var eligible = isAutoCreateEligible($dialog, ui);
+
+    if (!eligible) {
+      ui.$autoChildrenLabel.hide().text("Default dept pages");
+      ui.$autoChildrenRow.hide();
+      ui.$autoChildren.prop("checked", false).prop("disabled", true);
+      return;
+    }
+
+    ui.$autoChildrenLabel.text("Default dept pages").show();
+    ui.$autoChildrenRow.show();
+    ui.$autoChildren.prop("disabled", false);
+  }
+
+  function isAutoCreateEligible($dialog, ui) {
+    if (!isNewHeadingDialog($dialog)) return false;
+
+    var parentMeta = getParentHeadingMeta($dialog);
+    var parentName = normaliseText((parentMeta && parentMeta.name) || "");
+    var parentRenderType = (parentMeta && parentMeta.renderType) || "normal";
+
+    if (parentName || parentRenderType !== "normal") return false;
+    if ((ui.$render.val() || "normal") !== "section") return false;
+
+    var children = getDefaultDeptTemplatesForSectionName(ui.$proxy.val() || "");
+    return children.length > 0;
+  }
+
+  function getDefaultDeptTemplatesForSectionName(sectionName) {
+    var cleanSectionName = normaliseText(sectionName);
+
+    return PAGE_TEMPLATES.filter(function (tpl) {
+      return tpl.renderType === "dept" &&
+        tpl.parentRenderType === "section" &&
+        normaliseText(tpl.parentName) === cleanSectionName;
+    }).sort(sortTemplates);
+  }
+
+  function maybeStorePendingAutoChildPlan($dialog, $actualNameInput, ui) {
+    if (!isAutoCreateEligible($dialog, ui) || !ui.$autoChildren.prop("checked")) {
+      $dialog.removeData("wisePendingAutoChildPlan");
+      return;
+    }
+
+    var childTemplates = getDefaultDeptTemplatesForSectionName(ui.$proxy.val() || "");
+    if (!childTemplates.length) {
+      $dialog.removeData("wisePendingAutoChildPlan");
+      return;
+    }
+
+    var plan = {
+      parentStoredValue: $actualNameInput.val() || "",
+      sectionName: ui.$proxy.val() || "",
+      childTemplates: childTemplates.map(function (tpl) {
+        return {
+          key: tpl.key,
+          renderType: tpl.renderType,
+          name: tpl.name,
+          parentRenderType: tpl.parentRenderType,
+          parentName: tpl.parentName
+        };
+      })
+    };
+
+    $dialog.data("wisePendingAutoChildPlan", plan);
+  }
+
+  async function processAutoChildQueue() {
+    if (AUTO_CHILD_RUNNING) return;
+    AUTO_CHILD_RUNNING = true;
+
+    try {
+      while (AUTO_CHILD_QUEUE.length) {
+        var plan = AUTO_CHILD_QUEUE.shift();
+        if (plan) {
+          try {
+            await runAutoChildPlan(plan);
+          } catch (err) {
+            try { console.warn("[WiseHireHop] auto child creation failed", err); } catch (e) {}
+          }
+        }
+      }
+    } finally {
+      AUTO_CHILD_RUNNING = false;
+    }
+  }
+
+  async function runAutoChildPlan(plan) {
+    if (!plan || !plan.childTemplates || !plan.childTemplates.length) return;
+
+    // Give HireHop a moment to save and refresh the parent section
+    await sleep(500);
+
+    for (var i = 0; i < plan.childTemplates.length; i++) {
+      await createChildHeadingFromTemplate(plan, plan.childTemplates[i]);
+      await sleep(150);
+    }
+  }
+
+  async function createChildHeadingFromTemplate(plan, childTemplate) {
+    var maxAttempts = 8;
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      var opened = openAddHeadingDialog();
+      if (!opened) {
+        await sleep(300);
+        continue;
+      }
+
+      var $dialog = await waitForNewHeadingDialog(3500);
+      if (!$dialog || !$dialog.length) {
+        await sleep(300);
+        continue;
+      }
+
+      await waitForInjectedUi($dialog, 2500);
+
+      var childUi = getUiRefsFromDialog($dialog);
+      var $parentSelect = getParentSelect($dialog);
+
+      if (!$parentSelect.length) {
+        cancelHeadingDialog($dialog);
+        await sleep(300);
+        continue;
+      }
+
+      if (!selectOptionByText($parentSelect, plan.parentStoredValue)) {
+        cancelHeadingDialog($dialog);
+        await sleep(350);
+        continue;
+      }
+
+      await sleep(60);
+
+      populateTemplateSelect(childUi.$template, $dialog, childTemplate.key);
+
+      if (childUi.$template.find('option[value="' + childTemplate.key + '"]').length) {
+        childUi.$template.val(childTemplate.key).trigger("change");
+      } else {
+        // Fallback if template select has not yet matched for some reason
+        childUi.$render.val(childTemplate.renderType || "dept").trigger("change");
+        childUi.$proxy.val(childTemplate.name || "").trigger("input").trigger("change");
+      }
+
+      await sleep(60);
+
+      // Ensure the exact saved parent is selected, even if the template changed parent context
+      selectOptionByText($parentSelect, plan.parentStoredValue);
+      await sleep(60);
+
+      childUi.$hidden.prop("checked", false).trigger("change");
+      childUi.$additional.prop("checked", false).trigger("change");
+      childUi.$autoChildren.prop("checked", false).trigger("change");
+
+      var $save = getSaveButton($dialog);
+      if (!$save.length) {
+        cancelHeadingDialog($dialog);
+        await sleep(300);
+        continue;
+      }
+
+      $save.get(0).click();
+      await waitUntil(function () { return !isDialogStillOpen($dialog); }, 5000, 100);
+      await sleep(250);
+      return true;
+    }
+
+    try { console.warn("[WiseHireHop] Could not auto-create child heading:", childTemplate && childTemplate.name); } catch (e) {}
+    return false;
+  }
+
+  function openAddHeadingDialog() {
+    var $trigger = findAddHeadingTrigger();
+    if (!$trigger.length) return false;
+
+    $trigger.get(0).click();
+    return true;
+  }
+
+  function findAddHeadingTrigger() {
+    var $all = $('button, a, [role="button"], input[type="button"], input[type="submit"]')
+      .filter(":visible")
+      .filter(function () {
+        return $(this).closest(".ui-dialog").length === 0;
+      });
+
+    var exact = $all.filter(function () {
+      var txt = $.trim(getTriggerText($(this))).toLowerCase();
+      return txt === "add heading" || txt === "new heading";
+    }).first();
+
+    if (exact.length) return exact;
+
+    var fuzzy = $all.filter(function () {
+      var txt = $.trim(getTriggerText($(this))).toLowerCase();
+      return /add heading|new heading|\+ heading|heading/.test(txt);
+    }).first();
+
+    return fuzzy;
+  }
+
+  function getTriggerText($el) {
+    return $.trim($el.text() || $el.val() || $el.attr("title") || $el.attr("aria-label") || "");
+  }
+
+  async function waitForNewHeadingDialog(timeoutMs) {
+    return waitUntilResult(function () {
+      var $match = $();
+      $(".ui-dialog:visible").each(function () {
+        var $dlg = $(this);
+        if (isNewHeadingDialog($dlg)) {
+          $match = $dlg;
+          return false;
+        }
+      });
+      return $match.length ? $match : null;
+    }, timeoutMs || 3000, 100);
+  }
+
+  async function waitForInjectedUi($dialog, timeoutMs) {
+    return waitUntil(function () {
+      return $dialog.find(".wise-docgen-ui").length > 0;
+    }, timeoutMs || 2000, 80);
+  }
+
+  function isDialogStillOpen($dialog) {
+    return !!($dialog && $dialog.length && $dialog.is(":visible"));
+  }
+
+  function cancelHeadingDialog($dialog) {
+    var $cancel = getCancelButton($dialog);
+    if ($cancel.length) {
+      $cancel.get(0).click();
+      return;
+    }
+
+    var $close = $dialog.find(".ui-dialog-titlebar-close:visible").first();
+    if ($close.length) {
+      $close.get(0).click();
+    }
+  }
+
+  function selectOptionByText($select, desiredText) {
+    if (!$select.length || !desiredText) return false;
+
+    var target = normaliseText(desiredText);
+    var matched = false;
+
+    $select.find("option").each(function () {
+      var $opt = $(this);
+      if (normaliseText($opt.text()) === target) {
+        $select.val($opt.val()).trigger("change");
+        matched = true;
+        return false;
+      }
+    });
+
+    return matched;
+  }
+
+  async function waitUntil(predicate, timeoutMs, intervalMs) {
+    var started = Date.now();
+    while ((Date.now() - started) < timeoutMs) {
+      if (predicate()) return true;
+      await sleep(intervalMs || 100);
+    }
+    return false;
+  }
+
+  async function waitUntilResult(getter, timeoutMs, intervalMs) {
+    var started = Date.now();
+    while ((Date.now() - started) < timeoutMs) {
+      var result = getter();
+      if (result) return result;
+      await sleep(intervalMs || 100);
+    }
+    return null;
+  }
+
+  function sleep(ms) {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, ms);
+    });
   }
 
   // =========================================================
