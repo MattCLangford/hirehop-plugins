@@ -139,21 +139,46 @@
   }
 
   function bindSaveHandler($dialog, $nameInput, $checkbox) {
-    var $saveButton = getSaveButton($dialog);
-    if (!$saveButton.length) return;
+  var $saveButton = getSaveButton($dialog);
+  if (!$saveButton.length) return;
 
-    // Remove only our handler, then rebind safely
-    $saveButton.off("click.wiseDocgenHeading");
-    $saveButton.on("click.wiseDocgenHeading", function () {
-      var currentValue = $nameInput.val() || "";
-      var finalValue = $checkbox.prop("checked")
-        ? applyHiddenPrefix(currentValue)
-        : stripHiddenPrefix(currentValue);
+  var btn = $saveButton.get(0);
+  if (!btn) return;
 
+  if (btn._wiseDocgenBound) return;
+
+  function prepareActualValue() {
+    var currentValue = $nameInput.val() || "";
+    var finalValue = $checkbox.prop("checked")
+      ? applyHiddenPrefix(currentValue)
+      : stripHiddenPrefix(currentValue);
+
+    if (($nameInput.val() || "") !== finalValue) {
       $nameInput.val(finalValue);
       triggerInputEvents($nameInput);
-    });
+    }
   }
+
+  // Run BEFORE HireHop's normal click handlers
+  btn.addEventListener("pointerdown", prepareActualValue, true);
+  btn.addEventListener("mousedown", prepareActualValue, true);
+  btn.addEventListener("click", prepareActualValue, true);
+
+  // Also cover enter-to-save / form submit paths
+  var form = $nameInput.closest("form").get(0);
+  if (form && !form._wiseDocgenSubmitBound) {
+    form.addEventListener("submit", prepareActualValue, true);
+    form._wiseDocgenSubmitBound = true;
+  }
+
+  $nameInput.on("keydown.wiseDocgenHeading", function (e) {
+    if (e.key === "Enter") {
+      prepareActualValue();
+    }
+  });
+
+  btn._wiseDocgenBound = true;
+}
 
   function getSaveButton($dialog) {
     return $dialog.find(".ui-dialog-buttonpane button").filter(function () {
