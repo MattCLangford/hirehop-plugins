@@ -1,13 +1,10 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-23.01"); } catch (e) {}
+  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-23.02"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
-
-  // Optional route guard if you want one later
-  // if (!/\/project\.php(\?|$)/.test(location.pathname)) return;
 
   var applyTimer = null;
 
@@ -18,7 +15,6 @@
     }, 50);
   }
 
-  // Main hook when jQuery UI dialogs open
   $(document).on("dialogopen", ".ui-dialog-content", function () {
     var $dialog = $(this).closest(".ui-dialog");
     if (!isHeadingDialog($dialog)) return;
@@ -31,7 +27,6 @@
     applyToHeadingDialog($dialog);
   });
 
-  // Reset init marker when dialog closes
   $(document).on("dialogclose", ".ui-dialog-content", function () {
     var $dialog = $(this).closest(".ui-dialog");
     if (!isHeadingDialog($dialog)) return;
@@ -42,7 +37,6 @@
     }
   });
 
-  // Fallback for late re-renders
   var obs = new MutationObserver(function () {
     scheduleApply();
   });
@@ -54,7 +48,6 @@
     attributeFilter: ["class", "style"]
   });
 
-  // Initial attempt
   $(scheduleApply);
 
   function processVisibleHeadingDialogs() {
@@ -76,10 +69,11 @@
     if (!$actualNameInput.length) return;
 
     var ui = ensureHeadingUi($form, $actualNameInput);
-    if (!ui.$proxy.length || !ui.$hidden.length || !ui.$render.length) return;
+    if (!ui.$proxy.length || !ui.$hidden.length || !ui.$render.length || !ui.$modifier.length) return;
 
     syncUiFromActual($form, $actualNameInput, ui);
     bindUiHandlers($form, $dialog, $actualNameInput, ui);
+    refreshModifierState(ui);
   }
 
   function isHeadingDialog($dialog) {
@@ -109,23 +103,36 @@
         '<span class="wise-docgen-ui" style="display:inline-block; vertical-align:middle;">' +
           '<input type="text" class="wise-docgen-display-name" maxlength="60" style="width:' + width + 'px;">' +
           '<span class="wise-docgen-meta" style="display:block; margin-top:8px;">' +
-            '<label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; margin-right:16px;">' +
-              '<input type="checkbox" class="wise-docgen-hidden" style="margin:0;">' +
-              '<span>Hide this heading in doc generator</span>' +
-            '</label>' +
-            '<label style="display:inline-flex; align-items:center; gap:8px;">' +
-              '<span>Render as</span>' +
-              '<select class="wise-docgen-render-type" style="min-width:180px;">' +
-                '<option value="normal">Normal heading</option>' +
-                '<option value="section">Section page</option>' +
-                '<option value="dept">Dept page</option>' +
-              '</select>' +
-            '</label>' +
+            '<div style="margin-bottom:8px;">' +
+              '<label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; margin-right:16px;">' +
+                '<input type="checkbox" class="wise-docgen-hidden" style="margin:0;">' +
+                '<span>Hide this heading in doc generator</span>' +
+              '</label>' +
+            '</div>' +
+            '<div style="margin-bottom:8px;">' +
+              '<label style="display:inline-flex; align-items:center; gap:8px;">' +
+                '<span>Render as</span>' +
+                '<select class="wise-docgen-render-type" style="min-width:180px;">' +
+                  '<option value="normal">Normal heading</option>' +
+                  '<option value="section">Section page</option>' +
+                  '<option value="dept">Dept page</option>' +
+                '</select>' +
+              '</label>' +
+            '</div>' +
+            '<div class="wise-docgen-modifier-row">' +
+              '<label style="display:inline-flex; align-items:center; gap:8px;">' +
+                '<span>Section layout</span>' +
+                '<select class="wise-docgen-modifier" style="min-width:180px;">' +
+                  '<option value="none">Standard</option>' +
+                  '<option value="left">Left</option>' +
+                  '<option value="right">Right</option>' +
+                '</select>' +
+              '</label>' +
+            '</div>' +
           '</span>' +
         '</span>'
       );
 
-      // Hide the real HireHop field and insert our UI after it
       $actualNameInput.hide();
       $actualNameInput.after($ui);
     } else {
@@ -136,12 +143,13 @@
       $ui: $ui,
       $proxy: $ui.find(".wise-docgen-display-name").first(),
       $hidden: $ui.find(".wise-docgen-hidden").first(),
-      $render: $ui.find(".wise-docgen-render-type").first()
+      $render: $ui.find(".wise-docgen-render-type").first(),
+      $modifier: $ui.find(".wise-docgen-modifier").first(),
+      $modifierRow: $ui.find(".wise-docgen-modifier-row").first()
     };
   }
 
   function syncUiFromActual($form, $actualNameInput, ui) {
-    // Only initialise once per dialog open-cycle
     if ($form.data("wiseDocgenInitialised") === "1") return;
 
     var meta = parseHeadingMeta($actualNameInput.val() || "");
@@ -149,9 +157,10 @@
     ui.$proxy.val(meta.name);
     ui.$hidden.prop("checked", meta.hidden);
     ui.$render.val(meta.renderType);
+    ui.$modifier.val(meta.modifier || "none");
 
-    // Canonicalise the underlying value immediately
     syncActualFromUi($actualNameInput, ui);
+    refreshModifierState(ui);
 
     $form.data("wiseDocgenInitialised", "1");
   }
@@ -159,6 +168,7 @@
   function bindUiHandlers($form, $dialog, $actualNameInput, ui) {
     if ($form.data("wiseDocgenBound") !== "1") {
       ui.$proxy.on("input.wiseDocgen change.wiseDocgen keyup.wiseDocgen blur.wiseDocgen", function () {
+        refreshModifierState(ui);
         syncActualFromUi($actualNameInput, ui);
       });
 
@@ -167,11 +177,17 @@
       });
 
       ui.$render.on("change.wiseDocgen", function () {
+        refreshModifierState(ui);
+        syncActualFromUi($actualNameInput, ui);
+      });
+
+      ui.$modifier.on("change.wiseDocgen", function () {
         syncActualFromUi($actualNameInput, ui);
       });
 
       ui.$proxy.on("keydown.wiseDocgen", function (e) {
         if (e.key === "Enter") {
+          refreshModifierState(ui);
           syncActualFromUi($actualNameInput, ui);
         }
       });
@@ -191,10 +207,10 @@
 
     if (!btn._wiseDocgenBound) {
       function ensureLatestActualValue() {
+        refreshModifierState(ui);
         syncActualFromUi($actualNameInput, ui);
       }
 
-      // Run before HireHop's own save path
       btn.addEventListener("pointerdown", ensureLatestActualValue, true);
       btn.addEventListener("mousedown", ensureLatestActualValue, true);
       btn.addEventListener("click", ensureLatestActualValue, true);
@@ -219,7 +235,8 @@
     var meta = {
       hidden: ui.$hidden.prop("checked"),
       renderType: ui.$render.val() || "normal",
-      name: ui.$proxy.val() || ""
+      name: ui.$proxy.val() || "",
+      modifier: getEffectiveModifier(ui)
     };
 
     var composed = composeHeadingMeta(meta);
@@ -234,16 +251,15 @@
     var meta = {
       hidden: false,
       renderType: "normal",
-      name: raw
+      name: raw,
+      modifier: "none"
     };
 
-    // Hidden marker first
     if (/^\/\/\s*/i.test(raw)) {
       meta.hidden = true;
       raw = raw.replace(/^\/\/\s*/i, "");
     }
 
-    // Render type next
     if (/^section\s*:\s*/i.test(raw)) {
       meta.renderType = "section";
       raw = raw.replace(/^section\s*:\s*/i, "");
@@ -252,7 +268,15 @@
       raw = raw.replace(/^dept\s*:\s*/i, "");
     }
 
-    meta.name = raw;
+    if (/\s*-\s*left$/i.test(raw)) {
+      meta.modifier = "left";
+      raw = raw.replace(/\s*-\s*left$/i, "");
+    } else if (/\s*-\s*right$/i.test(raw)) {
+      meta.modifier = "right";
+      raw = raw.replace(/\s*-\s*right$/i, "");
+    }
+
+    meta.name = $.trim(raw);
     return meta;
   }
 
@@ -260,6 +284,7 @@
     var hidden = !!(meta && meta.hidden);
     var renderType = (meta && meta.renderType) || "normal";
     var name = $.trim(String((meta && meta.name) || ""));
+    var modifier = (meta && meta.modifier) || "none";
 
     var prefix = "";
     if (hidden) prefix += "// ";
@@ -270,7 +295,39 @@
       prefix += "Dept: ";
     }
 
-    return prefix + name;
+    var suffix = "";
+    if (modifier === "left") {
+      suffix = " - Left";
+    } else if (modifier === "right") {
+      suffix = " - Right";
+    }
+
+    return prefix + name + suffix;
+  }
+
+  function refreshModifierState(ui) {
+    var eligible = isModifierEligible(ui);
+
+    if (ui.$modifierRow.length) {
+      ui.$modifierRow.toggle(eligible);
+    }
+
+    ui.$modifier.prop("disabled", !eligible);
+
+    if (!eligible) {
+      ui.$modifier.val("none");
+    }
+  }
+
+  function isModifierEligible(ui) {
+    var renderType = ui.$render.val() || "normal";
+    var name = $.trim(String(ui.$proxy.val() || "")).toLowerCase();
+
+    return renderType === "section" && name === "details";
+  }
+
+  function getEffectiveModifier(ui) {
+    return isModifierEligible(ui) ? (ui.$modifier.val() || "none") : "none";
   }
 
   function triggerInputEvents($el) {
