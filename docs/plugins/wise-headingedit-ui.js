@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-23.02"); } catch (e) {}
+  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-23.03"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -71,9 +71,9 @@
     var ui = ensureHeadingUi($form, $actualNameInput);
     if (!ui.$proxy.length || !ui.$hidden.length || !ui.$render.length || !ui.$modifier.length) return;
 
-    syncUiFromActual($form, $actualNameInput, ui);
+    syncUiFromActual($form, $dialog, $actualNameInput, ui);
     bindUiHandlers($form, $dialog, $actualNameInput, ui);
-    refreshModifierState(ui);
+    refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
   }
 
   function isHeadingDialog($dialog) {
@@ -119,14 +119,10 @@
                 '</select>' +
               '</label>' +
             '</div>' +
-            '<div class="wise-docgen-modifier-row">' +
+            '<div class="wise-docgen-modifier-row" style="display:none;">' +
               '<label style="display:inline-flex; align-items:center; gap:8px;">' +
-                '<span>Section layout</span>' +
-                '<select class="wise-docgen-modifier" style="min-width:180px;">' +
-                  '<option value="none">Standard</option>' +
-                  '<option value="left">Left</option>' +
-                  '<option value="right">Right</option>' +
-                '</select>' +
+                '<span class="wise-docgen-modifier-label">Modifier</span>' +
+                '<select class="wise-docgen-modifier" style="min-width:220px;"></select>' +
               '</label>' +
             '</div>' +
           '</span>' +
@@ -145,22 +141,23 @@
       $hidden: $ui.find(".wise-docgen-hidden").first(),
       $render: $ui.find(".wise-docgen-render-type").first(),
       $modifier: $ui.find(".wise-docgen-modifier").first(),
-      $modifierRow: $ui.find(".wise-docgen-modifier-row").first()
+      $modifierRow: $ui.find(".wise-docgen-modifier-row").first(),
+      $modifierLabel: $ui.find(".wise-docgen-modifier-label").first()
     };
   }
 
-  function syncUiFromActual($form, $actualNameInput, ui) {
+  function syncUiFromActual($form, $dialog, $actualNameInput, ui) {
     if ($form.data("wiseDocgenInitialised") === "1") return;
 
-    var meta = parseHeadingMeta($actualNameInput.val() || "");
+    var meta = parseHeadingMetaForDialog($actualNameInput.val() || "", $dialog);
 
     ui.$proxy.val(meta.name);
     ui.$hidden.prop("checked", meta.hidden);
     ui.$render.val(meta.renderType);
-    ui.$modifier.val(meta.modifier || "none");
 
-    syncActualFromUi($actualNameInput, ui);
-    refreshModifierState(ui);
+    refreshModifierState($dialog, ui, meta.modifier || "none");
+
+    syncActualFromUi($dialog, $actualNameInput, ui);
 
     $form.data("wiseDocgenInitialised", "1");
   }
@@ -168,27 +165,27 @@
   function bindUiHandlers($form, $dialog, $actualNameInput, ui) {
     if ($form.data("wiseDocgenBound") !== "1") {
       ui.$proxy.on("input.wiseDocgen change.wiseDocgen keyup.wiseDocgen blur.wiseDocgen", function () {
-        refreshModifierState(ui);
-        syncActualFromUi($actualNameInput, ui);
+        refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
+        syncActualFromUi($dialog, $actualNameInput, ui);
       });
 
       ui.$hidden.on("change.wiseDocgen", function () {
-        syncActualFromUi($actualNameInput, ui);
+        syncActualFromUi($dialog, $actualNameInput, ui);
       });
 
       ui.$render.on("change.wiseDocgen", function () {
-        refreshModifierState(ui);
-        syncActualFromUi($actualNameInput, ui);
+        refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
+        syncActualFromUi($dialog, $actualNameInput, ui);
       });
 
       ui.$modifier.on("change.wiseDocgen", function () {
-        syncActualFromUi($actualNameInput, ui);
+        syncActualFromUi($dialog, $actualNameInput, ui);
       });
 
       ui.$proxy.on("keydown.wiseDocgen", function (e) {
         if (e.key === "Enter") {
-          refreshModifierState(ui);
-          syncActualFromUi($actualNameInput, ui);
+          refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
+          syncActualFromUi($dialog, $actualNameInput, ui);
         }
       });
 
@@ -207,8 +204,8 @@
 
     if (!btn._wiseDocgenBound) {
       function ensureLatestActualValue() {
-        refreshModifierState(ui);
-        syncActualFromUi($actualNameInput, ui);
+        refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
+        syncActualFromUi($dialog, $actualNameInput, ui);
       }
 
       btn.addEventListener("pointerdown", ensureLatestActualValue, true);
@@ -231,28 +228,27 @@
     }).first();
   }
 
-  function syncActualFromUi($actualNameInput, ui) {
+  function syncActualFromUi($dialog, $actualNameInput, ui) {
     var meta = {
       hidden: ui.$hidden.prop("checked"),
       renderType: ui.$render.val() || "normal",
       name: ui.$proxy.val() || "",
-      modifier: getEffectiveModifier(ui)
+      modifier: getEffectiveModifier($dialog, ui)
     };
 
-    var composed = composeHeadingMeta(meta);
+    var composed = composeHeadingMeta($dialog, meta);
     if (($actualNameInput.val() || "") !== composed) {
       $actualNameInput.val(composed);
       triggerInputEvents($actualNameInput);
     }
   }
 
-  function parseHeadingMeta(value) {
+  function parseHeadingBaseMeta(value) {
     var raw = $.trim(String(value || ""));
     var meta = {
       hidden: false,
       renderType: "normal",
-      name: raw,
-      modifier: "none"
+      name: raw
     };
 
     if (/^\/\/\s*/i.test(raw)) {
@@ -268,23 +264,81 @@
       raw = raw.replace(/^dept\s*:\s*/i, "");
     }
 
-    if (/\s*-\s*left$/i.test(raw)) {
-      meta.modifier = "left";
-      raw = raw.replace(/\s*-\s*left$/i, "");
-    } else if (/\s*-\s*right$/i.test(raw)) {
-      meta.modifier = "right";
-      raw = raw.replace(/\s*-\s*right$/i, "");
-    }
-
     meta.name = $.trim(raw);
     return meta;
   }
 
-  function composeHeadingMeta(meta) {
+  function parseHeadingMetaForDialog(value, $dialog) {
+    var meta = parseHeadingBaseMeta(value);
+    meta.modifier = "none";
+
+    var parentMeta = getParentHeadingMeta($dialog);
+
+    // Profile 1: Section: Details - Left / Right
+    if (meta.renderType === "section") {
+      var strippedLeft = $.trim(meta.name.replace(/\s*-\s*left$/i, ""));
+      var strippedRight = $.trim(meta.name.replace(/\s*-\s*right$/i, ""));
+
+      if (strippedLeft.toLowerCase() === "details" && strippedLeft !== meta.name) {
+        meta.name = strippedLeft;
+        meta.modifier = "left";
+        return meta;
+      }
+
+      if (strippedRight.toLowerCase() === "details" && strippedRight !== meta.name) {
+        meta.name = strippedRight;
+        meta.modifier = "right";
+        return meta;
+      }
+    }
+
+    // Profile 2: Section: Proposal Summary > Dept: Project Total - Section / Dept
+    if (
+      meta.renderType === "dept" &&
+      parentMeta.renderType === "section" &&
+      parentMeta.name.toLowerCase() === "proposal summary"
+    ) {
+      var strippedSection = $.trim(meta.name.replace(/\s*-\s*section$/i, ""));
+      var strippedDept = $.trim(meta.name.replace(/\s*-\s*dept$/i, ""));
+
+      if (strippedSection.toLowerCase() === "project total" && strippedSection !== meta.name) {
+        meta.name = strippedSection;
+        meta.modifier = "section";
+        return meta;
+      }
+
+      if (strippedDept.toLowerCase() === "project total" && strippedDept !== meta.name) {
+        meta.name = strippedDept;
+        meta.modifier = "dept";
+        return meta;
+      }
+    }
+
+    return meta;
+  }
+
+  function composeHeadingMeta($dialog, meta) {
     var hidden = !!(meta && meta.hidden);
     var renderType = (meta && meta.renderType) || "normal";
     var name = $.trim(String((meta && meta.name) || ""));
     var modifier = (meta && meta.modifier) || "none";
+    var suffix = "";
+
+    var profile = getModifierProfileFromValues(
+      renderType,
+      name,
+      getParentHeadingMeta($dialog)
+    );
+
+    if (profile && profile.key === "details_layout") {
+      if (modifier === "left") suffix = " - Left";
+      if (modifier === "right") suffix = " - Right";
+    }
+
+    if (profile && profile.key === "project_total_grouping") {
+      if (modifier === "section") suffix = " - Section";
+      if (modifier === "dept") suffix = " - Dept";
+    }
 
     var prefix = "";
     if (hidden) prefix += "// ";
@@ -295,39 +349,127 @@
       prefix += "Dept: ";
     }
 
-    var suffix = "";
-    if (modifier === "left") {
-      suffix = " - Left";
-    } else if (modifier === "right") {
-      suffix = " - Right";
-    }
-
     return prefix + name + suffix;
   }
 
-  function refreshModifierState(ui) {
-    var eligible = isModifierEligible(ui);
+  function refreshModifierState($dialog, ui, preferredValue) {
+    var profile = getModifierProfile($dialog, ui);
 
-    if (ui.$modifierRow.length) {
-      ui.$modifierRow.toggle(eligible);
+    if (!profile) {
+      ui.$modifierRow.hide();
+      ui.$modifier.prop("disabled", true);
+      populateModifierOptions(ui, [{ value: "none", label: "None" }], "none");
+      return;
     }
 
-    ui.$modifier.prop("disabled", !eligible);
+    ui.$modifierLabel.text(profile.label);
+    ui.$modifierRow.show();
+    ui.$modifier.prop("disabled", false);
+    populateModifierOptions(ui, profile.options, preferredValue || "none");
+  }
 
-    if (!eligible) {
+  function populateModifierOptions(ui, options, selectedValue) {
+    var current = selectedValue || "none";
+    ui.$modifier.empty();
+
+    $.each(options, function (_, opt) {
+      ui.$modifier.append(
+        $("<option></option>").attr("value", opt.value).text(opt.label)
+      );
+    });
+
+    if (ui.$modifier.find('option[value="' + current + '"]').length) {
+      ui.$modifier.val(current);
+    } else {
       ui.$modifier.val("none");
     }
   }
 
-  function isModifierEligible(ui) {
-    var renderType = ui.$render.val() || "normal";
-    var name = $.trim(String(ui.$proxy.val() || "")).toLowerCase();
-
-    return renderType === "section" && name === "details";
+  function getModifierProfile($dialog, ui) {
+    return getModifierProfileFromValues(
+      ui.$render.val() || "normal",
+      ui.$proxy.val() || "",
+      getParentHeadingMeta($dialog)
+    );
   }
 
-  function getEffectiveModifier(ui) {
-    return isModifierEligible(ui) ? (ui.$modifier.val() || "none") : "none";
+  function getModifierProfileFromValues(renderType, name, parentMeta) {
+    var cleanName = $.trim(String(name || "")).toLowerCase();
+    var parentName = $.trim(String((parentMeta && parentMeta.name) || "")).toLowerCase();
+    var parentRender = (parentMeta && parentMeta.renderType) || "normal";
+
+    if (renderType === "section" && cleanName === "details") {
+      return {
+        key: "details_layout",
+        label: "Section layout",
+        options: [
+          { value: "none", label: "Standard" },
+          { value: "left", label: "Left" },
+          { value: "right", label: "Right" }
+        ]
+      };
+    }
+
+    if (
+      renderType === "dept" &&
+      cleanName === "project total" &&
+      parentRender === "section" &&
+      parentName === "proposal summary"
+    ) {
+      return {
+        key: "project_total_grouping",
+        label: "Sub total table",
+        options: [
+          { value: "none", label: "None" },
+          { value: "section", label: "Group by Section" },
+          { value: "dept", label: "Group by Dept" }
+        ]
+      };
+    }
+
+    return null;
+  }
+
+  function getEffectiveModifier($dialog, ui) {
+    var profile = getModifierProfile($dialog, ui);
+    if (!profile) return "none";
+
+    var value = ui.$modifier.val() || "none";
+    if (ui.$modifier.find('option[value="' + value + '"]').length) {
+      return value;
+    }
+
+    return "none";
+  }
+
+  function getParentHeadingRaw($dialog) {
+    var $select = $dialog.find("select.hh_base_select").first();
+    if (!$select.length) return "";
+
+    var selectedText = $.trim($select.find("option:selected").text());
+    if (selectedText && selectedText.toLowerCase() !== "none") {
+      return selectedText;
+    }
+
+    var overlayTitle = $.trim(($select.siblings('div[title]').attr("title")) || "");
+    if (overlayTitle && overlayTitle.toLowerCase() !== "none") {
+      return overlayTitle;
+    }
+
+    return "";
+  }
+
+  function getParentHeadingMeta($dialog) {
+    var raw = getParentHeadingRaw($dialog);
+    if (!raw) {
+      return {
+        hidden: false,
+        renderType: "normal",
+        name: ""
+      };
+    }
+
+    return parseHeadingBaseMeta(raw);
   }
 
   function triggerInputEvents($el) {
