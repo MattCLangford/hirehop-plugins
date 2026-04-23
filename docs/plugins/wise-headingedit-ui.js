@@ -1,14 +1,22 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-23.08"); } catch (e) {}
+  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-23.09"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
 
   var applyTimer = null;
-  var AUTO_CHILD_QUEUE = [];
-  var AUTO_CHILD_RUNNING = false;
+  var PENDING_PARENT_SAVE_PLAN = null;
+  var DIRECT_CREATE_QUEUE = [];
+  var DIRECT_CREATE_RUNNING = false;
+
+  var AUTO_CREATE_SECTION_NAMES = {
+    "details": true,
+    "suffix": true,
+    "proposal summary": true,
+    "labour & general requirements": true
+  };
 
   // =========================================================
   // MODIFIER RULES
@@ -105,32 +113,20 @@
   });
 
   $(document).on("dialogclose", ".ui-dialog-content", function () {
-  var $dialog = $(this).closest(".ui-dialog");
+    var $dialog = $(this).closest(".ui-dialog");
 
-  // Do NOT use isHeadingDialog() here because the dialog is usually no longer visible
-  var title = $.trim($dialog.find(".ui-dialog-title").first().text()).toLowerCase();
-  var isHeading = title === "edit heading" || title === "add heading" || title === "new heading";
+    var title = $.trim($dialog.find(".ui-dialog-title").first().text()).toLowerCase();
+    var isHeading = title === "edit heading" || title === "add heading" || title === "new heading";
+    if (!isHeading) return;
 
-  if (!isHeading) return;
+    var $form = $dialog.find("form.edit_type").filter(function () {
+      return $(this).find('input[name="kind"][value="0"]').length > 0;
+    }).first();
 
-  var pendingPlan = $dialog.data("wisePendingAutoChildPlan");
-  if (pendingPlan) {
-    console.log("[WiseHireHop] queued auto-child plan:", pendingPlan);
-    AUTO_CHILD_QUEUE.push(pendingPlan);
-    $dialog.removeData("wisePendingAutoChildPlan");
-    processAutoChildQueue();
-  } else {
-    console.log("[WiseHireHop] no pending auto-child plan on dialog close");
-  }
-
-  var $form = $dialog.find("form.edit_type").filter(function () {
-    return $(this).find('input[name="kind"][value="0"]').length > 0;
-  }).first();
-
-  if ($form.length) {
-    $form.removeData("wiseDocgenInitialised");
-  }
-});
+    if ($form.length) {
+      $form.removeData("wiseDocgenInitialised");
+    }
+  });
 
   var obs = new MutationObserver(function () {
     scheduleApply();
@@ -144,6 +140,7 @@
   });
 
   $(scheduleApply);
+  installItemsSaveInterceptor();
 
   // =========================================================
   // MAIN APPLY
@@ -197,19 +194,19 @@
   }
 
   function isNewHeadingDialog($dialog) {
-  if (!$dialog || !$dialog.length || !$dialog.is(":visible")) return false;
+    if (!$dialog || !$dialog.length || !$dialog.is(":visible")) return false;
 
-  var $form = getVisibleHeadingForm($dialog);
-  if ($form.length) {
-    var idVal = $.trim(String($form.find('input[name="id"]').first().val() || ""));
-    if (idVal === "0" || idVal === "") {
-      return true;
+    var $form = getVisibleHeadingForm($dialog);
+    if ($form.length) {
+      var idVal = $.trim(String($form.find('input[name="id"]').first().val() || ""));
+      if (idVal === "0" || idVal === "") {
+        return true;
+      }
     }
-  }
 
-  var title = $.trim($dialog.find(".ui-dialog-title").first().text()).toLowerCase();
-  return title === "add heading" || title === "new heading";
-}
+    var title = $.trim($dialog.find(".ui-dialog-title").first().text()).toLowerCase();
+    return title === "add heading" || title === "new heading";
+  }
 
   function getVisibleHeadingForm($dialog) {
     return $dialog.find("form.edit_type:visible").filter(function () {
@@ -227,31 +224,8 @@
     }).first();
   }
 
-  function getCancelButton($dialog) {
-    return $dialog.find(".ui-dialog-buttonpane button").filter(function () {
-      return $.trim($(this).text()).toLowerCase() === "cancel";
-    }).first();
-  }
-
   function getParentSelect($dialog) {
     return $dialog.find("select.hh_base_select").first();
-  }
-
-  function getUiRefsFromDialog($dialog) {
-    return {
-      $ui: $dialog.find(".wise-docgen-ui").first(),
-      $proxy: $dialog.find(".wise-docgen-display-name").first(),
-      $hidden: $dialog.find(".wise-docgen-hidden").first(),
-      $additional: $dialog.find(".wise-docgen-additional").first(),
-      $render: $dialog.find(".wise-docgen-render-type").first(),
-      $modifier: $dialog.find(".wise-docgen-modifier").first(),
-      $modifierRow: $dialog.find(".wise-docgen-modifier-row").first(),
-      $modifierLabel: $dialog.find(".wise-docgen-modifier-label-cell").first(),
-      $template: $dialog.find(".wise-docgen-template").first(),
-      $autoChildren: $dialog.find(".wise-docgen-auto-children").first(),
-      $autoChildrenRow: $dialog.find(".wise-docgen-autocreate-row").first(),
-      $autoChildrenLabel: $dialog.find(".wise-docgen-autocreate-label-cell").first()
-    };
   }
 
   // =========================================================
@@ -435,7 +409,7 @@
       });
 
       ui.$autoChildren.on("change.wiseDocgen", function () {
-        // purely UI state; no stored value
+        // UI state only
       });
 
       ui.$proxy.on("keydown.wiseDocgen", function (e) {
@@ -499,7 +473,7 @@
   }
 
   // =========================================================
-  // AUTO CREATE CHILD DEPTS
+  // AUTO CREATE CHILD DEPTS - DIRECT HTTP VERSION
   // =========================================================
   function refreshAutoCreateState($dialog, ui) {
     var eligible = isAutoCreateEligible($dialog, ui);
@@ -533,6 +507,10 @@
   function getDefaultDeptTemplatesForSectionName(sectionName) {
     var cleanSectionName = normaliseText(sectionName);
 
+    if (!AUTO_CREATE_SECTION_NAMES[cleanSectionName]) {
+      return [];
+    }
+
     return PAGE_TEMPLATES.filter(function (tpl) {
       return tpl.renderType === "dept" &&
         tpl.parentRenderType === "section" &&
@@ -541,362 +519,296 @@
   }
 
   function maybeStorePendingAutoChildPlan($dialog, $actualNameInput, ui) {
-  if (!isAutoCreateEligible($dialog, ui)) {
-    console.log("[WiseHireHop] auto-create not eligible for this heading");
-    $dialog.removeData("wisePendingAutoChildPlan");
-    return;
-  }
-
-  if (!ui.$autoChildren.prop("checked")) {
-    console.log("[WiseHireHop] auto-create checkbox not ticked");
-    $dialog.removeData("wisePendingAutoChildPlan");
-    return;
-  }
-
-  var childTemplates = getDefaultDeptTemplatesForSectionName(ui.$proxy.val() || "");
-  if (!childTemplates.length) {
-    console.log("[WiseHireHop] no default child dept templates found for section:", ui.$proxy.val() || "");
-    $dialog.removeData("wisePendingAutoChildPlan");
-    return;
-  }
-
-  var plan = {
-    parentStoredValue: $actualNameInput.val() || "",
-    sectionName: ui.$proxy.val() || "",
-    childTemplates: childTemplates.map(function (tpl) {
-      return {
-        key: tpl.key,
-        renderType: tpl.renderType,
-        name: tpl.name,
-        parentRenderType: tpl.parentRenderType,
-        parentName: tpl.parentName
-      };
-    })
-  };
-
-  console.log("[WiseHireHop] pending auto-child plan stored:", plan);
-  $dialog.data("wisePendingAutoChildPlan", plan);
-}
-
-  async function processAutoChildQueue() {
-  if (AUTO_CHILD_RUNNING) return;
-  AUTO_CHILD_RUNNING = true;
-
-  try {
-    while (AUTO_CHILD_QUEUE.length) {
-      var plan = AUTO_CHILD_QUEUE.shift();
-      if (plan) {
-        console.log("[WiseHireHop] running auto-child plan for:", plan.sectionName, plan);
-        try {
-          await runAutoChildPlan(plan);
-        } catch (err) {
-          console.warn("[WiseHireHop] auto child creation failed", err);
-        }
-      }
-    }
-  } finally {
-    AUTO_CHILD_RUNNING = false;
-  }
-}
-
-  async function runAutoChildPlan(plan) {
-    if (!plan || !plan.childTemplates || !plan.childTemplates.length) return;
-
-    // Give HireHop a moment to save and refresh the parent section
-    await sleep(500);
-
-    for (var i = 0; i < plan.childTemplates.length; i++) {
-      await createChildHeadingFromTemplate(plan, plan.childTemplates[i]);
-      await sleep(150);
-    }
-  }
-
-  async function createChildHeadingFromTemplate(plan, childTemplate) {
-  var maxAttempts = 8;
-
-  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
-    var opened = openAddHeadingDialog();
-    if (!opened) {
-      await sleep(300);
-      continue;
-    }
-
-    // First check whether the New button opens the heading dialog directly
-    var $dialog = await waitForNewHeadingDialog(800);
-
-    // If not, try clicking a Heading item from the New menu
-    if ((!$dialog || !$dialog.length)) {
-      var $headingOption = findVisibleNewMenuHeadingOption();
-      if ($headingOption.length) {
-        clickElementNative($headingOption);
-        $dialog = await waitForNewHeadingDialog(2500);
-      }
-    }
-
-    if (!$dialog || !$dialog.length) {
-      await sleep(300);
-      continue;
-    }
-
-    await waitForInjectedUi($dialog, 2500);
-
-    var childUi = getUiRefsFromDialog($dialog);
-    var $parentSelect = getParentSelect($dialog);
-
-    if (!$parentSelect.length) {
-      cancelHeadingDialog($dialog);
-      await sleep(300);
-      continue;
-    }
-
-    if (!selectOptionByText($parentSelect, plan.parentStoredValue)) {
-      cancelHeadingDialog($dialog);
-      await sleep(350);
-      continue;
-    }
-
-    await sleep(60);
-
-    populateTemplateSelect(childUi.$template, $dialog, childTemplate.key);
-
-    if (childUi.$template.find('option[value="' + childTemplate.key + '"]').length) {
-      childUi.$template.val(childTemplate.key).trigger("change");
-    } else {
-      childUi.$render.val(childTemplate.renderType || "dept").trigger("change");
-      childUi.$proxy.val(childTemplate.name || "").trigger("input").trigger("change");
-    }
-
-    await sleep(60);
-
-    // Re-apply exact parent after template selection
-    selectOptionByText($parentSelect, plan.parentStoredValue);
-    await sleep(60);
-
-    childUi.$hidden.prop("checked", false).trigger("change");
-    childUi.$additional.prop("checked", false).trigger("change");
-    childUi.$autoChildren.prop("checked", false).trigger("change");
-
-    var $save = getSaveButton($dialog);
-    if (!$save.length) {
-      cancelHeadingDialog($dialog);
-      await sleep(300);
-      continue;
-    }
-
-    clickElementNative($save);
-    await waitUntil(function () { return !isDialogStillOpen($dialog); }, 5000, 100);
-    await sleep(250);
-    return true;
-  }
-
-  try { console.warn("[WiseHireHop] Could not auto-create child heading:", childTemplate && childTemplate.name); } catch (e) {}
-  return false;
-}
-
- function openAddHeadingDialog() {
-  var $trigger = findAddHeadingTrigger();
-  if (!$trigger.length) {
-    console.warn("[WiseHireHop] no New trigger found");
-    return false;
-  }
-
-  console.log("[WiseHireHop] clicking New trigger:", $trigger.get(0));
-  clickElementNative($trigger);
-
-  return true;
-}
-
-function findAddHeadingTrigger() {
-  var $all = $('button, a, [role="button"], input[type="button"], input[type="submit"]')
-    .filter(":visible")
-    .filter(function () {
-      return $(this).closest(".ui-dialog").length === 0;
-    });
-
-  // Exact known HireHop toolbar button
-  var $classMatch = $all.filter(function () {
-    var $el = $(this);
-    var txt = $.trim(getTriggerText($el)).toLowerCase();
-    return $el.hasClass("items_func_btn") && txt === "new";
-  }).first();
-
-  if ($classMatch.length) {
-    console.log("[WiseHireHop] using class-based New trigger:", $classMatch.get(0));
-    return $classMatch;
-  }
-
-  // Exact text fallback
-  var $exact = $all.filter(function () {
-    var txt = $.trim(getTriggerText($(this))).toLowerCase();
-    return txt === "new" || txt === "add heading" || txt === "new heading";
-  }).first();
-
-  if ($exact.length) {
-    console.log("[WiseHireHop] using exact trigger:", $exact.get(0));
-    return $exact;
-  }
-
-  // Fuzzy fallback
-  var $fuzzy = $all.filter(function () {
-    var txt = $.trim(getTriggerText($(this))).toLowerCase();
-    return /\bnew\b|\bheading\b/.test(txt);
-  }).first();
-
-  if ($fuzzy.length) {
-    console.log("[WiseHireHop] using fuzzy trigger:", $fuzzy.get(0));
-  } else {
-    console.warn("[WiseHireHop] no add-heading trigger found");
-  }
-
-  return $fuzzy;
-}
-
-function findVisibleNewMenuHeadingOption() {
-  var $all = $('button, a, li, div, span')
-    .filter(":visible")
-    .filter(function () {
-      return $(this).closest(".ui-dialog").length === 0;
-    });
-
-  // Prefer explicit heading items
-  var $heading = $all.filter(function () {
-    var txt = $.trim($(this).text()).toLowerCase();
-    return txt === "heading" || txt === "new heading";
-  }).first();
-
-  if ($heading.length) {
-    console.log("[WiseHireHop] found Heading menu option:", $heading.get(0));
-    return $heading;
-  }
-
-  // Fuzzy fallback, but avoid toolbar "New"
-  var $fuzzy = $all.filter(function () {
-    var txt = $.trim($(this).text()).toLowerCase();
-    if (!txt) return false;
-    if (txt === "new") return false;
-    return /\bheading\b/.test(txt);
-  }).first();
-
-  if ($fuzzy.length) {
-    console.log("[WiseHireHop] using fuzzy Heading option:", $fuzzy.get(0));
-  } else {
-    console.warn("[WiseHireHop] no Heading menu option found");
-  }
-
-  return $fuzzy;
-}
-
-function clickElementNative($el) {
-  if (!$el || !$el.length) return false;
-
-  var el = $el.get(0);
-  if (!el) return false;
-
-  try {
-    el.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
-    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
-    el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
-    el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-    return true;
-  } catch (e) {
-    try {
-      el.click();
-      return true;
-    } catch (e2) {
-      return false;
-    }
-  }
-}
-  function getTriggerText($el) {
-    return $.trim($el.text() || $el.val() || $el.attr("title") || $el.attr("aria-label") || "");
-  }
-
-  async function waitForNewHeadingDialog(timeoutMs) {
-  var result = await waitUntilResult(function () {
-    var $match = $();
-    $(".ui-dialog:visible").each(function () {
-      var $dlg = $(this);
-      if (isNewHeadingDialog($dlg)) {
-        $match = $dlg;
-        return false;
-      }
-    });
-    return $match.length ? $match : null;
-  }, timeoutMs || 3000, 100);
-
-  if (result && result.length) {
-    console.log("[WiseHireHop] detected new heading dialog:", result.get(0));
-  } else {
-    console.warn("[WiseHireHop] no new heading dialog detected");
-  }
-
-  return result;
-}
-
-  async function waitForInjectedUi($dialog, timeoutMs) {
-    return waitUntil(function () {
-      return $dialog.find(".wise-docgen-ui").length > 0;
-    }, timeoutMs || 2000, 80);
-  }
-
-  function isDialogStillOpen($dialog) {
-    return !!($dialog && $dialog.length && $dialog.is(":visible"));
-  }
-
-  function cancelHeadingDialog($dialog) {
-    var $cancel = getCancelButton($dialog);
-    if ($cancel.length) {
-      $cancel.get(0).click();
+    if (!isAutoCreateEligible($dialog, ui)) {
+      console.log("[WiseHireHop] auto-create not eligible for this heading");
+      PENDING_PARENT_SAVE_PLAN = null;
       return;
     }
 
-    var $close = $dialog.find(".ui-dialog-titlebar-close:visible").first();
-    if ($close.length) {
-      $close.get(0).click();
+    if (!ui.$autoChildren.prop("checked")) {
+      console.log("[WiseHireHop] auto-create checkbox not ticked");
+      PENDING_PARENT_SAVE_PLAN = null;
+      return;
     }
+
+    var childTemplates = getDefaultDeptTemplatesForSectionName(ui.$proxy.val() || "");
+    if (!childTemplates.length) {
+      console.log("[WiseHireHop] no default child dept templates found for section:", ui.$proxy.val() || "");
+      PENDING_PARENT_SAVE_PLAN = null;
+      return;
+    }
+
+    PENDING_PARENT_SAVE_PLAN = {
+      parentStoredValue: $actualNameInput.val() || "",
+      sectionName: ui.$proxy.val() || "",
+      childTemplates: childTemplates.map(function (tpl) {
+        return {
+          key: tpl.key,
+          renderType: tpl.renderType,
+          name: tpl.name,
+          parentRenderType: tpl.parentRenderType,
+          parentName: tpl.parentName
+        };
+      }),
+      armedAt: Date.now()
+    };
+
+    console.log("[WiseHireHop] pending auto-child plan stored:", PENDING_PARENT_SAVE_PLAN);
   }
 
-  function selectOptionByText($select, desiredText) {
-    if (!$select.length || !desiredText) return false;
+  function installItemsSaveInterceptor() {
+    if (window.__wiseItemsSaveInterceptorInstalled) return;
+    window.__wiseItemsSaveInterceptorInstalled = true;
 
-    var target = normaliseText(desiredText);
-    var matched = false;
+    var origOpen = XMLHttpRequest.prototype.open;
+    var origSend = XMLHttpRequest.prototype.send;
 
-    $select.find("option").each(function () {
-      var $opt = $(this);
-      if (normaliseText($opt.text()) === target) {
-        $select.val($opt.val()).trigger("change");
-        matched = true;
-        return false;
+    XMLHttpRequest.prototype.open = function (method, url) {
+      this._wiseItemsSaveMeta = {
+        method: method,
+        url: url
+      };
+      return origOpen.apply(this, arguments);
+    };
+
+    XMLHttpRequest.prototype.send = function (body) {
+      if (
+        this._wiseItemsSaveMeta &&
+        String(this._wiseItemsSaveMeta.method || "").toUpperCase() === "POST" &&
+        isItemsSaveUrl(this._wiseItemsSaveMeta.url)
+      ) {
+        var meta = this._wiseItemsSaveMeta;
+        meta.body = body;
+
+        this.addEventListener("load", function () {
+          try {
+            handleItemsSaveResponse(meta.url, meta.body, this.status, this.responseText);
+          } catch (err) {
+            console.warn("[WiseHireHop] items_save interceptor error", err);
+          }
+        });
       }
+
+      return origSend.apply(this, arguments);
+    };
+
+    console.log("[WiseHireHop] items_save interceptor installed");
+  }
+
+  function isItemsSaveUrl(url) {
+    var u = String(url || "");
+    return /\/php_functions\/items_save\.php(?:\?|$)/i.test(u);
+  }
+
+  function handleItemsSaveResponse(url, body, status, responseText) {
+    if (!PENDING_PARENT_SAVE_PLAN) return;
+
+    var req = parseFormEncodedBody(body);
+
+    if (String(req.kind || "") !== "0") return;
+    if (String(req.id || "") !== "0") return;
+    if (String(req.parent || "") !== "0") return;
+
+    if (normaliseText(req.name || "") !== normaliseText(PENDING_PARENT_SAVE_PLAN.parentStoredValue || "")) {
+      return;
+    }
+
+    if ((Date.now() - (PENDING_PARENT_SAVE_PLAN.armedAt || 0)) > 30000) {
+      console.warn("[WiseHireHop] pending auto-child plan expired");
+      PENDING_PARENT_SAVE_PLAN = null;
+      return;
+    }
+
+    var json = tryParseJson(responseText);
+    var parentId = getCreatedHeadingIdFromResponse(json);
+
+    if (!parentId) {
+      console.warn("[WiseHireHop] could not read created parent heading ID from items_save response", json);
+      PENDING_PARENT_SAVE_PLAN = null;
+      return;
+    }
+
+    var plan = PENDING_PARENT_SAVE_PLAN;
+    PENDING_PARENT_SAVE_PLAN = null;
+
+    plan.parentId = String(parentId);
+    plan.job = String(req.job || "");
+
+    console.log("[WiseHireHop] matched parent save response. Queueing direct child creation:", plan);
+    queueDirectChildCreatePlan(plan);
+  }
+
+  function parseFormEncodedBody(body) {
+    var out = {};
+
+    if (!body) return out;
+
+    if (typeof body === "string") {
+      var params = new URLSearchParams(body);
+      params.forEach(function (value, key) {
+        out[key] = value;
+      });
+      return out;
+    }
+
+    if (body instanceof URLSearchParams) {
+      body.forEach(function (value, key) {
+        out[key] = value;
+      });
+      return out;
+    }
+
+    if (window.FormData && body instanceof FormData) {
+      body.forEach(function (value, key) {
+        out[key] = String(value);
+      });
+      return out;
+    }
+
+    if (typeof body === "object") {
+      $.each(body, function (key, value) {
+        out[key] = value;
+      });
+    }
+
+    return out;
+  }
+
+  function tryParseJson(text) {
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getCreatedHeadingIdFromResponse(json) {
+    if (!json || !json.items || !json.items.length) return "";
+    var item = json.items[0] || {};
+    return String(item.ID || item.id || "");
+  }
+
+  function queueDirectChildCreatePlan(plan) {
+    DIRECT_CREATE_QUEUE.push(plan);
+    processDirectCreateQueue();
+  }
+
+  async function processDirectCreateQueue() {
+    if (DIRECT_CREATE_RUNNING) return;
+    DIRECT_CREATE_RUNNING = true;
+
+    try {
+      while (DIRECT_CREATE_QUEUE.length) {
+        var plan = DIRECT_CREATE_QUEUE.shift();
+        if (!plan) continue;
+
+        console.log("[WiseHireHop] running direct child create plan for:", plan.sectionName, plan);
+
+        for (var i = 0; i < plan.childTemplates.length; i++) {
+          try {
+            await createHeadingDirect(plan, plan.childTemplates[i]);
+          } catch (err) {
+            console.warn("[WiseHireHop] direct child create failed for:", plan.childTemplates[i], err);
+          }
+        }
+
+        triggerSupplyingRefresh();
+      }
+    } finally {
+      DIRECT_CREATE_RUNNING = false;
+    }
+  }
+
+  async function createHeadingDirect(plan, childTemplate) {
+    var payload = {
+      parent: String(plan.parentId || "0"),
+      flag: "0",
+      priority_confirm: "0",
+      custom_fields: "",
+      kind: "0",
+      local: formatHireHopLocalDateTime(new Date()),
+      id: "0",
+      name: composeStoredHeadingFromTemplate(childTemplate),
+      desc: "",
+      memo: "",
+      set_child_dates: "0",
+      job: String(plan.job || ""),
+      no_availability: "0",
+      ignore: "0"
+    };
+
+    console.log("[WiseHireHop] creating child heading via HTTP:", payload);
+
+    var response = await fetch("/php_functions/items_save.php", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+      },
+      body: new URLSearchParams(payload).toString()
     });
 
-    return matched;
-  }
+    var text = await response.text();
+    var json = tryParseJson(text);
 
-  async function waitUntil(predicate, timeoutMs, intervalMs) {
-    var started = Date.now();
-    while ((Date.now() - started) < timeoutMs) {
-      if (predicate()) return true;
-      await sleep(intervalMs || 100);
+    if (!response.ok) {
+      throw new Error("items_save failed with status " + response.status + " :: " + text);
     }
-    return false;
+
+    console.log("[WiseHireHop] child heading created:", json);
+    return json;
   }
 
-  async function waitUntilResult(getter, timeoutMs, intervalMs) {
-    var started = Date.now();
-    while ((Date.now() - started) < timeoutMs) {
-      var result = getter();
-      if (result) return result;
-      await sleep(intervalMs || 100);
+  function composeStoredHeadingFromTemplate(template) {
+    var prefix = "";
+
+    if (template.renderType === "section") {
+      prefix = "Section: ";
+    } else if (template.renderType === "dept") {
+      prefix = "Dept: ";
     }
-    return null;
+
+    return prefix + String(template.name || "");
   }
 
-  function sleep(ms) {
-    return new Promise(function (resolve) {
-      setTimeout(resolve, ms);
-    });
+  function formatHireHopLocalDateTime(date) {
+    function pad(n) {
+      return String(n).padStart(2, "0");
+    }
+
+    return [
+      date.getFullYear(),
+      "-",
+      pad(date.getMonth() + 1),
+      "-",
+      pad(date.getDate()),
+      " ",
+      pad(date.getHours()),
+      ":",
+      pad(date.getMinutes()),
+      ":",
+      pad(date.getSeconds())
+    ].join("");
+  }
+
+  function triggerSupplyingRefresh() {
+    var $btn = $('button, a, [role="button"], input[type="button"], input[type="submit"]')
+      .filter(":visible")
+      .filter(function () {
+        return $(this).closest(".ui-dialog").length === 0;
+      })
+      .filter(function () {
+        var txt = $.trim($(this).text() || $(this).val() || $(this).attr("title") || $(this).attr("aria-label") || "").toLowerCase();
+        return txt === "refresh";
+      })
+      .first();
+
+    if ($btn.length) {
+      console.log("[WiseHireHop] refreshing supplying list");
+      $btn.get(0).click();
+    } else {
+      console.warn("[WiseHireHop] could not find Refresh button");
+    }
   }
 
   // =========================================================
