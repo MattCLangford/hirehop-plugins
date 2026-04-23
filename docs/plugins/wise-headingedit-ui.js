@@ -1,16 +1,15 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] heading docgen toggle plugin loaded"); } catch (e) {}
+  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-23.01"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
 
-  var HIDDEN_PREFIX = "// ";
-  var applyTimer = null;
-
-  // Optional page restriction if you know the exact supplying-list URL
+  // Optional route guard if you want one later
   // if (!/\/project\.php(\?|$)/.test(location.pathname)) return;
+
+  var applyTimer = null;
 
   function scheduleApply() {
     clearTimeout(applyTimer);
@@ -19,33 +18,31 @@
     }, 50);
   }
 
-  // Main hook: when any jQuery UI dialog opens
+  // Main hook when jQuery UI dialogs open
   $(document).on("dialogopen", ".ui-dialog-content", function () {
-    var $content = $(this);
-    var $dialog = $content.closest(".ui-dialog");
-
+    var $dialog = $(this).closest(".ui-dialog");
     if (!isHeadingDialog($dialog)) return;
 
-    // Reset sync marker for this open-cycle
     var $form = getVisibleHeadingForm($dialog);
     if ($form.length) {
-      $form.removeData("wiseDocgenSynced");
+      $form.removeData("wiseDocgenInitialised");
     }
 
     applyToHeadingDialog($dialog);
   });
 
-  // Clean up sync marker when closed
+  // Reset init marker when dialog closes
   $(document).on("dialogclose", ".ui-dialog-content", function () {
-    var $content = $(this);
-    var $dialog = $content.closest(".ui-dialog");
-
+    var $dialog = $(this).closest(".ui-dialog");
     if (!isHeadingDialog($dialog)) return;
 
-    $dialog.find("form.edit_type").removeData("wiseDocgenSynced");
+    var $form = getVisibleHeadingForm($dialog);
+    if ($form.length) {
+      $form.removeData("wiseDocgenInitialised");
+    }
   });
 
-  // Fallback hook for late DOM updates / re-renders
+  // Fallback for late re-renders
   var obs = new MutationObserver(function () {
     scheduleApply();
   });
@@ -57,7 +54,7 @@
     attributeFilter: ["class", "style"]
   });
 
-  // Initial attempt after load
+  // Initial attempt
   $(scheduleApply);
 
   function processVisibleHeadingDialogs() {
@@ -75,15 +72,14 @@
     var $form = getVisibleHeadingForm($dialog);
     if (!$form.length) return;
 
-    var $nameInput = getHeadingNameInput($form);
-    if (!$nameInput.length) return;
+    var $actualNameInput = getHeadingNameInput($form);
+    if (!$actualNameInput.length) return;
 
-    var $wrap = ensureToggleControl($form, $nameInput);
-    var $checkbox = $wrap.find("input.wise-docgen-hidden");
-    if (!$checkbox.length) return;
+    var ui = ensureHeadingUi($form, $actualNameInput);
+    if (!ui.$proxy.length || !ui.$hidden.length || !ui.$render.length) return;
 
-    syncUiFromStoredValue($form, $nameInput, $checkbox);
-    bindSaveHandler($dialog, $nameInput, $checkbox);
+    syncUiFromActual($form, $actualNameInput, ui);
+    bindUiHandlers($form, $dialog, $actualNameInput, ui);
   }
 
   function isHeadingDialog($dialog) {
@@ -103,82 +99,115 @@
     return $form.find('input[name="name"]').first();
   }
 
-  function ensureToggleControl($form, $nameInput) {
-    var $existing = $form.find(".wise-docgen-toggle").first();
-    if ($existing.length) return $existing;
+  function ensureHeadingUi($form, $actualNameInput) {
+    var $ui = $form.find(".wise-docgen-ui").first();
 
-    var $wrap = $(
-      '<div class="wise-docgen-toggle" style="margin-top:8px;">' +
-        '<label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">' +
-          '<input type="checkbox" class="wise-docgen-hidden" style="margin:0;">' +
-          '<span>Hide this heading in doc generator</span>' +
-        '</label>' +
-      '</div>'
-    );
+    if (!$ui.length) {
+      var width = $actualNameInput.outerWidth() || 450;
 
-    $nameInput.after($wrap);
-    return $wrap;
-  }
+      $ui = $(
+        '<span class="wise-docgen-ui" style="display:inline-block; vertical-align:middle;">' +
+          '<input type="text" class="wise-docgen-display-name" maxlength="60" style="width:' + width + 'px;">' +
+          '<span class="wise-docgen-meta" style="display:block; margin-top:8px;">' +
+            '<label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; margin-right:16px;">' +
+              '<input type="checkbox" class="wise-docgen-hidden" style="margin:0;">' +
+              '<span>Hide this heading in doc generator</span>' +
+            '</label>' +
+            '<label style="display:inline-flex; align-items:center; gap:8px;">' +
+              '<span>Render as</span>' +
+              '<select class="wise-docgen-render-type" style="min-width:180px;">' +
+                '<option value="normal">Normal heading</option>' +
+                '<option value="section">Section page</option>' +
+                '<option value="dept">Dept page</option>' +
+              '</select>' +
+            '</label>' +
+          '</span>' +
+        '</span>'
+      );
 
-  function syncUiFromStoredValue($form, $nameInput, $checkbox) {
-    // Only sync once per dialog open-cycle, otherwise observer re-runs can
-    // interfere with the user while editing.
-    if ($form.data("wiseDocgenSynced") === "1") return;
-
-    var storedValue = $nameInput.val() || "";
-    var hidden = hasHiddenPrefix(storedValue);
-
-    $checkbox.prop("checked", hidden);
-
-    if (hidden) {
-      $nameInput.val(stripHiddenPrefix(storedValue));
-      triggerInputEvents($nameInput);
+      // Hide the real HireHop field and insert our UI after it
+      $actualNameInput.hide();
+      $actualNameInput.after($ui);
+    } else {
+      $actualNameInput.hide();
     }
 
-    $form.data("wiseDocgenSynced", "1");
+    return {
+      $ui: $ui,
+      $proxy: $ui.find(".wise-docgen-display-name").first(),
+      $hidden: $ui.find(".wise-docgen-hidden").first(),
+      $render: $ui.find(".wise-docgen-render-type").first()
+    };
   }
 
-  function bindSaveHandler($dialog, $nameInput, $checkbox) {
-  var $saveButton = getSaveButton($dialog);
-  if (!$saveButton.length) return;
+  function syncUiFromActual($form, $actualNameInput, ui) {
+    // Only initialise once per dialog open-cycle
+    if ($form.data("wiseDocgenInitialised") === "1") return;
 
-  var btn = $saveButton.get(0);
-  if (!btn) return;
+    var meta = parseHeadingMeta($actualNameInput.val() || "");
 
-  if (btn._wiseDocgenBound) return;
+    ui.$proxy.val(meta.name);
+    ui.$hidden.prop("checked", meta.hidden);
+    ui.$render.val(meta.renderType);
 
-  function prepareActualValue() {
-    var currentValue = $nameInput.val() || "";
-    var finalValue = $checkbox.prop("checked")
-      ? applyHiddenPrefix(currentValue)
-      : stripHiddenPrefix(currentValue);
+    // Canonicalise the underlying value immediately
+    syncActualFromUi($actualNameInput, ui);
 
-    if (($nameInput.val() || "") !== finalValue) {
-      $nameInput.val(finalValue);
-      triggerInputEvents($nameInput);
+    $form.data("wiseDocgenInitialised", "1");
+  }
+
+  function bindUiHandlers($form, $dialog, $actualNameInput, ui) {
+    if ($form.data("wiseDocgenBound") !== "1") {
+      ui.$proxy.on("input.wiseDocgen change.wiseDocgen keyup.wiseDocgen blur.wiseDocgen", function () {
+        syncActualFromUi($actualNameInput, ui);
+      });
+
+      ui.$hidden.on("change.wiseDocgen", function () {
+        syncActualFromUi($actualNameInput, ui);
+      });
+
+      ui.$render.on("change.wiseDocgen", function () {
+        syncActualFromUi($actualNameInput, ui);
+      });
+
+      ui.$proxy.on("keydown.wiseDocgen", function (e) {
+        if (e.key === "Enter") {
+          syncActualFromUi($actualNameInput, ui);
+        }
+      });
+
+      $form.data("wiseDocgenBound", "1");
+    }
+
+    bindSaveAssurance($dialog, $actualNameInput, ui);
+  }
+
+  function bindSaveAssurance($dialog, $actualNameInput, ui) {
+    var $saveButton = getSaveButton($dialog);
+    if (!$saveButton.length) return;
+
+    var btn = $saveButton.get(0);
+    if (!btn) return;
+
+    if (!btn._wiseDocgenBound) {
+      function ensureLatestActualValue() {
+        syncActualFromUi($actualNameInput, ui);
+      }
+
+      // Run before HireHop's own save path
+      btn.addEventListener("pointerdown", ensureLatestActualValue, true);
+      btn.addEventListener("mousedown", ensureLatestActualValue, true);
+      btn.addEventListener("click", ensureLatestActualValue, true);
+
+      var formEl = $actualNameInput.closest("form").get(0);
+      if (formEl && !formEl._wiseDocgenSubmitBound) {
+        formEl.addEventListener("submit", ensureLatestActualValue, true);
+        formEl._wiseDocgenSubmitBound = true;
+      }
+
+      btn._wiseDocgenBound = true;
     }
   }
-
-  // Run BEFORE HireHop's normal click handlers
-  btn.addEventListener("pointerdown", prepareActualValue, true);
-  btn.addEventListener("mousedown", prepareActualValue, true);
-  btn.addEventListener("click", prepareActualValue, true);
-
-  // Also cover enter-to-save / form submit paths
-  var form = $nameInput.closest("form").get(0);
-  if (form && !form._wiseDocgenSubmitBound) {
-    form.addEventListener("submit", prepareActualValue, true);
-    form._wiseDocgenSubmitBound = true;
-  }
-
-  $nameInput.on("keydown.wiseDocgenHeading", function (e) {
-    if (e.key === "Enter") {
-      prepareActualValue();
-    }
-  });
-
-  btn._wiseDocgenBound = true;
-}
 
   function getSaveButton($dialog) {
     return $dialog.find(".ui-dialog-buttonpane button").filter(function () {
@@ -186,16 +215,62 @@
     }).first();
   }
 
-  function hasHiddenPrefix(value) {
-    return /^\s*\/\/\s*/.test(value || "");
+  function syncActualFromUi($actualNameInput, ui) {
+    var meta = {
+      hidden: ui.$hidden.prop("checked"),
+      renderType: ui.$render.val() || "normal",
+      name: ui.$proxy.val() || ""
+    };
+
+    var composed = composeHeadingMeta(meta);
+    if (($actualNameInput.val() || "") !== composed) {
+      $actualNameInput.val(composed);
+      triggerInputEvents($actualNameInput);
+    }
   }
 
-  function stripHiddenPrefix(value) {
-    return String(value || "").replace(/^\s*\/\/\s*/, "");
+  function parseHeadingMeta(value) {
+    var raw = $.trim(String(value || ""));
+    var meta = {
+      hidden: false,
+      renderType: "normal",
+      name: raw
+    };
+
+    // Hidden marker first
+    if (/^\/\/\s*/i.test(raw)) {
+      meta.hidden = true;
+      raw = raw.replace(/^\/\/\s*/i, "");
+    }
+
+    // Render type next
+    if (/^section\s*:\s*/i.test(raw)) {
+      meta.renderType = "section";
+      raw = raw.replace(/^section\s*:\s*/i, "");
+    } else if (/^dept\s*:\s*/i.test(raw)) {
+      meta.renderType = "dept";
+      raw = raw.replace(/^dept\s*:\s*/i, "");
+    }
+
+    meta.name = raw;
+    return meta;
   }
 
-  function applyHiddenPrefix(value) {
-    return HIDDEN_PREFIX + stripHiddenPrefix(value);
+  function composeHeadingMeta(meta) {
+    var hidden = !!(meta && meta.hidden);
+    var renderType = (meta && meta.renderType) || "normal";
+    var name = $.trim(String((meta && meta.name) || ""));
+
+    var prefix = "";
+    if (hidden) prefix += "// ";
+
+    if (renderType === "section") {
+      prefix += "Section: ";
+    } else if (renderType === "dept") {
+      prefix += "Dept: ";
+    }
+
+    return prefix + name;
   }
 
   function triggerInputEvents($el) {
