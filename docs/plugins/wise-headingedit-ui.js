@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-23.05"); } catch (e) {}
+  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-23.06"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -46,6 +46,7 @@
   var PAGE_TEMPLATES = [
     { key: "section_hero", renderType: "section", name: "Hero", parentRenderType: null, parentName: null, sectionRank: 1, deptRank: null },
     { key: "section_details", renderType: "section", name: "Details", parentRenderType: null, parentName: null, sectionRank: 2, deptRank: null },
+
     { key: "dept_experience_expertise", renderType: "dept", name: "Experience<br>& Expertise", parentRenderType: "section", parentName: "Details", sectionRank: 2, deptRank: 1 },
     { key: "dept_fpv_proven_process", renderType: "dept", name: "FPV Proven Process", parentRenderType: "section", parentName: "Details", sectionRank: 2, deptRank: 2 },
     { key: "dept_your_dedicated_project_manager", renderType: "dept", name: "Your Dedicated<br>Project Manager", parentRenderType: "section", parentName: "Details", sectionRank: 2, deptRank: 3 },
@@ -156,6 +157,8 @@
       !ui.$additional.length
     ) return;
 
+    populateTemplateSelect(ui.$template, $dialog, ui.$template.val() || "");
+    refreshRenderTypeState($dialog, ui);
     syncUiFromActual($form, $dialog, $actualNameInput, ui);
     bindUiHandlers($form, $dialog, $actualNameInput, ui);
     refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
@@ -195,81 +198,79 @@
   // UI BUILD
   // =========================================================
   function ensureHeadingUi($form, $actualNameInput) {
-  var $ui = $form.find(".wise-docgen-ui").first();
+    var $ui = $form.find(".wise-docgen-ui").first();
 
-  if (!$ui.length) {
-    var width = $actualNameInput.outerWidth() || 450;
+    if (!$ui.length) {
+      var width = $actualNameInput.outerWidth() || 450;
 
-    neutraliseOriginalHeadingInlineLabel($actualNameInput);
+      neutraliseOriginalHeadingInlineLabel($actualNameInput);
 
-    $ui = $(
-      '<div class="wise-docgen-ui" style="display:block; margin:6px 0 10px 0;">' +
+      $ui = $(
+        '<div class="wise-docgen-ui" style="display:block; margin:6px 0 10px 0;">' +
 
-        '<div class="wise-docgen-meta" style="display:grid; grid-template-columns: 170px minmax(220px, 1fr); gap:8px 12px; align-items:center; max-width:760px; margin-bottom:12px;">' +
+          '<div class="wise-docgen-meta" style="display:grid; grid-template-columns: 170px minmax(220px, 1fr); gap:8px 12px; align-items:center; max-width:760px; margin-bottom:12px;">' +
 
-          '<div class="wise-docgen-setting-label">Page template</div>' +
-          '<div class="wise-docgen-setting-control">' +
-            '<select class="wise-docgen-template" style="min-width:320px;"></select>' +
+            '<div class="wise-docgen-setting-label">Page template</div>' +
+            '<div class="wise-docgen-setting-control">' +
+              '<select class="wise-docgen-template" style="min-width:320px;"></select>' +
+            '</div>' +
+
           '</div>' +
 
-        '</div>' +
-
-        '<div class="wise-docgen-headingname-row" style="margin-bottom:12px;">' +
-          '<label class="wise-docgen-headingname-label" style="display:block; font-weight:600; margin-bottom:4px;">Heading name</label>' +
-          '<input type="text" class="wise-docgen-display-name" maxlength="60" style="width:' + width + 'px;">' +
-        '</div>' +
-
-        '<div class="wise-docgen-meta" style="display:grid; grid-template-columns: 170px minmax(220px, 1fr); gap:8px 12px; align-items:center; max-width:760px;">' +
-
-          '<div class="wise-docgen-setting-label">Hide in doc generator</div>' +
-          '<div class="wise-docgen-setting-control">' +
-            '<input type="checkbox" class="wise-docgen-hidden" style="margin:0;">' +
+          '<div class="wise-docgen-headingname-row" style="margin-bottom:12px;">' +
+            '<label class="wise-docgen-headingname-label" style="display:block; font-weight:600; margin-bottom:4px;">Heading name</label>' +
+            '<input type="text" class="wise-docgen-display-name" maxlength="60" style="width:' + width + 'px;">' +
           '</div>' +
 
-          '<div class="wise-docgen-setting-label">Additional options costs</div>' +
-          '<div class="wise-docgen-setting-control">' +
-            '<input type="checkbox" class="wise-docgen-additional" style="margin:0;">' +
+          '<div class="wise-docgen-meta" style="display:grid; grid-template-columns: 170px minmax(220px, 1fr); gap:8px 12px; align-items:center; max-width:760px;">' +
+
+            '<div class="wise-docgen-setting-label">Hide in doc generator</div>' +
+            '<div class="wise-docgen-setting-control">' +
+              '<input type="checkbox" class="wise-docgen-hidden" style="margin:0;">' +
+            '</div>' +
+
+            '<div class="wise-docgen-setting-label">Additional options costs</div>' +
+            '<div class="wise-docgen-setting-control">' +
+              '<input type="checkbox" class="wise-docgen-additional" style="margin:0;">' +
+            '</div>' +
+
+            '<div class="wise-docgen-setting-label">Render as</div>' +
+            '<div class="wise-docgen-setting-control">' +
+              '<select class="wise-docgen-render-type" style="min-width:180px;">' +
+                '<option value="normal">Normal heading</option>' +
+                '<option value="section">Section page</option>' +
+                '<option value="dept">Dept page</option>' +
+              '</select>' +
+            '</div>' +
+
+            '<div class="wise-docgen-setting-label wise-docgen-modifier-label-cell" style="display:none;">Modifier</div>' +
+            '<div class="wise-docgen-setting-control wise-docgen-modifier-row" style="display:none;">' +
+              '<select class="wise-docgen-modifier" style="min-width:220px;"></select>' +
+            '</div>' +
+
           '</div>' +
+        '</div>'
+      );
 
-          '<div class="wise-docgen-setting-label">Render as</div>' +
-          '<div class="wise-docgen-setting-control">' +
-            '<select class="wise-docgen-render-type" style="min-width:180px;">' +
-              '<option value="normal">Normal heading</option>' +
-              '<option value="section">Section page</option>' +
-              '<option value="dept">Dept page</option>' +
-            '</select>' +
-          '</div>' +
+      $actualNameInput.hide();
+      $actualNameInput.after($ui);
+    } else {
+      $actualNameInput.hide();
+      neutraliseOriginalHeadingInlineLabel($actualNameInput);
+    }
 
-          '<div class="wise-docgen-setting-label wise-docgen-modifier-label-cell" style="display:none;">Modifier</div>' +
-          '<div class="wise-docgen-setting-control wise-docgen-modifier-row" style="display:none;">' +
-            '<select class="wise-docgen-modifier" style="min-width:220px;"></select>' +
-          '</div>' +
-
-        '</div>' +
-      '</div>'
-    );
-
-    $actualNameInput.hide();
-    $actualNameInput.after($ui);
-  } else {
-    $actualNameInput.hide();
-    neutraliseOriginalHeadingInlineLabel($actualNameInput);
+    return {
+      $ui: $ui,
+      $proxy: $ui.find(".wise-docgen-display-name").first(),
+      $hidden: $ui.find(".wise-docgen-hidden").first(),
+      $additional: $ui.find(".wise-docgen-additional").first(),
+      $render: $ui.find(".wise-docgen-render-type").first(),
+      $modifier: $ui.find(".wise-docgen-modifier").first(),
+      $modifierRow: $ui.find(".wise-docgen-modifier-row").first(),
+      $modifierLabel: $ui.find(".wise-docgen-modifier-label-cell").first(),
+      $template: $ui.find(".wise-docgen-template").first()
+    };
   }
-
-  populateTemplateSelect($ui.find(".wise-docgen-template").first());
-
-  return {
-    $ui: $ui,
-    $proxy: $ui.find(".wise-docgen-display-name").first(),
-    $hidden: $ui.find(".wise-docgen-hidden").first(),
-    $additional: $ui.find(".wise-docgen-additional").first(),
-    $render: $ui.find(".wise-docgen-render-type").first(),
-    $modifier: $ui.find(".wise-docgen-modifier").first(),
-    $modifierRow: $ui.find(".wise-docgen-modifier-row").first(),
-    $modifierLabel: $ui.find(".wise-docgen-modifier-label-cell").first(),
-    $template: $ui.find(".wise-docgen-template").first()
-  };
-}
 
   function neutraliseOriginalHeadingInlineLabel($actualNameInput) {
     var inputEl = $actualNameInput.get(0);
@@ -297,47 +298,6 @@
     inputEl._wiseHeadingLabelNeutralised = true;
   }
 
-  function populateTemplateSelect($select) {
-    if (!$select.length) return;
-    if ($select.data("wiseDocgenTemplatesLoaded") === "1") return;
-
-    $select.empty();
-    $select.append($("<option></option>").attr("value", "").text("Custom / Manual"));
-
-    var sections = PAGE_TEMPLATES.filter(function (t) { return t.renderType === "section"; });
-    var depts = PAGE_TEMPLATES.filter(function (t) { return t.renderType === "dept"; });
-
-    var $sectionGroup = $('<optgroup label="Section pages"></optgroup>');
-    $.each(sections, function (_, tpl) {
-      $sectionGroup.append(
-        $("<option></option>")
-          .attr("value", tpl.key)
-          .text(getTemplateOptionText(tpl))
-      );
-    });
-
-    var $deptGroup = $('<optgroup label="Dept pages"></optgroup>');
-    $.each(depts, function (_, tpl) {
-      $deptGroup.append(
-        $("<option></option>")
-          .attr("value", tpl.key)
-          .text(getTemplateOptionText(tpl))
-      );
-    });
-
-    $select.append($sectionGroup).append($deptGroup);
-    $select.data("wiseDocgenTemplatesLoaded", "1");
-  }
-
-  function getTemplateOptionText(template) {
-    var parent = template.parentName ? normaliseDisplayText(template.parentName) + " → " : "";
-    return parent + normaliseDisplayText(template.name);
-  }
-
-  function normaliseDisplayText(value) {
-    return $.trim(String(value || "").replace(/<br\s*\/?>/gi, " "));
-  }
-
   // =========================================================
   // INITIAL SYNC
   // =========================================================
@@ -352,6 +312,7 @@
     ui.$render.val(meta.renderType);
 
     syncTemplateControl($dialog, ui, meta);
+    refreshRenderTypeState($dialog, ui);
     refreshModifierState($dialog, ui, meta.modifier || "none");
     syncActualFromUi($dialog, $actualNameInput, ui);
 
@@ -365,12 +326,15 @@
     if ($form.data("wiseDocgenBound") !== "1") {
       ui.$template.on("change.wiseDocgen", function () {
         applyTemplateSelection($dialog, ui);
+        populateTemplateSelect(ui.$template, $dialog, ui.$template.val() || "");
+        refreshRenderTypeState($dialog, ui);
         refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
         syncActualFromUi($dialog, $actualNameInput, ui);
       });
 
       ui.$proxy.on("input.wiseDocgen change.wiseDocgen keyup.wiseDocgen blur.wiseDocgen", function () {
         syncTemplateControl($dialog, ui);
+        refreshRenderTypeState($dialog, ui);
         refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
         syncActualFromUi($dialog, $actualNameInput, ui);
       });
@@ -385,6 +349,7 @@
 
       ui.$render.on("change.wiseDocgen", function () {
         syncTemplateControl($dialog, ui);
+        refreshRenderTypeState($dialog, ui);
         refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
         syncActualFromUi($dialog, $actualNameInput, ui);
       });
@@ -396,6 +361,7 @@
       ui.$proxy.on("keydown.wiseDocgen", function (e) {
         if (e.key === "Enter") {
           syncTemplateControl($dialog, ui);
+          refreshRenderTypeState($dialog, ui);
           refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
           syncActualFromUi($dialog, $actualNameInput, ui);
         }
@@ -407,7 +373,9 @@
     var $parentSelect = getParentSelect($dialog);
     if ($parentSelect.length && $parentSelect.data("wiseDocgenBound") !== "1") {
       $parentSelect.on("change.wiseDocgen", function () {
+        populateTemplateSelect(ui.$template, $dialog, ui.$template.val() || "");
         syncTemplateControl($dialog, ui);
+        refreshRenderTypeState($dialog, ui);
         refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
         syncActualFromUi($dialog, $actualNameInput, ui);
       });
@@ -427,6 +395,7 @@
     if (!btn._wiseDocgenBound) {
       function ensureLatestActualValue() {
         syncTemplateControl($dialog, ui);
+        refreshRenderTypeState($dialog, ui);
         refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
         syncActualFromUi($dialog, $actualNameInput, ui);
       }
@@ -469,46 +438,42 @@
   // PARSING / COMPOSING
   // =========================================================
   function parseHeadingBaseMeta(value) {
-  var raw = $.trim(String(value || ""));
-  var meta = {
-    additionalOptions: false,
-    hidden: false,
-    renderType: "normal",
-    name: raw
-  };
+    var raw = $.trim(String(value || ""));
+    var meta = {
+      additionalOptions: false,
+      hidden: false,
+      renderType: "normal",
+      name: raw
+    };
 
-  // Consume leading markers in any order so both:
-  // "// $ Section: X"
-  // "$ // Section: X"
-  // are parsed safely
-  var changed = true;
-  while (changed) {
-    changed = false;
+    var changed = true;
+    while (changed) {
+      changed = false;
 
-    if (/^\/\/\s*/i.test(raw)) {
-      meta.hidden = true;
-      raw = raw.replace(/^\/\/\s*/i, "");
-      changed = true;
+      if (/^\/\/\s*/i.test(raw)) {
+        meta.hidden = true;
+        raw = raw.replace(/^\/\/\s*/i, "");
+        changed = true;
+      }
+
+      if (/^\$\s*/i.test(raw)) {
+        meta.additionalOptions = true;
+        raw = raw.replace(/^\$\s*/i, "");
+        changed = true;
+      }
     }
 
-    if (/^\$\s*/i.test(raw)) {
-      meta.additionalOptions = true;
-      raw = raw.replace(/^\$\s*/i, "");
-      changed = true;
+    if (/^section\s*:\s*/i.test(raw)) {
+      meta.renderType = "section";
+      raw = raw.replace(/^section\s*:\s*/i, "");
+    } else if (/^dept\s*:\s*/i.test(raw)) {
+      meta.renderType = "dept";
+      raw = raw.replace(/^dept\s*:\s*/i, "");
     }
-  }
 
-  if (/^section\s*:\s*/i.test(raw)) {
-    meta.renderType = "section";
-    raw = raw.replace(/^section\s*:\s*/i, "");
-  } else if (/^dept\s*:\s*/i.test(raw)) {
-    meta.renderType = "dept";
-    raw = raw.replace(/^dept\s*:\s*/i, "");
+    meta.name = $.trim(raw);
+    return meta;
   }
-
-  meta.name = $.trim(raw);
-  return meta;
-}
 
   function parseHeadingMetaForDialog(value, $dialog) {
     var meta = parseHeadingBaseMeta(value);
@@ -522,37 +487,33 @@
   }
 
   function composeHeadingMeta($dialog, meta) {
-  var additionalOptions = !!(meta && meta.additionalOptions);
-  var hidden = !!(meta && meta.hidden);
-  var renderType = (meta && meta.renderType) || "normal";
-  var baseName = $.trim(String((meta && meta.name) || ""));
-  var modifier = (meta && meta.modifier) || "none";
-  var parentMeta = getParentHeadingMeta($dialog);
+    var additionalOptions = !!(meta && meta.additionalOptions);
+    var hidden = !!(meta && meta.hidden);
+    var renderType = (meta && meta.renderType) || "normal";
+    var baseName = $.trim(String((meta && meta.name) || ""));
+    var modifier = (meta && meta.modifier) || "none";
+    var parentMeta = getParentHeadingMeta($dialog);
 
-  var rule = findRuleForBaseName(renderType, baseName, parentMeta);
-  var suffix = "";
+    var rule = findRuleForBaseName(renderType, baseName, parentMeta);
+    var suffix = "";
 
-  if (rule) {
-    var opt = findOptionByValue(rule, modifier) || findOptionByValue(rule, "none");
-    suffix = opt ? opt.suffix : "";
+    if (rule) {
+      var opt = findOptionByValue(rule, modifier) || findOptionByValue(rule, "none");
+      suffix = opt ? opt.suffix : "";
+    }
+
+    var prefix = "";
+    if (hidden) prefix += "// ";
+    if (additionalOptions) prefix += "$ ";
+
+    if (renderType === "section") {
+      prefix += "Section: ";
+    } else if (renderType === "dept") {
+      prefix += "Dept: ";
+    }
+
+    return prefix + baseName + suffix;
   }
-
-  var prefix = "";
-
-  // Canonical order:
-  // 1) hidden
-  // 2) additional options
-  if (hidden) prefix += "// ";
-  if (additionalOptions) prefix += "$ ";
-
-  if (renderType === "section") {
-    prefix += "Section: ";
-  } else if (renderType === "dept") {
-    prefix += "Dept: ";
-  }
-
-  return prefix + baseName + suffix;
-}
 
   // =========================================================
   // RULE ENGINE
@@ -661,12 +622,96 @@
   // =========================================================
   // TEMPLATE ENGINE
   // =========================================================
+  function populateTemplateSelect($select, $dialog, selectedKey) {
+    if (!$select.length) return;
+
+    var parentMeta = getParentHeadingMeta($dialog);
+    var allowedTemplates = getAllowedTemplatesForParent(parentMeta);
+
+    $select.empty();
+    $select.append($("<option></option>").attr("value", "").text("Custom / Manual"));
+
+    if (!allowedTemplates.length) {
+      $select.prop("disabled", true).val("");
+      return;
+    }
+
+    $select.prop("disabled", false);
+
+    var sections = allowedTemplates.filter(function (t) { return t.renderType === "section"; });
+    var depts = allowedTemplates.filter(function (t) { return t.renderType === "dept"; });
+
+    if (sections.length) {
+      var $sectionGroup = $('<optgroup label="Section pages"></optgroup>');
+      $.each(sections, function (_, tpl) {
+        $sectionGroup.append(
+          $("<option></option>")
+            .attr("value", tpl.key)
+            .text(getTemplateOptionText(tpl))
+        );
+      });
+      $select.append($sectionGroup);
+    }
+
+    if (depts.length) {
+      var $deptGroup = $('<optgroup label="Dept pages"></optgroup>');
+      $.each(depts, function (_, tpl) {
+        $deptGroup.append(
+          $("<option></option>")
+            .attr("value", tpl.key)
+            .text(getTemplateOptionText(tpl))
+        );
+      });
+      $select.append($deptGroup);
+    }
+
+    if (selectedKey && $select.find('option[value="' + selectedKey + '"]').length) {
+      $select.val(selectedKey);
+    } else {
+      $select.val("");
+    }
+  }
+
+  function getAllowedTemplatesForParent(parentMeta) {
+    var parentRenderType = (parentMeta && parentMeta.renderType) || "normal";
+    var parentName = normaliseText((parentMeta && parentMeta.name) || "");
+
+    if (!parentName && parentRenderType === "normal") {
+      return PAGE_TEMPLATES.filter(function (tpl) {
+        return tpl.renderType === "section" && !tpl.parentRenderType && !tpl.parentName;
+      }).sort(sortTemplates);
+    }
+
+    if (parentRenderType === "section" && parentName) {
+      return PAGE_TEMPLATES.filter(function (tpl) {
+        return tpl.renderType === "dept" &&
+          tpl.parentRenderType === "section" &&
+          normaliseText(tpl.parentName) === parentName;
+      }).sort(sortTemplates);
+    }
+
+    return [];
+  }
+
+  function sortTemplates(a, b) {
+    var a1 = a.sectionRank == null ? 999 : a.sectionRank;
+    var b1 = b.sectionRank == null ? 999 : b.sectionRank;
+    if (a1 !== b1) return a1 - b1;
+
+    var a2 = a.deptRank == null ? 999 : a.deptRank;
+    var b2 = b.deptRank == null ? 999 : b.deptRank;
+    if (a2 !== b2) return a2 - b2;
+
+    return normaliseDisplayText(a.name).localeCompare(normaliseDisplayText(b.name));
+  }
+
   function syncTemplateControl($dialog, ui, metaOverride) {
     var parentMeta = getParentHeadingMeta($dialog);
     var renderType = metaOverride ? metaOverride.renderType : (ui.$render.val() || "normal");
     var name = metaOverride ? metaOverride.name : (ui.$proxy.val() || "");
     var template = findTemplateForValues(renderType, name, parentMeta);
 
+    populateTemplateSelect(ui.$template, $dialog, template ? template.key : "");
     ui.$template.val(template ? template.key : "");
   }
 
@@ -682,6 +727,8 @@
 
     if (template.parentRenderType && template.parentName) {
       trySetParentHeading($dialog, template.parentRenderType, template.parentName);
+    } else if (!template.parentRenderType && !template.parentName) {
+      tryClearParentHeading($dialog);
     }
   }
 
@@ -722,6 +769,22 @@
     return exactMatch || looseMatch || null;
   }
 
+  function getTemplateOptionText(template) {
+    var parent = template.parentName ? normaliseDisplayText(template.parentName) + " → " : "";
+    return parent + normaliseDisplayText(template.name);
+  }
+
+  function normaliseDisplayText(value) {
+    return $.trim(String(value || "").replace(/<br\s*\/?>/gi, " "));
+  }
+
+  function composeParentHeadingText(renderType, name) {
+    if (!name) return "";
+    if (renderType === "section") return "Section: " + name;
+    if (renderType === "dept") return "Dept: " + name;
+    return String(name || "");
+  }
+
   function trySetParentHeading($dialog, renderType, name) {
     var $select = getParentSelect($dialog);
     if (!$select.length) return false;
@@ -743,11 +806,50 @@
     return matched;
   }
 
-  function composeParentHeadingText(renderType, name) {
-    if (!name) return "";
-    if (renderType === "section") return "Section: " + name;
-    if (renderType === "dept") return "Dept: " + name;
-    return String(name || "");
+  function tryClearParentHeading($dialog) {
+    var $select = getParentSelect($dialog);
+    if (!$select.length) return false;
+
+    var matched = false;
+
+    $select.find("option").each(function () {
+      var $opt = $(this);
+      if (normaliseText($opt.text()) === "none") {
+        $select.val($opt.val()).trigger("change");
+        matched = true;
+        return false;
+      }
+    });
+
+    return matched;
+  }
+
+  // =========================================================
+  // RENDER TYPE CONSTRAINTS
+  // =========================================================
+  function refreshRenderTypeState($dialog, ui) {
+    var parentMeta = getParentHeadingMeta($dialog);
+    var parentRenderType = (parentMeta && parentMeta.renderType) || "normal";
+    var parentName = normaliseText((parentMeta && parentMeta.name) || "");
+
+    var allowed = ["normal"];
+
+    if (!parentName && parentRenderType === "normal") {
+      allowed = ["normal", "section"];
+    } else if (parentRenderType === "section" && parentName) {
+      allowed = ["normal", "dept"];
+    } else {
+      allowed = ["normal"];
+    }
+
+    ui.$render.find("option").each(function () {
+      var val = $(this).attr("value");
+      $(this).prop("disabled", allowed.indexOf(val) === -1);
+    });
+
+    if (allowed.indexOf(ui.$render.val()) === -1) {
+      ui.$render.val("normal");
+    }
   }
 
   // =========================================================
@@ -855,7 +957,7 @@
   // TEXT HELPERS
   // =========================================================
   function normaliseText(value) {
-    return $.trim(String(value || "")).toLowerCase();
+    return $.trim(String(value || "").replace(/<br\s*\/?>/gi, " ")).toLowerCase();
   }
 
   function endsWithIgnoreCase(full, suffix) {
