@@ -195,77 +195,81 @@
   // UI BUILD
   // =========================================================
   function ensureHeadingUi($form, $actualNameInput) {
-    var $ui = $form.find(".wise-docgen-ui").first();
+  var $ui = $form.find(".wise-docgen-ui").first();
 
-    if (!$ui.length) {
-      var width = $actualNameInput.outerWidth() || 450;
+  if (!$ui.length) {
+    var width = $actualNameInput.outerWidth() || 450;
 
-      neutraliseOriginalHeadingInlineLabel($actualNameInput);
+    neutraliseOriginalHeadingInlineLabel($actualNameInput);
 
-      $ui = $(
-        '<div class="wise-docgen-ui" style="display:block; margin:6px 0 10px 0;">' +
+    $ui = $(
+      '<div class="wise-docgen-ui" style="display:block; margin:6px 0 10px 0;">' +
 
-          '<div class="wise-docgen-headingname-row" style="margin-bottom:10px;">' +
-            '<label class="wise-docgen-headingname-label" style="display:block; font-weight:600; margin-bottom:4px;">Heading name</label>' +
-            '<input type="text" class="wise-docgen-display-name" maxlength="60" style="width:' + width + 'px;">' +
+        '<div class="wise-docgen-meta" style="display:grid; grid-template-columns: 170px minmax(220px, 1fr); gap:8px 12px; align-items:center; max-width:760px; margin-bottom:12px;">' +
+
+          '<div class="wise-docgen-setting-label">Page template</div>' +
+          '<div class="wise-docgen-setting-control">' +
+            '<select class="wise-docgen-template" style="min-width:320px;"></select>' +
           '</div>' +
 
-          '<div class="wise-docgen-meta" style="display:grid; grid-template-columns: 170px minmax(220px, 1fr); gap:8px 12px; align-items:center; max-width:760px;">' +
+        '</div>' +
 
-            '<div class="wise-docgen-setting-label">Page template</div>' +
-            '<div class="wise-docgen-setting-control">' +
-              '<select class="wise-docgen-template" style="min-width:320px;"></select>' +
-            '</div>' +
+        '<div class="wise-docgen-headingname-row" style="margin-bottom:12px;">' +
+          '<label class="wise-docgen-headingname-label" style="display:block; font-weight:600; margin-bottom:4px;">Heading name</label>' +
+          '<input type="text" class="wise-docgen-display-name" maxlength="60" style="width:' + width + 'px;">' +
+        '</div>' +
 
-            '<div class="wise-docgen-setting-label">Hide in doc generator</div>' +
-            '<div class="wise-docgen-setting-control">' +
-              '<input type="checkbox" class="wise-docgen-hidden" style="margin:0;">' +
-            '</div>' +
+        '<div class="wise-docgen-meta" style="display:grid; grid-template-columns: 170px minmax(220px, 1fr); gap:8px 12px; align-items:center; max-width:760px;">' +
 
-            '<div class="wise-docgen-setting-label">Additional options costs</div>' +
-            '<div class="wise-docgen-setting-control">' +
-              '<input type="checkbox" class="wise-docgen-additional" style="margin:0;">' +
-            '</div>' +
-
-            '<div class="wise-docgen-setting-label">Render as</div>' +
-            '<div class="wise-docgen-setting-control">' +
-              '<select class="wise-docgen-render-type" style="min-width:180px;">' +
-                '<option value="normal">Normal heading</option>' +
-                '<option value="section">Section page</option>' +
-                '<option value="dept">Dept page</option>' +
-              '</select>' +
-            '</div>' +
-
-            '<div class="wise-docgen-setting-label wise-docgen-modifier-label-cell" style="display:none;">Modifier</div>' +
-            '<div class="wise-docgen-setting-control wise-docgen-modifier-row" style="display:none;">' +
-              '<select class="wise-docgen-modifier" style="min-width:220px;"></select>' +
-            '</div>' +
-
+          '<div class="wise-docgen-setting-label">Hide in doc generator</div>' +
+          '<div class="wise-docgen-setting-control">' +
+            '<input type="checkbox" class="wise-docgen-hidden" style="margin:0;">' +
           '</div>' +
-        '</div>'
-      );
 
-      $actualNameInput.hide();
-      $actualNameInput.after($ui);
-    } else {
-      $actualNameInput.hide();
-      neutraliseOriginalHeadingInlineLabel($actualNameInput);
-    }
+          '<div class="wise-docgen-setting-label">Additional options costs</div>' +
+          '<div class="wise-docgen-setting-control">' +
+            '<input type="checkbox" class="wise-docgen-additional" style="margin:0;">' +
+          '</div>' +
 
-    populateTemplateSelect($ui.find(".wise-docgen-template").first());
+          '<div class="wise-docgen-setting-label">Render as</div>' +
+          '<div class="wise-docgen-setting-control">' +
+            '<select class="wise-docgen-render-type" style="min-width:180px;">' +
+              '<option value="normal">Normal heading</option>' +
+              '<option value="section">Section page</option>' +
+              '<option value="dept">Dept page</option>' +
+            '</select>' +
+          '</div>' +
 
-    return {
-      $ui: $ui,
-      $proxy: $ui.find(".wise-docgen-display-name").first(),
-      $hidden: $ui.find(".wise-docgen-hidden").first(),
-      $additional: $ui.find(".wise-docgen-additional").first(),
-      $render: $ui.find(".wise-docgen-render-type").first(),
-      $modifier: $ui.find(".wise-docgen-modifier").first(),
-      $modifierRow: $ui.find(".wise-docgen-modifier-row").first(),
-      $modifierLabel: $ui.find(".wise-docgen-modifier-label-cell").first(),
-      $template: $ui.find(".wise-docgen-template").first()
-    };
+          '<div class="wise-docgen-setting-label wise-docgen-modifier-label-cell" style="display:none;">Modifier</div>' +
+          '<div class="wise-docgen-setting-control wise-docgen-modifier-row" style="display:none;">' +
+            '<select class="wise-docgen-modifier" style="min-width:220px;"></select>' +
+          '</div>' +
+
+        '</div>' +
+      '</div>'
+    );
+
+    $actualNameInput.hide();
+    $actualNameInput.after($ui);
+  } else {
+    $actualNameInput.hide();
+    neutraliseOriginalHeadingInlineLabel($actualNameInput);
   }
+
+  populateTemplateSelect($ui.find(".wise-docgen-template").first());
+
+  return {
+    $ui: $ui,
+    $proxy: $ui.find(".wise-docgen-display-name").first(),
+    $hidden: $ui.find(".wise-docgen-hidden").first(),
+    $additional: $ui.find(".wise-docgen-additional").first(),
+    $render: $ui.find(".wise-docgen-render-type").first(),
+    $modifier: $ui.find(".wise-docgen-modifier").first(),
+    $modifierRow: $ui.find(".wise-docgen-modifier-row").first(),
+    $modifierLabel: $ui.find(".wise-docgen-modifier-label-cell").first(),
+    $template: $ui.find(".wise-docgen-template").first()
+  };
+}
 
   function neutraliseOriginalHeadingInlineLabel($actualNameInput) {
     var inputEl = $actualNameInput.get(0);
