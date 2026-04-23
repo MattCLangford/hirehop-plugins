@@ -582,93 +582,108 @@
   }
 
   async function createChildHeadingFromTemplate(plan, childTemplate) {
-    var maxAttempts = 8;
+  var maxAttempts = 8;
 
-    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
-      var opened = openAddHeadingDialog();
-      if (!opened) {
-        await sleep(300);
-        continue;
-      }
-
-      var $dialog = await waitForNewHeadingDialog(3500);
-      if (!$dialog || !$dialog.length) {
-        await sleep(300);
-        continue;
-      }
-
-      await waitForInjectedUi($dialog, 2500);
-
-      var childUi = getUiRefsFromDialog($dialog);
-      var $parentSelect = getParentSelect($dialog);
-
-      if (!$parentSelect.length) {
-        cancelHeadingDialog($dialog);
-        await sleep(300);
-        continue;
-      }
-
-      if (!selectOptionByText($parentSelect, plan.parentStoredValue)) {
-        cancelHeadingDialog($dialog);
-        await sleep(350);
-        continue;
-      }
-
-      await sleep(60);
-
-      populateTemplateSelect(childUi.$template, $dialog, childTemplate.key);
-
-      if (childUi.$template.find('option[value="' + childTemplate.key + '"]').length) {
-        childUi.$template.val(childTemplate.key).trigger("change");
-      } else {
-        // Fallback if template select has not yet matched for some reason
-        childUi.$render.val(childTemplate.renderType || "dept").trigger("change");
-        childUi.$proxy.val(childTemplate.name || "").trigger("input").trigger("change");
-      }
-
-      await sleep(60);
-
-      // Ensure the exact saved parent is selected, even if the template changed parent context
-      selectOptionByText($parentSelect, plan.parentStoredValue);
-      await sleep(60);
-
-      childUi.$hidden.prop("checked", false).trigger("change");
-      childUi.$additional.prop("checked", false).trigger("change");
-      childUi.$autoChildren.prop("checked", false).trigger("change");
-
-      var $save = getSaveButton($dialog);
-      if (!$save.length) {
-        cancelHeadingDialog($dialog);
-        await sleep(300);
-        continue;
-      }
-
-      $save.get(0).click();
-      await waitUntil(function () { return !isDialogStillOpen($dialog); }, 5000, 100);
-      await sleep(250);
-      return true;
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    var opened = openAddHeadingDialog();
+    if (!opened) {
+      await sleep(300);
+      continue;
     }
 
-    try { console.warn("[WiseHireHop] Could not auto-create child heading:", childTemplate && childTemplate.name); } catch (e) {}
-    return false;
-  }
+    // First check whether the New button opens the heading dialog directly
+    var $dialog = await waitForNewHeadingDialog(800);
 
-  function openAddHeadingDialog() {
-    var $trigger = findAddHeadingTrigger();
-    if (!$trigger.length) return false;
+    // If not, try clicking a Heading item from the New menu
+    if ((!$dialog || !$dialog.length)) {
+      var $headingOption = findVisibleNewMenuHeadingOption();
+      if ($headingOption.length) {
+        clickElementNative($headingOption);
+        $dialog = await waitForNewHeadingDialog(2500);
+      }
+    }
 
-    $trigger.get(0).click();
+    if (!$dialog || !$dialog.length) {
+      await sleep(300);
+      continue;
+    }
+
+    await waitForInjectedUi($dialog, 2500);
+
+    var childUi = getUiRefsFromDialog($dialog);
+    var $parentSelect = getParentSelect($dialog);
+
+    if (!$parentSelect.length) {
+      cancelHeadingDialog($dialog);
+      await sleep(300);
+      continue;
+    }
+
+    if (!selectOptionByText($parentSelect, plan.parentStoredValue)) {
+      cancelHeadingDialog($dialog);
+      await sleep(350);
+      continue;
+    }
+
+    await sleep(60);
+
+    populateTemplateSelect(childUi.$template, $dialog, childTemplate.key);
+
+    if (childUi.$template.find('option[value="' + childTemplate.key + '"]').length) {
+      childUi.$template.val(childTemplate.key).trigger("change");
+    } else {
+      childUi.$render.val(childTemplate.renderType || "dept").trigger("change");
+      childUi.$proxy.val(childTemplate.name || "").trigger("input").trigger("change");
+    }
+
+    await sleep(60);
+
+    // Re-apply exact parent after template selection
+    selectOptionByText($parentSelect, plan.parentStoredValue);
+    await sleep(60);
+
+    childUi.$hidden.prop("checked", false).trigger("change");
+    childUi.$additional.prop("checked", false).trigger("change");
+    childUi.$autoChildren.prop("checked", false).trigger("change");
+
+    var $save = getSaveButton($dialog);
+    if (!$save.length) {
+      cancelHeadingDialog($dialog);
+      await sleep(300);
+      continue;
+    }
+
+    clickElementNative($save);
+    await waitUntil(function () { return !isDialogStillOpen($dialog); }, 5000, 100);
+    await sleep(250);
     return true;
   }
 
-  function findAddHeadingTrigger() {
+  try { console.warn("[WiseHireHop] Could not auto-create child heading:", childTemplate && childTemplate.name); } catch (e) {}
+  return false;
+}
+
+ function openAddHeadingDialog() {
+  var $trigger = findAddHeadingTrigger();
+  if (!$trigger.length) {
+    console.warn("[WiseHireHop] no New trigger found");
+    return false;
+  }
+
+  console.log("[WiseHireHop] clicking New trigger:", $trigger.get(0));
+  clickElementNative($trigger);
+
+  return true;
+}
+
+function findAddHeadingTrigger() {
   var $all = $('button, a, [role="button"], input[type="button"], input[type="submit"]')
     .filter(":visible")
     .filter(function () {
       return $(this).closest(".ui-dialog").length === 0;
     });
 
-  // Best match for your page based on the console result
+  // Exact known HireHop toolbar button
   var $classMatch = $all.filter(function () {
     var $el = $(this);
     var txt = $.trim(getTriggerText($el)).toLowerCase();
@@ -680,7 +695,7 @@
     return $classMatch;
   }
 
-  // Exact text matches
+  // Exact text fallback
   var $exact = $all.filter(function () {
     var txt = $.trim(getTriggerText($(this))).toLowerCase();
     return txt === "new" || txt === "add heading" || txt === "new heading";
@@ -691,7 +706,7 @@
     return $exact;
   }
 
-  // Fallback fuzzy match
+  // Fuzzy fallback
   var $fuzzy = $all.filter(function () {
     var txt = $.trim(getTriggerText($(this))).toLowerCase();
     return /\bnew\b|\bheading\b/.test(txt);
@@ -704,6 +719,63 @@
   }
 
   return $fuzzy;
+}
+
+function findVisibleNewMenuHeadingOption() {
+  var $all = $('button, a, li, div, span')
+    .filter(":visible")
+    .filter(function () {
+      return $(this).closest(".ui-dialog").length === 0;
+    });
+
+  // Prefer explicit heading items
+  var $heading = $all.filter(function () {
+    var txt = $.trim($(this).text()).toLowerCase();
+    return txt === "heading" || txt === "new heading";
+  }).first();
+
+  if ($heading.length) {
+    console.log("[WiseHireHop] found Heading menu option:", $heading.get(0));
+    return $heading;
+  }
+
+  // Fuzzy fallback, but avoid toolbar "New"
+  var $fuzzy = $all.filter(function () {
+    var txt = $.trim($(this).text()).toLowerCase();
+    if (!txt) return false;
+    if (txt === "new") return false;
+    return /\bheading\b/.test(txt);
+  }).first();
+
+  if ($fuzzy.length) {
+    console.log("[WiseHireHop] using fuzzy Heading option:", $fuzzy.get(0));
+  } else {
+    console.warn("[WiseHireHop] no Heading menu option found");
+  }
+
+  return $fuzzy;
+}
+
+function clickElementNative($el) {
+  if (!$el || !$el.length) return false;
+
+  var el = $el.get(0);
+  if (!el) return false;
+
+  try {
+    el.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    return true;
+  } catch (e) {
+    try {
+      el.click();
+      return true;
+    } catch (e2) {
+      return false;
+    }
+  }
 }
   function getTriggerText($el) {
     return $.trim($el.text() || $el.val() || $el.attr("title") || $el.attr("aria-label") || "");
