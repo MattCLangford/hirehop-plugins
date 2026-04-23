@@ -47,7 +47,7 @@
         { value: "section", label: "Group by Section", suffix: " - Section" },
         { value: "dept",    label: "Group by Dept",    suffix: " - Dept" }
       ]
-    }
+    },
     {
   key: "thank_you_variant",
   renderType: "dept",
