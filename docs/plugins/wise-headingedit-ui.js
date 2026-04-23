@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-23.04"); } catch (e) {}
+  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-23.05"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -10,7 +10,6 @@
 
   // =========================================================
   // MODIFIER RULES
-  // Add future contextual modifier behaviours here
   // =========================================================
   var MODIFIER_RULES = [
     {
@@ -39,6 +38,45 @@
         { value: "dept",    label: "Group by Dept",    suffix: " - Dept" }
       ]
     }
+  ];
+
+  // =========================================================
+  // PAGE TEMPLATES
+  // =========================================================
+  var PAGE_TEMPLATES = [
+    { key: "section_hero", renderType: "section", name: "Hero", parentRenderType: null, parentName: null, sectionRank: 1, deptRank: null },
+    { key: "section_details", renderType: "section", name: "Details", parentRenderType: null, parentName: null, sectionRank: 2, deptRank: null },
+    { key: "dept_experience_expertise", renderType: "dept", name: "Experience<br>& Expertise", parentRenderType: "section", parentName: "Details", sectionRank: 2, deptRank: 1 },
+    { key: "dept_fpv_proven_process", renderType: "dept", name: "FPV Proven Process", parentRenderType: "section", parentName: "Details", sectionRank: 2, deptRank: 2 },
+    { key: "dept_your_dedicated_project_manager", renderType: "dept", name: "Your Dedicated<br>Project Manager", parentRenderType: "section", parentName: "Details", sectionRank: 2, deptRank: 3 },
+    { key: "dept_your_specialist_team", renderType: "dept", name: "Your Specialist Team", parentRenderType: "section", parentName: "Details", sectionRank: 2, deptRank: 4 },
+    { key: "dept_our_experts", renderType: "dept", name: "Our Experts", parentRenderType: "section", parentName: "Details", sectionRank: 2, deptRank: 5 },
+    { key: "dept_venue_hero", renderType: "dept", name: "Venue Hero", parentRenderType: "section", parentName: "Details", sectionRank: 2, deptRank: 6 },
+
+    { key: "section_event_overview", renderType: "section", name: "Event Overview", parentRenderType: null, parentName: null, sectionRank: 3, deptRank: null },
+    { key: "dept_proposed_timings", renderType: "dept", name: "Proposed Timings", parentRenderType: "section", parentName: "Event Overview", sectionRank: 3, deptRank: 1 },
+
+    { key: "section_area", renderType: "section", name: "Area", parentRenderType: null, parentName: null, sectionRank: 4, deptRank: null },
+    { key: "dept_department_area", renderType: "dept", name: "Department", parentRenderType: "section", parentName: "Area", sectionRank: 4, deptRank: 1 },
+
+    { key: "section_labour_general_requirements", renderType: "section", name: "Labour & General Requirements", parentRenderType: null, parentName: null, sectionRank: 5, deptRank: null },
+    { key: "dept_labour", renderType: "dept", name: "Labour", parentRenderType: "section", parentName: "Labour & General Requirements", sectionRank: 5, deptRank: 1 },
+    { key: "dept_general_requirements", renderType: "dept", name: "General Requirements", parentRenderType: "section", parentName: "Labour & General Requirements", sectionRank: 5, deptRank: 2 },
+
+    { key: "section_proposal_summary", renderType: "section", name: "Proposal Summary", parentRenderType: null, parentName: null, sectionRank: 6, deptRank: null },
+    { key: "dept_project_total", renderType: "dept", name: "Project Total", parentRenderType: "section", parentName: "Proposal Summary", sectionRank: 6, deptRank: 1 },
+
+    { key: "section_suffix", renderType: "section", name: "Suffix", parentRenderType: null, parentName: null, sectionRank: 7, deptRank: null },
+    { key: "dept_critical_path", renderType: "dept", name: "Critical Path", parentRenderType: "section", parentName: "Suffix", sectionRank: 7, deptRank: 1 },
+    { key: "dept_sustainability", renderType: "dept", name: "Sustainability", parentRenderType: "section", parentName: "Suffix", sectionRank: 7, deptRank: 2 },
+    { key: "dept_about_us", renderType: "dept", name: "About Us", parentRenderType: "section", parentName: "Suffix", sectionRank: 7, deptRank: 2 },
+    { key: "dept_thank_you", renderType: "dept", name: "Thank you", parentRenderType: "section", parentName: "Suffix", sectionRank: 7, deptRank: 3 },
+
+    { key: "section_visual", renderType: "section", name: "Visual", parentRenderType: null, parentName: null, sectionRank: 8, deptRank: null },
+    { key: "dept_fpv", renderType: "dept", name: "FPV", parentRenderType: "section", parentName: "Visual", sectionRank: 8, deptRank: 1 },
+
+    { key: "section_additional_options", renderType: "section", name: "Additional Options", parentRenderType: null, parentName: null, sectionRank: 9, deptRank: null },
+    { key: "dept_department_additional_options", renderType: "dept", name: "Department", parentRenderType: "section", parentName: "Additional Options", sectionRank: 9, deptRank: 1 }
   ];
 
   // =========================================================
@@ -108,7 +146,15 @@
     if (!$actualNameInput.length) return;
 
     var ui = ensureHeadingUi($form, $actualNameInput);
-    if (!ui.$proxy.length || !ui.$hidden.length || !ui.$render.length || !ui.$modifier.length) return;
+
+    if (
+      !ui.$proxy.length ||
+      !ui.$hidden.length ||
+      !ui.$render.length ||
+      !ui.$modifier.length ||
+      !ui.$template.length ||
+      !ui.$additional.length
+    ) return;
 
     syncUiFromActual($form, $dialog, $actualNameInput, ui);
     bindUiHandlers($form, $dialog, $actualNameInput, ui);
@@ -141,93 +187,152 @@
     }).first();
   }
 
+  function getParentSelect($dialog) {
+    return $dialog.find("select.hh_base_select").first();
+  }
+
   // =========================================================
   // UI BUILD
   // =========================================================
   function ensureHeadingUi($form, $actualNameInput) {
-  var $ui = $form.find(".wise-docgen-ui").first();
+    var $ui = $form.find(".wise-docgen-ui").first();
 
-  if (!$ui.length) {
-    var width = $actualNameInput.outerWidth() || 450;
+    if (!$ui.length) {
+      var width = $actualNameInput.outerWidth() || 450;
 
-    neutraliseOriginalHeadingInlineLabel($actualNameInput);
+      neutraliseOriginalHeadingInlineLabel($actualNameInput);
 
-    $ui = $(
-      '<div class="wise-docgen-ui" style="display:block; margin:6px 0 10px 0;">' +
+      $ui = $(
+        '<div class="wise-docgen-ui" style="display:block; margin:6px 0 10px 0;">' +
 
-        '<div class="wise-docgen-headingname-row" style="margin-bottom:10px;">' +
-          '<label class="wise-docgen-headingname-label" style="display:block; font-weight:600; margin-bottom:4px;">Heading name</label>' +
-          '<input type="text" class="wise-docgen-display-name" maxlength="60" style="width:' + width + 'px;">' +
-        '</div>' +
-
-        '<div class="wise-docgen-meta" style="display:grid; grid-template-columns: 150px minmax(220px, 1fr); gap:8px 12px; align-items:center; max-width:700px;">' +
-
-          '<div class="wise-docgen-setting-label">Hide in doc generator</div>' +
-          '<div class="wise-docgen-setting-control">' +
-            '<input type="checkbox" class="wise-docgen-hidden">' +
+          '<div class="wise-docgen-headingname-row" style="margin-bottom:10px;">' +
+            '<label class="wise-docgen-headingname-label" style="display:block; font-weight:600; margin-bottom:4px;">Heading name</label>' +
+            '<input type="text" class="wise-docgen-display-name" maxlength="60" style="width:' + width + 'px;">' +
           '</div>' +
 
-          '<div class="wise-docgen-setting-label">Render as</div>' +
-          '<div class="wise-docgen-setting-control">' +
-            '<select class="wise-docgen-render-type" style="min-width:180px;">' +
-              '<option value="normal">Normal heading</option>' +
-              '<option value="section">Section page</option>' +
-              '<option value="dept">Dept page</option>' +
-            '</select>' +
+          '<div class="wise-docgen-meta" style="display:grid; grid-template-columns: 170px minmax(220px, 1fr); gap:8px 12px; align-items:center; max-width:760px;">' +
+
+            '<div class="wise-docgen-setting-label">Page template</div>' +
+            '<div class="wise-docgen-setting-control">' +
+              '<select class="wise-docgen-template" style="min-width:320px;"></select>' +
+            '</div>' +
+
+            '<div class="wise-docgen-setting-label">Hide in doc generator</div>' +
+            '<div class="wise-docgen-setting-control">' +
+              '<input type="checkbox" class="wise-docgen-hidden" style="margin:0;">' +
+            '</div>' +
+
+            '<div class="wise-docgen-setting-label">Additional options costs</div>' +
+            '<div class="wise-docgen-setting-control">' +
+              '<input type="checkbox" class="wise-docgen-additional" style="margin:0;">' +
+            '</div>' +
+
+            '<div class="wise-docgen-setting-label">Render as</div>' +
+            '<div class="wise-docgen-setting-control">' +
+              '<select class="wise-docgen-render-type" style="min-width:180px;">' +
+                '<option value="normal">Normal heading</option>' +
+                '<option value="section">Section page</option>' +
+                '<option value="dept">Dept page</option>' +
+              '</select>' +
+            '</div>' +
+
+            '<div class="wise-docgen-setting-label wise-docgen-modifier-label-cell" style="display:none;">Modifier</div>' +
+            '<div class="wise-docgen-setting-control wise-docgen-modifier-row" style="display:none;">' +
+              '<select class="wise-docgen-modifier" style="min-width:220px;"></select>' +
+            '</div>' +
+
           '</div>' +
+        '</div>'
+      );
 
-          '<div class="wise-docgen-setting-label wise-docgen-modifier-label-cell" style="display:none;">Modifier</div>' +
-          '<div class="wise-docgen-setting-control wise-docgen-modifier-row" style="display:none;">' +
-            '<select class="wise-docgen-modifier" style="min-width:220px;"></select>' +
-          '</div>' +
-
-        '</div>' +
-      '</div>'
-    );
-
-    $actualNameInput.hide();
-    $actualNameInput.after($ui);
-  } else {
-    $actualNameInput.hide();
-    neutraliseOriginalHeadingInlineLabel($actualNameInput);
-  }
-
-  return {
-    $ui: $ui,
-    $proxy: $ui.find(".wise-docgen-display-name").first(),
-    $hidden: $ui.find(".wise-docgen-hidden").first(),
-    $render: $ui.find(".wise-docgen-render-type").first(),
-    $modifier: $ui.find(".wise-docgen-modifier").first(),
-    $modifierRow: $ui.find(".wise-docgen-modifier-row").first(),
-    $modifierLabel: $ui.find(".wise-docgen-modifier-label-cell").first()
-  };
-}
-
- function neutraliseOriginalHeadingInlineLabel($actualNameInput) {
-  var inputEl = $actualNameInput.get(0);
-  if (!inputEl || inputEl._wiseHeadingLabelNeutralised) return;
-
-  var prev = inputEl.previousSibling;
-
-  while (prev && prev.nodeType === 3) { // text node
-    if ($.trim(prev.nodeValue).toLowerCase() === "heading:") {
-      prev.nodeValue = "";
-      break;
+      $actualNameInput.hide();
+      $actualNameInput.after($ui);
+    } else {
+      $actualNameInput.hide();
+      neutraliseOriginalHeadingInlineLabel($actualNameInput);
     }
-    prev = prev.previousSibling;
+
+    populateTemplateSelect($ui.find(".wise-docgen-template").first());
+
+    return {
+      $ui: $ui,
+      $proxy: $ui.find(".wise-docgen-display-name").first(),
+      $hidden: $ui.find(".wise-docgen-hidden").first(),
+      $additional: $ui.find(".wise-docgen-additional").first(),
+      $render: $ui.find(".wise-docgen-render-type").first(),
+      $modifier: $ui.find(".wise-docgen-modifier").first(),
+      $modifierRow: $ui.find(".wise-docgen-modifier-row").first(),
+      $modifierLabel: $ui.find(".wise-docgen-modifier-label-cell").first(),
+      $template: $ui.find(".wise-docgen-template").first()
+    };
   }
 
-  var next = inputEl.nextSibling;
-  while (next && next.nodeType === 3 && $.trim(next.nodeValue) === "") {
-    next = next.nextSibling;
+  function neutraliseOriginalHeadingInlineLabel($actualNameInput) {
+    var inputEl = $actualNameInput.get(0);
+    if (!inputEl || inputEl._wiseHeadingLabelNeutralised) return;
+
+    var prev = inputEl.previousSibling;
+
+    while (prev && prev.nodeType === 3) {
+      if ($.trim(prev.nodeValue).toLowerCase() === "heading:") {
+        prev.nodeValue = "";
+        break;
+      }
+      prev = prev.previousSibling;
+    }
+
+    var next = inputEl.nextSibling;
+    while (next && next.nodeType === 3 && $.trim(next.nodeValue) === "") {
+      next = next.nextSibling;
+    }
+
+    if (next && next.nodeType === 1 && next.tagName && next.tagName.toLowerCase() === "br") {
+      next.style.display = "none";
+    }
+
+    inputEl._wiseHeadingLabelNeutralised = true;
   }
 
-  if (next && next.nodeType === 1 && next.tagName && next.tagName.toLowerCase() === "br") {
-    next.style.display = "none";
+  function populateTemplateSelect($select) {
+    if (!$select.length) return;
+    if ($select.data("wiseDocgenTemplatesLoaded") === "1") return;
+
+    $select.empty();
+    $select.append($("<option></option>").attr("value", "").text("Custom / Manual"));
+
+    var sections = PAGE_TEMPLATES.filter(function (t) { return t.renderType === "section"; });
+    var depts = PAGE_TEMPLATES.filter(function (t) { return t.renderType === "dept"; });
+
+    var $sectionGroup = $('<optgroup label="Section pages"></optgroup>');
+    $.each(sections, function (_, tpl) {
+      $sectionGroup.append(
+        $("<option></option>")
+          .attr("value", tpl.key)
+          .text(getTemplateOptionText(tpl))
+      );
+    });
+
+    var $deptGroup = $('<optgroup label="Dept pages"></optgroup>');
+    $.each(depts, function (_, tpl) {
+      $deptGroup.append(
+        $("<option></option>")
+          .attr("value", tpl.key)
+          .text(getTemplateOptionText(tpl))
+      );
+    });
+
+    $select.append($sectionGroup).append($deptGroup);
+    $select.data("wiseDocgenTemplatesLoaded", "1");
   }
 
-  inputEl._wiseHeadingLabelNeutralised = true;
-} 
+  function getTemplateOptionText(template) {
+    var parent = template.parentName ? normaliseDisplayText(template.parentName) + " → " : "";
+    return parent + normaliseDisplayText(template.name);
+  }
+
+  function normaliseDisplayText(value) {
+    return $.trim(String(value || "").replace(/<br\s*\/?>/gi, " "));
+  }
 
   // =========================================================
   // INITIAL SYNC
@@ -239,8 +344,10 @@
 
     ui.$proxy.val(meta.name);
     ui.$hidden.prop("checked", meta.hidden);
+    ui.$additional.prop("checked", meta.additionalOptions);
     ui.$render.val(meta.renderType);
 
+    syncTemplateControl($dialog, ui, meta);
     refreshModifierState($dialog, ui, meta.modifier || "none");
     syncActualFromUi($dialog, $actualNameInput, ui);
 
@@ -252,7 +359,14 @@
   // =========================================================
   function bindUiHandlers($form, $dialog, $actualNameInput, ui) {
     if ($form.data("wiseDocgenBound") !== "1") {
+      ui.$template.on("change.wiseDocgen", function () {
+        applyTemplateSelection($dialog, ui);
+        refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
+        syncActualFromUi($dialog, $actualNameInput, ui);
+      });
+
       ui.$proxy.on("input.wiseDocgen change.wiseDocgen keyup.wiseDocgen blur.wiseDocgen", function () {
+        syncTemplateControl($dialog, ui);
         refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
         syncActualFromUi($dialog, $actualNameInput, ui);
       });
@@ -261,7 +375,12 @@
         syncActualFromUi($dialog, $actualNameInput, ui);
       });
 
+      ui.$additional.on("change.wiseDocgen", function () {
+        syncActualFromUi($dialog, $actualNameInput, ui);
+      });
+
       ui.$render.on("change.wiseDocgen", function () {
+        syncTemplateControl($dialog, ui);
         refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
         syncActualFromUi($dialog, $actualNameInput, ui);
       });
@@ -272,12 +391,23 @@
 
       ui.$proxy.on("keydown.wiseDocgen", function (e) {
         if (e.key === "Enter") {
+          syncTemplateControl($dialog, ui);
           refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
           syncActualFromUi($dialog, $actualNameInput, ui);
         }
       });
 
       $form.data("wiseDocgenBound", "1");
+    }
+
+    var $parentSelect = getParentSelect($dialog);
+    if ($parentSelect.length && $parentSelect.data("wiseDocgenBound") !== "1") {
+      $parentSelect.on("change.wiseDocgen", function () {
+        syncTemplateControl($dialog, ui);
+        refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
+        syncActualFromUi($dialog, $actualNameInput, ui);
+      });
+      $parentSelect.data("wiseDocgenBound", "1");
     }
 
     bindSaveAssurance($dialog, $actualNameInput, ui);
@@ -292,6 +422,7 @@
 
     if (!btn._wiseDocgenBound) {
       function ensureLatestActualValue() {
+        syncTemplateControl($dialog, ui);
         refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
         syncActualFromUi($dialog, $actualNameInput, ui);
       }
@@ -315,6 +446,7 @@
   // =========================================================
   function syncActualFromUi($dialog, $actualNameInput, ui) {
     var meta = {
+      additionalOptions: ui.$additional.prop("checked"),
       hidden: ui.$hidden.prop("checked"),
       renderType: ui.$render.val() || "normal",
       name: ui.$proxy.val() || "",
@@ -335,10 +467,16 @@
   function parseHeadingBaseMeta(value) {
     var raw = $.trim(String(value || ""));
     var meta = {
+      additionalOptions: false,
       hidden: false,
       renderType: "normal",
       name: raw
     };
+
+    if (/^\$\s*/i.test(raw)) {
+      meta.additionalOptions = true;
+      raw = raw.replace(/^\$\s*/i, "");
+    }
 
     if (/^\/\/\s*/i.test(raw)) {
       meta.hidden = true;
@@ -369,6 +507,7 @@
   }
 
   function composeHeadingMeta($dialog, meta) {
+    var additionalOptions = !!(meta && meta.additionalOptions);
     var hidden = !!(meta && meta.hidden);
     var renderType = (meta && meta.renderType) || "normal";
     var baseName = $.trim(String((meta && meta.name) || ""));
@@ -384,6 +523,7 @@
     }
 
     var prefix = "";
+    if (additionalOptions) prefix += "$ ";
     if (hidden) prefix += "// ";
 
     if (renderType === "section") {
@@ -499,33 +639,117 @@
     return null;
   }
 
-  function normaliseText(value) {
-    return $.trim(String(value || "")).toLowerCase();
+  // =========================================================
+  // TEMPLATE ENGINE
+  // =========================================================
+  function syncTemplateControl($dialog, ui, metaOverride) {
+    var parentMeta = getParentHeadingMeta($dialog);
+    var renderType = metaOverride ? metaOverride.renderType : (ui.$render.val() || "normal");
+    var name = metaOverride ? metaOverride.name : (ui.$proxy.val() || "");
+    var template = findTemplateForValues(renderType, name, parentMeta);
+
+    ui.$template.val(template ? template.key : "");
   }
 
-  function endsWithIgnoreCase(full, suffix) {
-    return full.toLowerCase().slice(-suffix.length) === suffix.toLowerCase();
+  function applyTemplateSelection($dialog, ui) {
+    var key = ui.$template.val() || "";
+    if (!key) return;
+
+    var template = findTemplateByKey(key);
+    if (!template) return;
+
+    ui.$render.val(template.renderType);
+    ui.$proxy.val(template.name);
+
+    if (template.parentRenderType && template.parentName) {
+      trySetParentHeading($dialog, template.parentRenderType, template.parentName);
+    }
+  }
+
+  function findTemplateByKey(key) {
+    for (var i = 0; i < PAGE_TEMPLATES.length; i++) {
+      if (PAGE_TEMPLATES[i].key === key) return PAGE_TEMPLATES[i];
+    }
+    return null;
+  }
+
+  function findTemplateForValues(renderType, name, parentMeta) {
+    var cleanName = normaliseText(name);
+    var parentRenderType = (parentMeta && parentMeta.renderType) || "normal";
+    var parentName = normaliseText((parentMeta && parentMeta.name) || "");
+
+    var exactMatch = null;
+    var looseMatch = null;
+
+    for (var i = 0; i < PAGE_TEMPLATES.length; i++) {
+      var tpl = PAGE_TEMPLATES[i];
+      if (tpl.renderType !== renderType) continue;
+      if (normaliseText(tpl.name) !== cleanName) continue;
+
+      if (!tpl.parentRenderType && !tpl.parentName) {
+        if (!looseMatch) looseMatch = tpl;
+        continue;
+      }
+
+      if (
+        tpl.parentRenderType === parentRenderType &&
+        normaliseText(tpl.parentName) === parentName
+      ) {
+        exactMatch = tpl;
+        break;
+      }
+    }
+
+    return exactMatch || looseMatch || null;
+  }
+
+  function trySetParentHeading($dialog, renderType, name) {
+    var $select = getParentSelect($dialog);
+    if (!$select.length) return false;
+
+    var desired = composeParentHeadingText(renderType, name);
+    if (!desired) return false;
+
+    var matched = false;
+
+    $select.find("option").each(function () {
+      var $opt = $(this);
+      if (normaliseText($opt.text()) === normaliseText(desired)) {
+        $select.val($opt.val()).trigger("change");
+        matched = true;
+        return false;
+      }
+    });
+
+    return matched;
+  }
+
+  function composeParentHeadingText(renderType, name) {
+    if (!name) return "";
+    if (renderType === "section") return "Section: " + name;
+    if (renderType === "dept") return "Dept: " + name;
+    return String(name || "");
   }
 
   // =========================================================
   // MODIFIER UI
   // =========================================================
   function refreshModifierState($dialog, ui, preferredValue) {
-  var profile = getModifierProfile($dialog, ui);
+    var profile = getModifierProfile($dialog, ui);
 
-  if (!profile) {
-    ui.$modifierLabel.hide().text("Modifier");
-    ui.$modifierRow.hide();
-    ui.$modifier.prop("disabled", true);
-    populateModifierOptions(ui, [{ value: "none", label: "None" }], "none");
-    return;
+    if (!profile) {
+      ui.$modifierLabel.hide().text("Modifier");
+      ui.$modifierRow.hide();
+      ui.$modifier.prop("disabled", true);
+      populateModifierOptions(ui, [{ value: "none", label: "None" }], "none");
+      return;
+    }
+
+    ui.$modifierLabel.text(profile.label).show();
+    ui.$modifierRow.show();
+    ui.$modifier.prop("disabled", false);
+    populateModifierOptions(ui, profile.options, preferredValue || "none");
   }
-
-  ui.$modifierLabel.text(profile.label).show();
-  ui.$modifierRow.show();
-  ui.$modifier.prop("disabled", false);
-  populateModifierOptions(ui, profile.options, preferredValue || "none");
-}
 
   function populateModifierOptions(ui, options, selectedValue) {
     var current = selectedValue || "none";
@@ -577,7 +801,7 @@
   // PARENT HEADING HELPERS
   // =========================================================
   function getParentHeadingRaw($dialog) {
-    var $select = $dialog.find("select.hh_base_select").first();
+    var $select = getParentSelect($dialog);
     if (!$select.length) return "";
 
     var selectedText = $.trim($select.find("option:selected").text());
@@ -598,6 +822,7 @@
 
     if (!raw) {
       return {
+        additionalOptions: false,
         hidden: false,
         renderType: "normal",
         name: ""
@@ -605,6 +830,17 @@
     }
 
     return parseHeadingBaseMeta(raw);
+  }
+
+  // =========================================================
+  // TEXT HELPERS
+  // =========================================================
+  function normaliseText(value) {
+    return $.trim(String(value || "")).toLowerCase();
+  }
+
+  function endsWithIgnoreCase(full, suffix) {
+    return full.toLowerCase().slice(-suffix.length) === suffix.toLowerCase();
   }
 
   // =========================================================
