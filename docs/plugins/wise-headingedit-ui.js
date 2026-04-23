@@ -1,176 +1,179 @@
-(function hireHopDocgenHeadingToggle() {
-  'use strict';
+(function () {
+  "use strict";
 
-  const HIDDEN_PREFIX = '// ';
-  const WRAP_CLASS = 'hh-docgen-hidden-wrap';
-  const CHECKBOX_CLASS = 'hh-docgen-hidden-checkbox';
+  try { console.warn("[WiseHireHop] heading docgen toggle plugin loaded"); } catch (e) {}
 
-  function isVisible(el) {
-    return !!el && el.offsetParent !== null;
+  var $ = window.jQuery;
+  if (!$) return;
+
+  var HIDDEN_PREFIX = "// ";
+  var applyTimer = null;
+
+  // Optional page restriction if you know the exact supplying-list URL
+  // if (!/\/project\.php(\?|$)/.test(location.pathname)) return;
+
+  function scheduleApply() {
+    clearTimeout(applyTimer);
+    applyTimer = setTimeout(function () {
+      processVisibleHeadingDialogs();
+    }, 50);
   }
 
-  function hasPrefix(value) {
-    return /^\s*\/\/\s*/.test(value || '');
-  }
+  // Main hook: when any jQuery UI dialog opens
+  $(document).on("dialogopen", ".ui-dialog-content", function () {
+    var $content = $(this);
+    var $dialog = $content.closest(".ui-dialog");
 
-  function stripPrefix(value) {
-    return (value || '').replace(/^\s*\/\/\s*/, '');
-  }
+    if (!isHeadingDialog($dialog)) return;
 
-  function applyPrefix(value, hidden) {
-    const clean = stripPrefix(value);
-    return hidden ? HIDDEN_PREFIX + clean : clean;
-  }
+    // Reset sync marker for this open-cycle
+    var $form = getVisibleHeadingForm($dialog);
+    if ($form.length) {
+      $form.removeData("wiseDocgenSynced");
+    }
 
-  function getHeadingDialogs() {
-    return Array.from(document.querySelectorAll('.ui-dialog')).filter(dialog => {
-      if (!isVisible(dialog)) return false;
+    applyToHeadingDialog($dialog);
+  });
 
-      const title = dialog.querySelector('.ui-dialog-title');
-      if (!title) return false;
+  // Clean up sync marker when closed
+  $(document).on("dialogclose", ".ui-dialog-content", function () {
+    var $content = $(this);
+    var $dialog = $content.closest(".ui-dialog");
 
-      return title.textContent.trim().toLowerCase() === 'edit heading';
+    if (!isHeadingDialog($dialog)) return;
+
+    $dialog.find("form.edit_type").removeData("wiseDocgenSynced");
+  });
+
+  // Fallback hook for late DOM updates / re-renders
+  var obs = new MutationObserver(function () {
+    scheduleApply();
+  });
+
+  obs.observe(document.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["class", "style"]
+  });
+
+  // Initial attempt after load
+  $(scheduleApply);
+
+  function processVisibleHeadingDialogs() {
+    $(".ui-dialog:visible").each(function () {
+      var $dialog = $(this);
+      if (isHeadingDialog($dialog)) {
+        applyToHeadingDialog($dialog);
+      }
     });
   }
 
-  function getHeadingForm(dialog) {
-    const forms = Array.from(dialog.querySelectorAll('form.edit_type'));
-    return forms.find(form => {
-      if (!isVisible(form)) return false;
-      const kind = form.querySelector('input[name="kind"]');
-      return kind && kind.value === '0';
-    }) || null;
+  function applyToHeadingDialog($dialog) {
+    if (!$dialog || !$dialog.length) return;
+
+    var $form = getVisibleHeadingForm($dialog);
+    if (!$form.length) return;
+
+    var $nameInput = getHeadingNameInput($form);
+    if (!$nameInput.length) return;
+
+    var $wrap = ensureToggleControl($form, $nameInput);
+    var $checkbox = $wrap.find("input.wise-docgen-hidden");
+    if (!$checkbox.length) return;
+
+    syncUiFromStoredValue($form, $nameInput, $checkbox);
+    bindSaveHandler($dialog, $nameInput, $checkbox);
   }
 
-  function getNameInput(form) {
-    return form ? form.querySelector('input[name="name"]') : null;
+  function isHeadingDialog($dialog) {
+    if (!$dialog || !$dialog.length || !$dialog.is(":visible")) return false;
+
+    var title = $.trim($dialog.find(".ui-dialog-title").first().text()).toLowerCase();
+    return title === "edit heading" || title === "add heading" || title === "new heading";
   }
 
-  function getIdInput(form) {
-    return form ? form.querySelector('input[name="id"]') : null;
+  function getVisibleHeadingForm($dialog) {
+    return $dialog.find("form.edit_type:visible").filter(function () {
+      return $(this).find('input[name="kind"][value="0"]').length > 0;
+    }).first();
   }
 
-  function getSaveButton(dialog) {
-    const buttons = Array.from(dialog.querySelectorAll('.ui-dialog-buttonpane button'));
-    return buttons.find(btn => {
-      const text = (btn.textContent || '').trim().toLowerCase();
-      return text === 'save';
-    }) || null;
+  function getHeadingNameInput($form) {
+    return $form.find('input[name="name"]').first();
   }
 
-  function fireInputEvents(el) {
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
+  function ensureToggleControl($form, $nameInput) {
+    var $existing = $form.find(".wise-docgen-toggle").first();
+    if ($existing.length) return $existing;
+
+    var $wrap = $(
+      '<div class="wise-docgen-toggle" style="margin-top:8px;">' +
+        '<label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">' +
+          '<input type="checkbox" class="wise-docgen-hidden" style="margin:0;">' +
+          '<span>Hide this heading in doc generator</span>' +
+        '</label>' +
+      '</div>'
+    );
+
+    $nameInput.after($wrap);
+    return $wrap;
   }
 
-  function buildControl() {
-    const wrap = document.createElement('div');
-    wrap.className = WRAP_CLASS;
-    wrap.style.marginTop = '10px';
-    wrap.style.display = 'flex';
-    wrap.style.alignItems = 'center';
-    wrap.style.gap = '8px';
+  function syncUiFromStoredValue($form, $nameInput, $checkbox) {
+    // Only sync once per dialog open-cycle, otherwise observer re-runs can
+    // interfere with the user while editing.
+    if ($form.data("wiseDocgenSynced") === "1") return;
 
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.className = CHECKBOX_CLASS;
-    checkbox.style.margin = '0';
+    var storedValue = $nameInput.val() || "";
+    var hidden = hasHiddenPrefix(storedValue);
 
-    const label = document.createElement('label');
-    label.textContent = 'Hidden in doc generator';
-    label.style.cursor = 'pointer';
-    label.style.margin = '0';
+    $checkbox.prop("checked", hidden);
 
-    label.addEventListener('click', function (e) {
-      e.preventDefault();
-      checkbox.checked = !checkbox.checked;
+    if (hidden) {
+      $nameInput.val(stripHiddenPrefix(storedValue));
+      triggerInputEvents($nameInput);
+    }
+
+    $form.data("wiseDocgenSynced", "1");
+  }
+
+  function bindSaveHandler($dialog, $nameInput, $checkbox) {
+    var $saveButton = getSaveButton($dialog);
+    if (!$saveButton.length) return;
+
+    // Remove only our handler, then rebind safely
+    $saveButton.off("click.wiseDocgenHeading");
+    $saveButton.on("click.wiseDocgenHeading", function () {
+      var currentValue = $nameInput.val() || "";
+      var finalValue = $checkbox.prop("checked")
+        ? applyHiddenPrefix(currentValue)
+        : stripHiddenPrefix(currentValue);
+
+      $nameInput.val(finalValue);
+      triggerInputEvents($nameInput);
     });
-
-    wrap.appendChild(checkbox);
-    wrap.appendChild(label);
-
-    return wrap;
   }
 
-  function ensureControl(form, nameInput) {
-    let wrap = form.querySelector('.' + WRAP_CLASS);
-
-    if (!wrap) {
-      wrap = buildControl();
-      nameInput.insertAdjacentElement('afterend', wrap);
-    }
-
-    return wrap;
+  function getSaveButton($dialog) {
+    return $dialog.find(".ui-dialog-buttonpane button").filter(function () {
+      return $.trim($(this).text()).toLowerCase() === "save";
+    }).first();
   }
 
-  function syncDialogState(dialog, form, nameInput, checkbox) {
-    const idInput = getIdInput(form);
-    const itemId = idInput ? idInput.value : 'new';
-
-    const syncKey = itemId + '|' + (nameInput.defaultValue || '') + '|' + (nameInput.value || '');
-
-    if (dialog.dataset.hhDocgenSyncKey === syncKey) {
-      return;
-    }
-
-    const currentlyHidden = hasPrefix(nameInput.value);
-    checkbox.checked = currentlyHidden;
-
-    if (currentlyHidden) {
-      nameInput.value = stripPrefix(nameInput.value);
-      fireInputEvents(nameInput);
-    }
-
-    dialog.dataset.hhDocgenSyncKey = syncKey;
+  function hasHiddenPrefix(value) {
+    return /^\s*\/\/\s*/.test(value || "");
   }
 
-  function bindSave(dialog, nameInput, checkbox) {
-    const saveButton = getSaveButton(dialog);
-    if (!saveButton) return;
-
-    if (saveButton.dataset.hhDocgenBound === '1') return;
-
-    saveButton.addEventListener('click', function () {
-      nameInput.value = applyPrefix(nameInput.value, checkbox.checked);
-      fireInputEvents(nameInput);
-    }, true);
-
-    saveButton.dataset.hhDocgenBound = '1';
+  function stripHiddenPrefix(value) {
+    return String(value || "").replace(/^\s*\/\/\s*/, "");
   }
 
-  function processDialog(dialog) {
-    const form = getHeadingForm(dialog);
-    if (!form) return;
-
-    const nameInput = getNameInput(form);
-    if (!nameInput) return;
-
-    const wrap = ensureControl(form, nameInput);
-    const checkbox = wrap.querySelector('.' + CHECKBOX_CLASS);
-    if (!checkbox) return;
-
-    syncDialogState(dialog, form, nameInput, checkbox);
-    bindSave(dialog, nameInput, checkbox);
+  function applyHiddenPrefix(value) {
+    return HIDDEN_PREFIX + stripHiddenPrefix(value);
   }
 
-  function processAll() {
-    getHeadingDialogs().forEach(processDialog);
-  }
-
-  const observer = new MutationObserver(processAll);
-
-  function init() {
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-
-    processAll();
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
+  function triggerInputEvents($el) {
+    $el.trigger("input").trigger("change");
   }
 })();
