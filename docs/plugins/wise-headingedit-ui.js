@@ -469,35 +469,46 @@
   // PARSING / COMPOSING
   // =========================================================
   function parseHeadingBaseMeta(value) {
-    var raw = $.trim(String(value || ""));
-    var meta = {
-      additionalOptions: false,
-      hidden: false,
-      renderType: "normal",
-      name: raw
-    };
+  var raw = $.trim(String(value || ""));
+  var meta = {
+    additionalOptions: false,
+    hidden: false,
+    renderType: "normal",
+    name: raw
+  };
 
-    if (/^\$\s*/i.test(raw)) {
-      meta.additionalOptions = true;
-      raw = raw.replace(/^\$\s*/i, "");
-    }
+  // Consume leading markers in any order so both:
+  // "// $ Section: X"
+  // "$ // Section: X"
+  // are parsed safely
+  var changed = true;
+  while (changed) {
+    changed = false;
 
     if (/^\/\/\s*/i.test(raw)) {
       meta.hidden = true;
       raw = raw.replace(/^\/\/\s*/i, "");
+      changed = true;
     }
 
-    if (/^section\s*:\s*/i.test(raw)) {
-      meta.renderType = "section";
-      raw = raw.replace(/^section\s*:\s*/i, "");
-    } else if (/^dept\s*:\s*/i.test(raw)) {
-      meta.renderType = "dept";
-      raw = raw.replace(/^dept\s*:\s*/i, "");
+    if (/^\$\s*/i.test(raw)) {
+      meta.additionalOptions = true;
+      raw = raw.replace(/^\$\s*/i, "");
+      changed = true;
     }
-
-    meta.name = $.trim(raw);
-    return meta;
   }
+
+  if (/^section\s*:\s*/i.test(raw)) {
+    meta.renderType = "section";
+    raw = raw.replace(/^section\s*:\s*/i, "");
+  } else if (/^dept\s*:\s*/i.test(raw)) {
+    meta.renderType = "dept";
+    raw = raw.replace(/^dept\s*:\s*/i, "");
+  }
+
+  meta.name = $.trim(raw);
+  return meta;
+}
 
   function parseHeadingMetaForDialog(value, $dialog) {
     var meta = parseHeadingBaseMeta(value);
@@ -511,33 +522,37 @@
   }
 
   function composeHeadingMeta($dialog, meta) {
-    var additionalOptions = !!(meta && meta.additionalOptions);
-    var hidden = !!(meta && meta.hidden);
-    var renderType = (meta && meta.renderType) || "normal";
-    var baseName = $.trim(String((meta && meta.name) || ""));
-    var modifier = (meta && meta.modifier) || "none";
-    var parentMeta = getParentHeadingMeta($dialog);
+  var additionalOptions = !!(meta && meta.additionalOptions);
+  var hidden = !!(meta && meta.hidden);
+  var renderType = (meta && meta.renderType) || "normal";
+  var baseName = $.trim(String((meta && meta.name) || ""));
+  var modifier = (meta && meta.modifier) || "none";
+  var parentMeta = getParentHeadingMeta($dialog);
 
-    var rule = findRuleForBaseName(renderType, baseName, parentMeta);
-    var suffix = "";
+  var rule = findRuleForBaseName(renderType, baseName, parentMeta);
+  var suffix = "";
 
-    if (rule) {
-      var opt = findOptionByValue(rule, modifier) || findOptionByValue(rule, "none");
-      suffix = opt ? opt.suffix : "";
-    }
-
-    var prefix = "";
-    if (additionalOptions) prefix += "$ ";
-    if (hidden) prefix += "// ";
-
-    if (renderType === "section") {
-      prefix += "Section: ";
-    } else if (renderType === "dept") {
-      prefix += "Dept: ";
-    }
-
-    return prefix + baseName + suffix;
+  if (rule) {
+    var opt = findOptionByValue(rule, modifier) || findOptionByValue(rule, "none");
+    suffix = opt ? opt.suffix : "";
   }
+
+  var prefix = "";
+
+  // Canonical order:
+  // 1) hidden
+  // 2) additional options
+  if (hidden) prefix += "// ";
+  if (additionalOptions) prefix += "$ ";
+
+  if (renderType === "section") {
+    prefix += "Section: ";
+  } else if (renderType === "dept") {
+    prefix += "Dept: ";
+  }
+
+  return prefix + baseName + suffix;
+}
 
   // =========================================================
   // RULE ENGINE
