@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-24.04"); } catch (e) {}
+  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-24.05"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -21,7 +21,7 @@
   var refreshTimer = null;
   var domObserver = null;
 
-  var lastIframeScrollTop = 0;
+  var lastIframeScrollRatio = 0;
   var previewRefreshInFlight = false;
   var pendingRefreshReason = null;
 
@@ -41,6 +41,18 @@
         tryAddPreviewButton();
         installAjaxHooks();
         installFetchHooks();
+
+        $(window).off("resize.wiseDocPreview").on("resize.wiseDocPreview", function () {
+          if (!panelOpen) return;
+
+          var iframe = document.getElementById(IFRAME_ID);
+          if (!iframe || !iframe.contentDocument) return;
+
+          try {
+            fitPreviewToPane(iframe, iframe.contentDocument);
+          } catch (e) {}
+        });
+
         return;
       }
 
@@ -180,12 +192,16 @@
     panelOpen = true;
     $("#" + RIGHT_PANE_ID).show();
     setButtonActive(true);
+    bindPreviewIframeLoad();
     refreshPreviewNow("open");
     installTargetedDomObserver();
   }
 
   function closeDockedPreview() {
     panelOpen = false;
+    clearTimeout(refreshTimer);
+    previewRefreshInFlight = false;
+    pendingRefreshReason = null;
     removeTargetedDomObserver();
 
     var $workspace = $("#" + OUTER_WRAP_ID);
@@ -261,6 +277,30 @@
     $("#wise-doc-preview-auto").off("change").on("change", function () {
       autoRefreshEnabled = $(this).prop("checked");
     });
+  }
+
+  function bindPreviewIframeLoad() {
+    var iframe = document.getElementById(IFRAME_ID);
+    if (!iframe || iframe._wiseDocPreviewBound) return;
+
+    iframe.addEventListener("load", function () {
+      try {
+        patchLoadedPreviewDocument(iframe);
+        restoreIframeScrollState(iframe);
+      } catch (err) {
+        try { console.warn("[WiseHireHop] iframe load patch failed", err); } catch (e) {}
+      } finally {
+        previewRefreshInFlight = false;
+
+        if (pendingRefreshReason) {
+          var queued = pendingRefreshReason;
+          pendingRefreshReason = null;
+          refreshPreviewSoon(queued);
+        }
+      }
+    });
+
+    iframe._wiseDocPreviewBound = true;
   }
 
   function setButtonActive(isActive) {
@@ -422,145 +462,177 @@
     if (!iframe) return;
 
     previewRefreshInFlight = true;
-    captureIframeScroll();
+    captureIframeScrollState(iframe);
+    clearStatus();
 
-    fetch(url, {
-      credentials: "same-origin"
-    })
-      .then(function (response) {
-        if (!response.ok) {
-          throw new Error("Preview fetch failed: " + response.status);
-        }
-        return response.text();
-      })
-      .then(function (html) {
-        var patchedHtml = patchPreviewHtml(html);
-
-        var doc = iframe.contentDocument || iframe.contentWindow.document;
-        doc.open();
-        doc.write(patchedHtml);
-        doc.close();
-
-        waitForIframeReadyAndRestoreScroll(iframe, function () {
-          previewRefreshInFlight = false;
-
-          if (pendingRefreshReason) {
-            var queued = pendingRefreshReason;
-            pendingRefreshReason = null;
-            refreshPreviewSoon(queued);
-          }
-        });
-      })
-      .catch(function (err) {
-        previewRefreshInFlight = false;
-        setStatus("Preview failed to refresh.");
-        try { console.warn("[WiseHireHop] preview refresh failed", err); } catch (e) {}
-      });
+    iframe.src = url;
   }
 
-  function captureIframeScroll() {
-    var iframe = document.getElementById(IFRAME_ID);
-    if (!iframe) return;
-
+  function captureIframeScrollState(iframe) {
     try {
       var win = iframe.contentWindow;
-      if (win) {
-        lastIframeScrollTop = win.scrollY || win.pageYOffset || 0;
+      var doc = iframe.contentDocument;
+      if (!win || !doc) {
+        lastIframeScrollRatio = 0;
         return;
       }
-    } catch (e) {}
 
-    try {
-      var doc = iframe.contentDocument;
-      if (doc) {
-        lastIframeScrollTop =
-          (doc.documentElement && doc.documentElement.scrollTop) ||
-          (doc.body && doc.body.scrollTop) ||
-          0;
+      var scrollTop = win.scrollY || doc.documentElement.scrollTop || doc.body.scrollTop || 0;
+      var maxScroll = Math.max(
+        1,
+        (doc.documentElement.scrollHeight || 0) - (win.innerHeight || 0)
+      );
+
+      lastIframeScrollRatio = scrollTop / maxScroll;
+      if (!isFinite(lastIframeScrollRatio) || lastIframeScrollRatio < 0) {
+        lastIframeScrollRatio = 0;
       }
-    } catch (e) {}
+    } catch (e) {
+      lastIframeScrollRatio = 0;
+    }
   }
 
-  function waitForIframeReadyAndRestoreScroll(iframe, done) {
-    var attempts = 0;
-    var maxAttempts = 60;
-
-    function tryRestore() {
-      attempts++;
-
+  function restoreIframeScrollState(iframe) {
+    function applyRestore() {
       try {
-        var doc = iframe.contentDocument;
         var win = iframe.contentWindow;
+        var doc = iframe.contentDocument;
+        if (!win || !doc) return;
 
-        if (doc && doc.body) {
-          if (win && typeof win.scrollTo === "function") {
-            win.scrollTo(0, lastIframeScrollTop || 0);
-          } else {
-            if (doc.documentElement) doc.documentElement.scrollTop = lastIframeScrollTop || 0;
-            if (doc.body) doc.body.scrollTop = lastIframeScrollTop || 0;
-          }
+        var maxScroll = Math.max(
+          0,
+          (doc.documentElement.scrollHeight || 0) - (win.innerHeight || 0)
+        );
 
-          if (typeof done === "function") done();
-          return;
-        }
+        var targetTop = Math.round(maxScroll * lastIframeScrollRatio);
+        win.scrollTo(0, targetTop);
       } catch (e) {}
-
-      if (attempts < maxAttempts) {
-        setTimeout(tryRestore, 50);
-      } else {
-        if (typeof done === "function") done();
-      }
     }
 
-    setTimeout(tryRestore, 30);
+    setTimeout(applyRestore, 60);
+    setTimeout(applyRestore, 220);
+    setTimeout(applyRestore, 450);
   }
 
-  function patchPreviewHtml(html) {
-    var injectedCss =
-      '<style id="wise-preview-fit-style">' +
-        'html, body {' +
-          'margin: 0 !important;' +
-          'padding: 0 !important;' +
-          'width: 100% !important;' +
-          'overflow-x: hidden !important;' +
-          'background: #e9eaec !important;' +
-        '}' +
-        'body {' +
-          'box-sizing: border-box !important;' +
-        '}' +
-        '.page, .sheet, .print-page, .paper, .doc-page, [class*="page"] {' +
-          'box-sizing: border-box !important;' +
-          'width: 100% !important;' +
-          'max-width: 100% !important;' +
-          'margin-left: auto !important;' +
-          'margin-right: auto !important;' +
-        '}' +
-        'img, svg, canvas {' +
-          'max-width: 100% !important;' +
-          'height: auto !important;' +
-        '}' +
-        'table {' +
-          'max-width: 100% !important;' +
-        '}' +
-        '[style*="width: 210mm"], [style*="width:210mm"], ' +
-        '[style*="width: 297mm"], [style*="width:297mm"], ' +
-        '[style*="width: 2480px"], [style*="width:2480px"], ' +
-        '[style*="width: 1240px"], [style*="width:1240px"], ' +
-        '[style*="width: 1123px"], [style*="width:1123px"] {' +
-          'width: 100% !important;' +
-          'max-width: 100% !important;' +
-        '}' +
-      '</style>';
+  function patchLoadedPreviewDocument(iframe) {
+    var doc = iframe.contentDocument;
+    if (!doc) return;
 
-    if (/<head[^>]*>/i.test(html)) {
-      return html.replace(/<head([^>]*)>/i, "<head$1>" + injectedCss);
+    ensurePreviewStyleTag(doc);
+    fitPreviewToPane(iframe, doc);
+
+    setTimeout(function () {
+      try { fitPreviewToPane(iframe, doc); } catch (e) {}
+    }, 120);
+
+    setTimeout(function () {
+      try { fitPreviewToPane(iframe, doc); } catch (e) {}
+    }, 350);
+  }
+
+  function ensurePreviewStyleTag(doc) {
+    if (doc.getElementById("wise-preview-fit-style")) return;
+
+    var style = doc.createElement("style");
+    style.id = "wise-preview-fit-style";
+    style.type = "text/css";
+    style.textContent =
+      "html, body {" +
+        "margin:0 !important;" +
+        "padding:0 !important;" +
+        "overflow-x:hidden !important;" +
+        "background:#e9eaec !important;" +
+      "}" +
+      "body {" +
+        "margin-left:auto !important;" +
+        "margin-right:auto !important;" +
+        "transform-origin:top left !important;" +
+      "}" +
+      "img, svg, canvas {" +
+        "max-width:none !important;" +
+      "}";
+
+    (doc.head || doc.documentElement).appendChild(style);
+  }
+
+  function fitPreviewToPane(iframe, doc) {
+    var body = doc.body;
+    var html = doc.documentElement;
+    if (!body || !html) return;
+
+    body.style.zoom = "";
+    body.style.transform = "";
+    body.style.width = "";
+    body.style.marginLeft = "auto";
+    body.style.marginRight = "auto";
+
+    var iframeWidth = iframe.clientWidth || 0;
+    if (!iframeWidth) return;
+
+    var sourceWidth = getPreviewSourceWidth(doc, body, html);
+    if (!sourceWidth) return;
+
+    var availableWidth = Math.max(100, iframeWidth - 24);
+    var scale = Math.min(1, availableWidth / sourceWidth);
+
+    if (!isFinite(scale) || scale <= 0) scale = 1;
+
+    if ("zoom" in body.style) {
+      body.style.zoom = String(scale);
+    } else {
+      body.style.transform = "scale(" + scale + ")";
+      body.style.transformOrigin = "top left";
+      body.style.width = (100 / scale) + "%";
+    }
+  }
+
+  function getPreviewSourceWidth(doc, body, html) {
+    var selectors = [
+      ".page",
+      ".print-page",
+      ".doc-page",
+      ".paper",
+      ".sheet",
+      "[data-page]",
+      "[style*='210mm']",
+      "[style*='297mm']",
+      "[style*='2480px']",
+      "[style*='1240px']",
+      "[style*='1123px']"
+    ];
+
+    var best = 0;
+
+    for (var i = 0; i < selectors.length; i++) {
+      var nodes = doc.querySelectorAll(selectors[i]);
+      for (var j = 0; j < nodes.length && j < 6; j++) {
+        var el = nodes[j];
+        var w = getElementNaturalWidth(el);
+        if (w > best) best = w;
+      }
+      if (best) break;
     }
 
-    if (/<body[^>]*>/i.test(html)) {
-      return html.replace(/<body([^>]*)>/i, "<body$1>" + injectedCss);
+    if (!best) {
+      best = Math.max(
+        body.scrollWidth || 0,
+        html.scrollWidth || 0,
+        body.offsetWidth || 0,
+        html.offsetWidth || 0
+      );
     }
 
-    return injectedCss + html;
+    return best;
+  }
+
+  function getElementNaturalWidth(el) {
+    if (!el) return 0;
+
+    return Math.max(
+      el.scrollWidth || 0,
+      el.offsetWidth || 0,
+      Math.round((el.getBoundingClientRect && el.getBoundingClientRect().width) || 0)
+    );
   }
 
   // =========================================================
