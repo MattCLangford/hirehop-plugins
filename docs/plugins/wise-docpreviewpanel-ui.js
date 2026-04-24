@@ -1,243 +1,367 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] doc preview panel loaded - v2026-04-24.01"); } catch (e) {}
+  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-24.03"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
 
-  var PANEL_ID = "wise-doc-preview-panel";
   var TOGGLE_ID = "wise-doc-preview-toggle";
+  var OUTER_WRAP_ID = "wise-doc-preview-workspace";
+  var LEFT_PANE_ID = "wise-doc-preview-left-pane";
+  var RIGHT_PANE_ID = "wise-doc-preview-right-pane";
+  var PANEL_ID = "wise-doc-preview-panel";
   var IFRAME_ID = "wise-doc-preview-iframe";
-  var RESIZER_ID = "wise-doc-preview-resizer";
 
-  var PANEL_WIDTH_KEY = "wiseDocPreviewWidth";
-  var PANEL_OPEN_KEY = "wiseDocPreviewOpen";
-  var AUTO_REFRESH_KEY = "wiseDocPreviewAutoRefresh";
+  var PREVIEW_RATIO = 0.25;            // ~1/4 width
+  var MIN_PREVIEW_WIDTH = 360;
+  var REFRESH_DEBOUNCE_MS = 900;
 
-  var DEFAULT_WIDTH = 720;
-  var MIN_WIDTH = 420;
-  var MAX_WIDTH_RATIO = 0.8;
-  var REFRESH_DEBOUNCE_MS = 1200;
-
-  var refreshTimer = null;
   var panelOpen = false;
-  var autoRefreshEnabled = getStoredBool(AUTO_REFRESH_KEY, true);
-  var panelWidth = getStoredInt(PANEL_WIDTH_KEY, DEFAULT_WIDTH);
+  var autoRefreshEnabled = true;
+  var refreshTimer = null;
+  var domObserver = null;
 
-  init();
+  waitForItemsTabAndInit();
 
-  function init() {
-    ensurePreviewPanel();
-    tryAddPreviewButton();
-    installAjaxHooks();
-    installFetchHooks();
-    installDomFallbackHooks();
+  // =========================================================
+  // BOOTSTRAP
+  // =========================================================
+  function waitForItemsTabAndInit() {
+    var tries = 0;
 
-    if (getStoredBool(PANEL_OPEN_KEY, false)) {
-      openPanel();
+    function attempt() {
+      tries++;
+
+      if ($("#items_tab").length) {
+        injectBaseStyles();
+        tryAddPreviewButton();
+        installAjaxHooks();
+        installFetchHooks();
+        return;
+      }
+
+      if (tries < 40) {
+        setTimeout(attempt, 500);
+      }
     }
+
+    attempt();
   }
 
   // =========================================================
-  // UI SETUP
+  // STYLES
   // =========================================================
-  function ensurePreviewPanel() {
-    if ($("#" + PANEL_ID).length) return;
+  function injectBaseStyles() {
+    if ($("#wise-doc-preview-styles").length) return;
 
-    var html =
-      '<div id="' + PANEL_ID + '" style="' +
-        'display:none;' +
-        'position:fixed;' +
-        'top:0;' +
-        'right:0;' +
-        'height:100vh;' +
-        'width:' + panelWidth + 'px;' +
-        'min-width:' + MIN_WIDTH + 'px;' +
-        'background:#ffffff;' +
-        'border-left:1px solid #d9d9d9;' +
-        'box-shadow:-8px 0 24px rgba(0,0,0,0.14);' +
-        'z-index:999999;' +
-      '">' +
+    var css = [
+      '<style id="wise-doc-preview-styles">',
+      '#' + OUTER_WRAP_ID + ' {',
+      '  display:flex;',
+      '  width:100%;',
+      '  gap:0;',
+      '  align-items:stretch;',
+      '  min-height:700px;',
+      '}',
+      '#' + LEFT_PANE_ID + ' {',
+      '  flex:1 1 auto;',
+      '  min-width:0;',
+      '}',
+      '#' + RIGHT_PANE_ID + ' {',
+      '  flex:0 0 max(' + MIN_PREVIEW_WIDTH + 'px, 25%);',
+      '  width:max(' + MIN_PREVIEW_WIDTH + 'px, 25%);',
+      '  min-width:' + MIN_PREVIEW_WIDTH + 'px;',
+      '  border-left:1px solid #d9d9d9;',
+      '  background:#fff;',
+      '  display:flex;',
+      '  flex-direction:column;',
+      '}',
+      '#' + PANEL_ID + ' {',
+      '  display:flex;',
+      '  flex-direction:column;',
+      '  height:100%;',
+      '  min-height:700px;',
+      '}',
+      '#' + PANEL_ID + ' .wise-doc-preview-toolbar {',
+      '  height:44px;',
+      '  display:flex;',
+      '  align-items:center;',
+      '  justify-content:space-between;',
+      '  gap:10px;',
+      '  padding:0 10px 0 12px;',
+      '  border-bottom:1px solid #e3e3e3;',
+      '  background:#f7f7f7;',
+      '  flex:0 0 44px;',
+      '}',
+      '#' + PANEL_ID + ' .wise-doc-preview-toolbar-right {',
+      '  display:flex;',
+      '  align-items:center;',
+      '  gap:8px;',
+      '}',
+      '#' + PANEL_ID + ' .wise-doc-preview-status {',
+      '  display:none;',
+      '  padding:6px 10px;',
+      '  font-size:12px;',
+      '  border-bottom:1px solid #ececec;',
+      '  background:#fff8e1;',
+      '  color:#6b5a00;',
+      '}',
+      '#' + IFRAME_ID + ' {',
+      '  display:block;',
+      '  width:100%;',
+      '  flex:1 1 auto;',
+      '  min-height:640px;',
+      '  border:0;',
+      '  background:#fff;',
+      '}',
+      '</style>'
+    ].join("");
 
-        '<div id="' + RESIZER_ID + '" style="' +
-          'position:absolute;' +
-          'left:0;' +
-          'top:0;' +
-          'width:8px;' +
-          'height:100%;' +
-          'cursor:col-resize;' +
-          'background:transparent;' +
-        '"></div>' +
+    $("head").append(css);
+  }
 
-        '<div style="' +
-          'height:52px;' +
-          'display:flex;' +
-          'align-items:center;' +
-          'justify-content:space-between;' +
-          'gap:10px;' +
-          'padding:0 14px 0 18px;' +
-          'border-bottom:1px solid #e3e3e3;' +
-          'background:#f7f7f7;' +
-        '">' +
-          '<div style="font-size:14px; font-weight:600;">Document Preview</div>' +
-          '<div style="display:flex; align-items:center; gap:10px;">' +
+  // =========================================================
+  // BUTTON
+  // =========================================================
+  function tryAddPreviewButton() {
+    if ($("#" + TOGGLE_ID).length) return;
+
+    var $host = findToolbarHost();
+    if (!$host.length) {
+      setTimeout(tryAddPreviewButton, 1000);
+      return;
+    }
+
+    var $btn = $(
+      '<button id="' + TOGGLE_ID + '" type="button" ' +
+        'class="items_func_btn ui-button ui-widget ui-state-default ui-corner-all ui-button-text-icon-primary" ' +
+        'style="width: 140px; margin: 0px 0.5em;" ' +
+        'role="button">' +
+        '<span class="ui-button-icon-primary ui-icon ui-icon-search"></span>' +
+        '<span class="ui-button-text">Preview</span>' +
+      '</button>'
+    );
+
+    $btn.on("click", function () {
+      if (panelOpen) closeDockedPreview();
+      else openDockedPreview();
+    });
+
+    var $gearBtn = $host.children("button.fixed_width").first();
+
+    if ($gearBtn.length) {
+      $btn.insertBefore($gearBtn);
+    } else {
+      $host.append($btn);
+    }
+  }
+
+  function findToolbarHost() {
+    return $("#items_tab > div:first-child");
+  }
+
+  // =========================================================
+  // DOCKED LAYOUT
+  // =========================================================
+  function openDockedPreview() {
+    if (panelOpen) return;
+
+    var $itemsTab = $("#items_tab");
+    if (!$itemsTab.length) return;
+
+    if (!$("#" + OUTER_WRAP_ID).length) {
+      buildDockedLayout($itemsTab);
+    }
+
+    panelOpen = true;
+    $("#" + RIGHT_PANE_ID).show();
+    setButtonActive(true);
+    refreshPreviewNow("open");
+    installTargetedDomObserver();
+  }
+
+  function closeDockedPreview() {
+    panelOpen = false;
+
+    removeTargetedDomObserver();
+
+    var $workspace = $("#" + OUTER_WRAP_ID);
+    if ($workspace.length) {
+      unwrapDockedLayout();
+    }
+
+    setButtonActive(false);
+  }
+
+  function buildDockedLayout($itemsTab) {
+    var $children = $itemsTab.children().detach();
+
+    var $workspace = $('<div id="' + OUTER_WRAP_ID + '"></div>');
+    var $left = $('<div id="' + LEFT_PANE_ID + '"></div>');
+    var $right = $('<div id="' + RIGHT_PANE_ID + '"></div>');
+
+    $left.append($children);
+    $right.append(buildPreviewPanelHtml());
+
+    $workspace.append($left).append($right);
+    $itemsTab.append($workspace);
+
+    bindPreviewPanelEvents();
+  }
+
+  function unwrapDockedLayout() {
+    var $itemsTab = $("#items_tab");
+    var $workspace = $("#" + OUTER_WRAP_ID);
+    if (!$itemsTab.length || !$workspace.length) return;
+
+    var $left = $("#" + LEFT_PANE_ID);
+    var $children = $left.children().detach();
+
+    $workspace.remove();
+    $itemsTab.append($children);
+  }
+
+  function buildPreviewPanelHtml() {
+    return $(
+      '<div id="' + PANEL_ID + '">' +
+        '<div class="wise-doc-preview-toolbar">' +
+          '<div style="font-size:13px; font-weight:600;">Document Preview</div>' +
+          '<div class="wise-doc-preview-toolbar-right">' +
             '<label style="display:flex; align-items:center; gap:6px; font-size:12px; white-space:nowrap;">' +
-              '<input type="checkbox" id="wise-doc-preview-auto"' + (autoRefreshEnabled ? ' checked' : '') + '> Auto-refresh' +
+              '<input type="checkbox" id="wise-doc-preview-auto" checked> Auto' +
             '</label>' +
             '<button type="button" id="wise-doc-preview-refresh">Refresh</button>' +
             '<button type="button" id="wise-doc-preview-open-tab">Open</button>' +
             '<button type="button" id="wise-doc-preview-close">Close</button>' +
           '</div>' +
         '</div>' +
+        '<div class="wise-doc-preview-status" id="wise-doc-preview-status"></div>' +
+        '<iframe id="' + IFRAME_ID + '"></iframe>' +
+      '</div>'
+    );
+  }
 
-        '<div id="wise-doc-preview-status" style="' +
-          'display:none;' +
-          'padding:6px 12px;' +
-          'font-size:12px;' +
-          'border-bottom:1px solid #ececec;' +
-          'background:#fff8e1;' +
-          'color:#6b5a00;' +
-        '"></div>' +
-
-        '<iframe id="' + IFRAME_ID + '" style="' +
-          'display:block;' +
-          'width:100%;' +
-          'height:calc(100vh - 52px);' +
-          'border:0;' +
-          'background:#fff;' +
-        '"></iframe>' +
-      '</div>';
-
-    $("body").append(html);
-
-    $("#wise-doc-preview-close").on("click", closePanel);
-    $("#wise-doc-preview-refresh").on("click", function () {
-      refreshPreviewNow(true);
+  function bindPreviewPanelEvents() {
+    $("#wise-doc-preview-close").off("click").on("click", function () {
+      closeDockedPreview();
     });
 
-    $("#wise-doc-preview-open-tab").on("click", function () {
+    $("#wise-doc-preview-refresh").off("click").on("click", function () {
+      refreshPreviewNow("manual");
+    });
+
+    $("#wise-doc-preview-open-tab").off("click").on("click", function () {
       var url = buildPreviewUrl();
-      if (url) {
-        window.open(url, "_blank");
-      }
+      if (url) window.open(url, "_blank");
     });
 
-    $("#wise-doc-preview-auto").on("change", function () {
+    $("#wise-doc-preview-auto").off("change").on("change", function () {
       autoRefreshEnabled = $(this).prop("checked");
-      localStorage.setItem(AUTO_REFRESH_KEY, autoRefreshEnabled ? "1" : "0");
     });
-
-    installResizer();
   }
 
-  function tryAddPreviewButton() {
-  if ($("#" + TOGGLE_ID).length) return;
+  function setButtonActive(isActive) {
+    var $btn = $("#" + TOGGLE_ID);
+    if (!$btn.length) return;
 
-  var $host = findToolbarHost();
-  if (!$host.length) {
-    setTimeout(tryAddPreviewButton, 1000);
-    return;
-  }
-
-  var $btn = $(
-    '<button id="' + TOGGLE_ID + '" type="button" ' +
-      'class="items_func_btn ui-button ui-widget ui-state-default ui-corner-all ui-button-text-icon-primary" ' +
-      'style="width: 199.2px; margin: 0px 0.5em;" ' +
-      'role="button">' +
-      '<span class="ui-button-icon-primary ui-icon ui-icon-document"></span>' +
-      '<span class="ui-button-text">Preview Doc</span>' +
-    '</button>'
-  );
-
-  $btn.on("click", function () {
-    if (panelOpen) {
-      closePanel();
+    if (isActive) {
+      $btn.addClass("ui-state-active");
+      $btn.find(".ui-button-text").text("Hide Preview");
     } else {
-      openPanel();
+      $btn.removeClass("ui-state-active");
+      $btn.find(".ui-button-text").text("Preview");
     }
-  });
-
-  var $gearBtn = $host.children("button.fixed_width").first();
-
-  if ($gearBtn.length) {
-    $btn.insertBefore($gearBtn);
-  } else {
-    $host.append($btn);
-  }
-}
-
-function findToolbarHost() {
-  var $host = $("#items_tab > div:first-child");
-
-  if ($host.length) return $host;
-
-  return $();
-}
-
-  function openPanel() {
-    ensurePreviewPanel();
-
-    panelOpen = true;
-    localStorage.setItem(PANEL_OPEN_KEY, "1");
-
-    $("#" + PANEL_ID).show();
-    applyPanelWidth(panelWidth);
-    refreshPreviewNow(false);
-  }
-
-  function closePanel() {
-    panelOpen = false;
-    localStorage.setItem(PANEL_OPEN_KEY, "0");
-    $("#" + PANEL_ID).hide();
   }
 
   // =========================================================
   // PREVIEW URL
   // =========================================================
   function buildPreviewUrl() {
-    var jobId = getCurrentJobId();
-    if (!jobId) {
-      setStatus("Could not determine the current job ID.");
-      return "";
-    }
-
-    clearStatus();
-
-    var params = new URLSearchParams();
-    params.set("main_id", jobId);
-    params.set("type", "1");
-    params.set("sub_id", "0");
-    params.set("sub_type", "16");
-    params.set("doc", "166");
-    params.set("local", formatLocalDateTime(new Date()));
-    params.set("tz", "Europe/London");
-    params.set("format", "html");
-    params.set("stn", "0");
-    params.set("or", "0");
-    params.set("nums", "0");
-    params.set("engine", "1");
-    params.set("_ts", String(Date.now()));
-
-    return "/modules/docmaker/merge-html.php?" + params.toString();
+  var jobId = getCurrentJobId();
+  if (!jobId) {
+    setStatus("Could not determine the current job ID.");
+    return "";
   }
 
+  clearStatus();
+
+  var params = new URLSearchParams();
+  params.set("main_id", jobId);
+  params.set("type", "1");
+  params.set("sub_id", "0");
+  params.set("sub_type", "16");
+  params.set("doc", "166");
+  params.set("local", formatLocalDateTime(new Date()));
+  params.set("tz", "Europe/London");
+  params.set("format", "html");
+
+  var selectedIds = getSelectedSupplyingNodeIds();
+  for (var i = 0; i < selectedIds.length; i++) {
+    params.append("params[selected][]", selectedIds[i]);
+  }
+
+  params.set("stn", "0");
+  params.set("or", "0");
+  params.set("nums", "0");
+  params.set("engine", "1");
+  params.set("_ts", String(Date.now()));
+
+  return "/modules/docmaker/merge-html.php?" + params.toString();
+}
+
+  function getSelectedSupplyingNodeIds() {
+  var ids = [];
+
+  // jstree selected nodes usually carry this class
+  $("#items_tab .jstree-clicked").each(function () {
+    var $anchor = $(this);
+    var $li = $anchor.closest("li");
+
+    if ($li.length) {
+      var id = $.trim(String($li.attr("id") || ""));
+      if (id) ids.push(id);
+    }
+  });
+
+  // Fallback: active/selected node styles
+  if (!ids.length) {
+    $("#items_tab li.jstree-node.jstree-clicked, #items_tab li.jstree-selected, #items_tab li[aria-selected='true']").each(function () {
+      var id = $.trim(String($(this).attr("id") || ""));
+      if (id) ids.push(id);
+    });
+  }
+
+  // De-duplicate
+  var seen = {};
+  var out = [];
+
+  for (var i = 0; i < ids.length; i++) {
+    if (!seen[ids[i]]) {
+      seen[ids[i]] = true;
+      out.push(ids[i]);
+    }
+  }
+
+  return out;
+}
+
   function getCurrentJobId() {
-    // First try URL
     var href = window.location.href || "";
     var m =
-      href.match(/[?&](?:job|job_id|main_id)=(\d+)/i) ||
+      href.match(/[?&](?:job|job_id|main_id|id)=(\d+)/i) ||
       href.match(/\/job\/(\d+)/i) ||
       href.match(/\/jobs\/(\d+)/i);
 
     if (m && m[1]) return m[1];
 
-    // Then common hidden/input fields
     var selectors = [
       'input[name="job"]',
       'input[name="job_id"]',
       'input[name="main_id"]',
-      'input[name="id"]'
+      'input[name="id"]',
+      '#job_id',
+      '#main_id'
     ];
 
     for (var i = 0; i < selectors.length; i++) {
@@ -248,10 +372,8 @@ function findToolbarHost() {
       }
     }
 
-    // Last fallback: inspect page for numeric hints
-    var bodyHtml = document.body ? document.body.innerHTML : "";
-    var match = bodyHtml.match(/name=["']job["'][^>]*value=["'](\d+)["']/i);
-    if (match && match[1]) return match[1];
+    if (window.main_id && /^\d+$/.test(String(window.main_id))) return String(window.main_id);
+    if (window.job_id && /^\d+$/.test(String(window.job_id))) return String(window.job_id);
 
     return "";
   }
@@ -282,11 +404,11 @@ function findToolbarHost() {
 
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(function () {
-      refreshPreviewNow(false, reason);
+      refreshPreviewNow(reason || "debounced");
     }, REFRESH_DEBOUNCE_MS);
   }
 
-  function refreshPreviewNow(manual, reason) {
+  function refreshPreviewNow(reason) {
     if (!panelOpen) return;
 
     var url = buildPreviewUrl();
@@ -300,7 +422,7 @@ function findToolbarHost() {
   }
 
   // =========================================================
-  // NETWORK / SAVE HOOKS
+  // AJAX / FETCH HOOKS
   // =========================================================
   function installAjaxHooks() {
     if (window.__wiseDocPreviewXhrInstalled) return;
@@ -367,79 +489,57 @@ function findToolbarHost() {
       /\/php_functions\/items_sort/i.test(url) ||
       /\/php_functions\/items_move/i.test(url) ||
       /\/php_functions\/items_copy/i.test(url) ||
-      /\/php_functions\/items_duplicate/i.test(url)
+      /\/php_functions\/items_duplicate/i.test(url) ||
+      /\/php_functions\/items_load/i.test(url) ||
+      /\/php_functions\/item/i.test(url)
     );
   }
 
   // =========================================================
-  // FALLBACK DOM WATCH
+  // TARGETED DOM OBSERVER
   // =========================================================
-  function installDomFallbackHooks() {
-    if (window.__wiseDocPreviewDomInstalled) return;
-    window.__wiseDocPreviewDomInstalled = true;
+  function installTargetedDomObserver() {
+    removeTargetedDomObserver();
 
-    var target = document.body;
+    var target =
+      $("#items_tab .items_tree").get(0) ||
+      $("#items_tab .items_tree_container").get(0) ||
+      $("#items_tab .entire_tree_container").get(0);
+
     if (!target) return;
 
-    var obs = new MutationObserver(function (mutations) {
+    domObserver = new MutationObserver(function (mutations) {
       if (!panelOpen || !autoRefreshEnabled) return;
 
       for (var i = 0; i < mutations.length; i++) {
         var m = mutations[i];
-        if (m.addedNodes && m.addedNodes.length) {
-          refreshPreviewSoon("dom");
-          return;
+
+        if (m.type === "childList") {
+          if ((m.addedNodes && m.addedNodes.length) || (m.removedNodes && m.removedNodes.length)) {
+            refreshPreviewSoon("dom-child");
+            return;
+          }
         }
-        if (m.removedNodes && m.removedNodes.length) {
-          refreshPreviewSoon("dom");
+
+        if (m.type === "attributes") {
+          refreshPreviewSoon("dom-attr");
           return;
         }
       }
     });
 
-    obs.observe(target, {
+    domObserver.observe(target, {
       childList: true,
-      subtree: true
+      subtree: true,
+      attributes: true
     });
   }
 
-  // =========================================================
-  // PANEL RESIZE
-  // =========================================================
-  function installResizer() {
-    var $resizer = $("#" + RESIZER_ID);
-    if (!$resizer.length) return;
-
-    var isDragging = false;
-
-    $resizer.on("mousedown", function (e) {
-      isDragging = true;
-      e.preventDefault();
-
-      $(document).on("mousemove.wiseDocPreviewResize", function (ev) {
-        if (!isDragging) return;
-
-        var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1600;
-        var maxWidth = Math.floor(viewportWidth * MAX_WIDTH_RATIO);
-        var newWidth = viewportWidth - ev.clientX;
-
-        newWidth = Math.max(MIN_WIDTH, newWidth);
-        newWidth = Math.min(maxWidth, newWidth);
-
-        applyPanelWidth(newWidth);
-      });
-
-      $(document).on("mouseup.wiseDocPreviewResize", function () {
-        isDragging = false;
-        $(document).off(".wiseDocPreviewResize");
-      });
-    });
-  }
-
-  function applyPanelWidth(width) {
-    panelWidth = width;
-    $("#" + PANEL_ID).css("width", width + "px");
-    localStorage.setItem(PANEL_WIDTH_KEY, String(width));
+  function removeTargetedDomObserver() {
+    if (domObserver) {
+      domObserver.disconnect();
+      domObserver = null;
+    }
   }
 
   // =========================================================
@@ -453,23 +553,4 @@ function findToolbarHost() {
     $("#wise-doc-preview-status").hide().text("");
   }
 
-  // =========================================================
-  // STORAGE HELPERS
-  // =========================================================
-  function getStoredBool(key, fallback) {
-    try {
-      var raw = localStorage.getItem(key);
-      if (raw === "1") return true;
-      if (raw === "0") return false;
-    } catch (e) {}
-    return fallback;
-  }
-
-  function getStoredInt(key, fallback) {
-    try {
-      var raw = parseInt(localStorage.getItem(key), 10);
-      if (!isNaN(raw)) return raw;
-    } catch (e) {}
-    return fallback;
-  }
 })();
