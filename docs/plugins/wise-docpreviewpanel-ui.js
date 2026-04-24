@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-24.07"); } catch (e) {}
+  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-24.09"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -14,28 +14,83 @@
   var IFRAME_VIEWPORT_ID = "wise-doc-preview-viewport";
   var IFRAME_PRIMARY_ID = "wise-doc-preview-iframe-primary";
   var IFRAME_SECONDARY_ID = "wise-doc-preview-iframe-secondary";
+  var VARIANT_SELECT_ID = "wise-doc-preview-variant";
 
   var PREVIEW_CONFIG = {
     minPreviewWidth: 360,
     refreshDebounceMs: 1500,
     timezone: "Europe/London",
     mergeHtmlPath: "/modules/docmaker/merge-html.php",
+    defaultDocumentVariantKey: "proposal_default",
+    documentVariants: [
+      {
+        key: "proposal_default",
+        family: "Proposal",
+        label: "Default",
+        params: {
+          doc: "166",
+          engine: "1"
+        }
+      },
+      {
+        key: "jobtrack_gp_predictor",
+        family: "Job Track",
+        label: "GP% Predictor",
+        params: {
+          doc: "162",
+          engine: "0"
+        }
+      }
+    ],
     staticParams: {
       type: "1",
       sub_id: "0",
       sub_type: "16",
-      doc: "166",
       format: "html",
       stn: "0",
       or: "0",
-      nums: "0",
-      engine: "1"
+      nums: "0"
     },
     refreshUrlPatterns: [
       /\/php_functions\/items_(?:save|delete|sort|move|copy|duplicate|load)(?:\.php)?(?:\?|$)/i,
       /\/php_functions\/items?(?:_[a-z]+)?(?:\.php)?(?:\?|$)/i
     ],
-    selectionAttributeFilter: ["class", "aria-selected"]
+    selectionAttributeFilter: ["class", "aria-selected"],
+    previewLoadActivateDelayMs: 90,
+    previewLoadFollowUpDelaysMs: [220, 420],
+    previewPageSelectors: [
+      ".page",
+      ".print-page",
+      ".doc-page",
+      ".paper",
+      ".sheet",
+      "[data-page]"
+    ],
+    previewHeadingSelectors: [
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      ".title",
+      ".heading",
+      ".page-title",
+      ".section-title",
+      ".dept-title",
+      "[role='heading']",
+      "strong",
+      "b"
+    ],
+    previewTextSelectors: [
+      "p",
+      "div",
+      "span",
+      "td",
+      "th",
+      "li"
+    ],
+    previewMaxMatchTextLength: 180
   };
 
   var MIN_PREVIEW_WIDTH = PREVIEW_CONFIG.minPreviewWidth;
@@ -52,6 +107,8 @@
   var activePreviewFrameId = IFRAME_PRIMARY_ID;
   var previewHasLoaded = false;
   var lastSelectedNodeIdsKey = "";
+  var activeDocumentVariantKey = getDefaultDocumentVariantKey();
+  var nextPreviewLoadId = 1;
 
   waitForItemsTabAndInit();
 
@@ -127,19 +184,48 @@
       '  min-height:700px;',
       '}',
       '#' + PANEL_ID + ' .wise-doc-preview-toolbar {',
-      '  height:44px;',
       '  display:flex;',
       '  align-items:center;',
       '  justify-content:space-between;',
+      '  flex-wrap:wrap;',
       '  gap:10px;',
-      '  padding:0 10px 0 12px;',
+      '  padding:6px 10px 6px 12px;',
       '  border-bottom:1px solid #e3e3e3;',
       '  background:#f7f7f7;',
-      '  flex:0 0 44px;',
+      '  min-height:44px;',
+      '  flex:0 0 auto;',
+      '}',
+      '#' + PANEL_ID + ' .wise-doc-preview-toolbar-left {',
+      '  display:flex;',
+      '  align-items:center;',
+      '  gap:10px;',
+      '  min-width:0;',
+      '  flex:1 1 auto;',
+      '}',
+      '#' + PANEL_ID + ' .wise-doc-preview-toolbar-title {',
+      '  font-size:13px;',
+      '  font-weight:600;',
+      '  white-space:nowrap;',
+      '}',
+      '#' + PANEL_ID + ' .wise-doc-preview-render {',
+      '  display:flex;',
+      '  align-items:center;',
+      '  gap:6px;',
+      '  min-width:0;',
+      '}',
+      '#' + PANEL_ID + ' .wise-doc-preview-render span {',
+      '  font-size:12px;',
+      '  white-space:nowrap;',
+      '}',
+      '#' + PANEL_ID + ' .wise-doc-preview-render select {',
+      '  min-width:170px;',
+      '  max-width:230px;',
       '}',
       '#' + PANEL_ID + ' .wise-doc-preview-toolbar-right {',
       '  display:flex;',
       '  align-items:center;',
+      '  flex-wrap:wrap;',
+      '  justify-content:flex-end;',
       '  gap:8px;',
       '}',
       '#' + PANEL_ID + ' .wise-doc-preview-status {',
@@ -300,7 +386,15 @@
     return $(
       '<div id="' + PANEL_ID + '">' +
         '<div class="wise-doc-preview-toolbar">' +
-          '<div style="font-size:13px; font-weight:600;">Document Preview</div>' +
+          '<div class="wise-doc-preview-toolbar-left">' +
+            '<div class="wise-doc-preview-toolbar-title">Document Preview</div>' +
+            '<label class="wise-doc-preview-render">' +
+              '<span>Render</span>' +
+              '<select id="' + VARIANT_SELECT_ID + '">' +
+                buildDocumentVariantOptionsHtml() +
+              '</select>' +
+            '</label>' +
+          '</div>' +
           '<div class="wise-doc-preview-toolbar-right">' +
             '<label style="display:flex; align-items:center; gap:6px; font-size:12px; white-space:nowrap;">' +
               '<input type="checkbox" id="wise-doc-preview-auto" checked> Auto' +
@@ -320,6 +414,8 @@
   }
 
   function bindPreviewPanelEvents() {
+    syncActiveDocumentVariantControl();
+
     $("#wise-doc-preview-close").off("click").on("click", function () {
       closeDockedPreview();
     });
@@ -331,6 +427,14 @@
     $("#wise-doc-preview-open-tab").off("click").on("click", function () {
       var url = buildPreviewUrl();
       if (url) window.open(url, "_blank");
+    });
+
+    $("#" + VARIANT_SELECT_ID).off("change").on("change", function () {
+      setActiveDocumentVariant($(this).val() || "");
+
+      if (!panelOpen) return;
+
+      refreshPreviewNow("variant");
     });
 
     $("#wise-doc-preview-auto").off("change").on("change", function () {
@@ -364,6 +468,13 @@
   // =========================================================
   function buildPreviewUrl() {
     var jobId = getCurrentJobId();
+    var activeVariant = getActiveDocumentVariant();
+
+    if (!activeVariant) {
+      setStatus("No preview document renders are configured.");
+      return "";
+    }
+
     if (!jobId) {
       setStatus("Could not determine the current job ID.");
       return "";
@@ -380,6 +491,12 @@
       params.set(key, PREVIEW_CONFIG.staticParams[key]);
     }
 
+    var variantParamKeys = Object.keys(activeVariant.params || {});
+    for (var v = 0; v < variantParamKeys.length; v++) {
+      var variantKey = variantParamKeys[v];
+      params.set(variantKey, activeVariant.params[variantKey]);
+    }
+
     params.set("local", formatLocalDateTime(new Date()));
     params.set("tz", PREVIEW_CONFIG.timezone);
 
@@ -391,6 +508,101 @@
     params.set("_ts", String(Date.now()));
 
     return PREVIEW_CONFIG.mergeHtmlPath + "?" + params.toString();
+  }
+
+  function buildDocumentVariantOptionsHtml() {
+    var variants = getDocumentVariants();
+    var groups = {};
+    var groupOrder = [];
+    var html = [];
+
+    for (var i = 0; i < variants.length; i++) {
+      var variant = variants[i];
+      var family = $.trim(String(variant.family || ""));
+
+      if (!family) {
+        html.push(buildDocumentVariantOptionHtml(variant));
+        continue;
+      }
+
+      if (!groups[family]) {
+        groups[family] = [];
+        groupOrder.push(family);
+      }
+
+      groups[family].push(variant);
+    }
+
+    for (var j = 0; j < groupOrder.length; j++) {
+      var groupName = groupOrder[j];
+      html.push('<optgroup label="' + escapeHtml(groupName) + '">');
+
+      var groupVariants = groups[groupName];
+      for (var k = 0; k < groupVariants.length; k++) {
+        html.push(buildDocumentVariantOptionHtml(groupVariants[k]));
+      }
+
+      html.push('</optgroup>');
+    }
+
+    return html.join("");
+  }
+
+  function buildDocumentVariantOptionHtml(variant) {
+    if (!variant || !variant.key) return "";
+
+    var isSelected = variant.key === activeDocumentVariantKey;
+    return '<option value="' + escapeHtml(variant.key) + '"' + (isSelected ? ' selected' : '') + '>' +
+      escapeHtml(String(variant.label || variant.key)) +
+    '</option>';
+  }
+
+  function getDocumentVariants() {
+    return PREVIEW_CONFIG.documentVariants || [];
+  }
+
+  function getDocumentVariantByKey(key) {
+    var variants = getDocumentVariants();
+
+    for (var i = 0; i < variants.length; i++) {
+      if (variants[i].key === key) return variants[i];
+    }
+
+    return null;
+  }
+
+  function getDefaultDocumentVariantKey() {
+    var configured = String(PREVIEW_CONFIG.defaultDocumentVariantKey || "");
+    if (configured && getDocumentVariantByKey(configured)) return configured;
+
+    var variants = getDocumentVariants();
+    return variants.length ? String(variants[0].key || "") : "";
+  }
+
+  function getActiveDocumentVariant() {
+    return getDocumentVariantByKey(activeDocumentVariantKey) ||
+      getDocumentVariantByKey(getDefaultDocumentVariantKey()) ||
+      null;
+  }
+
+  function setActiveDocumentVariant(key) {
+    var next = getDocumentVariantByKey(key) || getActiveDocumentVariant();
+
+    activeDocumentVariantKey = next ? next.key : getDefaultDocumentVariantKey();
+    syncActiveDocumentVariantControl();
+  }
+
+  function syncActiveDocumentVariantControl() {
+    var $select = $("#" + VARIANT_SELECT_ID);
+    if (!$select.length) return;
+
+    var selectedKey = activeDocumentVariantKey || getDefaultDocumentVariantKey();
+    if ($select.find('option[value="' + selectedKey + '"]').length) {
+      $select.val(selectedKey);
+    } else if ($select.find("option").length) {
+      $select.prop("selectedIndex", 0);
+      activeDocumentVariantKey = String($select.val() || "");
+    }
   }
 
   function getCurrentJobId() {
@@ -426,36 +638,93 @@
   }
 
   function getSelectedSupplyingNodeIds() {
+    var nodes = getSelectedSupplyingNodes();
     var ids = [];
 
-    $("#items_tab .jstree-clicked").each(function () {
-      var $anchor = $(this);
-      var $li = $anchor.closest("li");
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].id) ids.push(nodes[i].id);
+    }
 
-      if ($li.length) {
-        var id = $.trim(String($li.attr("id") || ""));
-        if (id) ids.push(id);
-      }
+    return ids;
+  }
+
+  function getSelectedSupplyingNodes() {
+    var nodes = [];
+    var seen = {};
+
+    collectSelectedSupplyingNodes($("#items_tab .jstree-clicked"), nodes, seen, true);
+
+    if (!nodes.length) {
+      collectSelectedSupplyingNodes(
+        $("#items_tab li.jstree-node.jstree-clicked, #items_tab li.jstree-selected, #items_tab li[aria-selected='true']"),
+        nodes,
+        seen,
+        false
+      );
+    }
+
+    return nodes;
+  }
+
+  function collectSelectedSupplyingNodes($elements, out, seen, anchorMode) {
+    $elements.each(function () {
+      var $el = $(this);
+      var $li = $el.is("li") ? $el : $el.closest("li");
+      if (!$li.length) return;
+
+      var meta = buildSelectedSupplyingNodeMeta($li, anchorMode ? $el : null);
+      if (!meta || !meta.id || seen[meta.id]) return;
+
+      seen[meta.id] = true;
+      out.push(meta);
+    });
+  }
+
+  function buildSelectedSupplyingNodeMeta($li, $anchorHint) {
+    if (!$li || !$li.length) return null;
+
+    var id = $.trim(String($li.attr("id") || ""));
+    if (!id) return null;
+
+    var text = getTreeNodeText($li, $anchorHint);
+    var ancestorTexts = [];
+
+    $li.parents("li.jstree-node").each(function () {
+      var ancestorText = getTreeNodeText($(this));
+      if (ancestorText) ancestorTexts.push(ancestorText);
     });
 
-    if (!ids.length) {
-      $("#items_tab li.jstree-node.jstree-clicked, #items_tab li.jstree-selected, #items_tab li[aria-selected='true']").each(function () {
-        var id = $.trim(String($(this).attr("id") || ""));
-        if (id) ids.push(id);
-      });
+    ancestorTexts = uniqueTextValues(ancestorTexts);
+
+    return {
+      id: id,
+      text: text,
+      normalizedText: normalisePreviewMatchText(text),
+      ancestorTexts: ancestorTexts,
+      normalizedAncestorTexts: normaliseTextValues(ancestorTexts)
+    };
+  }
+
+  function getTreeNodeText($li, $anchorHint) {
+    var $anchor = getTreeNodeAnchor($li, $anchorHint);
+    var text = $.trim(String(($anchor.length ? $anchor.text() : "") || ""));
+
+    if (text) return normaliseWhitespace(text);
+
+    var $clone = $li.clone();
+    $clone.children("ul").remove();
+    return normaliseWhitespace(String($clone.text() || ""));
+  }
+
+  function getTreeNodeAnchor($li, $anchorHint) {
+    if ($anchorHint && $anchorHint.length && $anchorHint.is("a")) {
+      return $anchorHint.first();
     }
 
-    var seen = {};
-    var out = [];
+    var $anchor = $li.children("a.jstree-anchor").first();
+    if ($anchor.length) return $anchor;
 
-    for (var i = 0; i < ids.length; i++) {
-      if (!seen[ids[i]]) {
-        seen[ids[i]] = true;
-        out.push(ids[i]);
-      }
-    }
-
-    return out;
+    return $li.find("a.jstree-anchor").first();
   }
 
   function getSelectedNodeIdsKey() {
@@ -478,6 +747,16 @@
       ":",
       pad(date.getSeconds())
     ].join("");
+  }
+
+  function capturePreviewScrollIntent(reason) {
+    var nodes = getSelectedSupplyingNodes();
+
+    return {
+      reason: reason || "",
+      nodes: nodes,
+      selectedNodeIdsKey: buildNodeIdsKey(nodes)
+    };
   }
 
   // =========================================================
@@ -506,12 +785,26 @@
     var iframe = getRefreshTargetIframe();
     if (!iframe) return;
 
+    captureIframeScrollState(getActivePreviewIframe());
+
+    var loadState = {
+      loadId: nextPreviewLoadId++,
+      reason: reason || "",
+      scrollRatio: lastIframeScrollRatio,
+      scrollIntent: capturePreviewScrollIntent(reason || "")
+    };
+
     previewRefreshInFlight = true;
     iframe._wiseDocPreviewAwaitingSwap = true;
-    captureIframeScrollState(getActivePreviewIframe());
+    iframe._wiseDocPreviewLoadState = loadState;
+    clearAllPreviewFrameTimers();
     clearStatus();
 
     iframe.src = url;
+  }
+
+  function isDirectRefreshReason(reason) {
+    return reason === "open" || reason === "manual" || reason === "variant";
   }
 
   function captureIframeScrollState(iframe) {
@@ -543,42 +836,246 @@
     }
   }
 
-  function restoreIframeScrollState(iframe) {
-    function applyRestore() {
-      try {
-        var win = iframe.contentWindow;
-        var doc = iframe.contentDocument;
-        if (!win || !doc) return;
+  function applyPreviewFrameLayoutAndScroll(iframe, loadState) {
+    if (!isCurrentPreviewLoadState(iframe, loadState)) return false;
 
-        var maxScroll = Math.max(
-          0,
-          (doc.documentElement.scrollHeight || 0) - (win.innerHeight || 0)
-        );
-
-        var targetTop = Math.round(maxScroll * lastIframeScrollRatio);
-        win.scrollTo(0, targetTop);
-      } catch (e) {}
-    }
-
-    setTimeout(applyRestore, 60);
-    setTimeout(applyRestore, 220);
-    setTimeout(applyRestore, 450);
-  }
-
-  function patchLoadedPreviewDocument(iframe) {
     var doc = iframe.contentDocument;
-    if (!doc) return;
+    if (!doc) return false;
 
     ensurePreviewStyleTag(doc);
     fitPreviewToPane(iframe, doc);
+    return applyPreviewScrollState(iframe, loadState);
+  }
 
-    setTimeout(function () {
-      try { fitPreviewToPane(iframe, doc); } catch (e) {}
-    }, 120);
+  function applyPreviewScrollState(iframe, loadState) {
+    if (tryScrollPreviewToSelection(iframe, loadState && loadState.scrollIntent)) {
+      return true;
+    }
 
-    setTimeout(function () {
-      try { fitPreviewToPane(iframe, doc); } catch (e) {}
-    }, 350);
+    applyPreviewScrollRatio(iframe, loadState ? loadState.scrollRatio : lastIframeScrollRatio);
+    return false;
+  }
+
+  function applyPreviewScrollRatio(iframe, scrollRatio) {
+    try {
+      var win = iframe.contentWindow;
+      var doc = iframe.contentDocument;
+      if (!win || !doc) return;
+
+      var safeRatio = Number(scrollRatio || 0);
+      if (!isFinite(safeRatio) || safeRatio < 0) safeRatio = 0;
+
+      var maxScroll = Math.max(
+        0,
+        (doc.documentElement.scrollHeight || 0) - (win.innerHeight || 0)
+      );
+
+      win.scrollTo(0, Math.round(maxScroll * safeRatio));
+    } catch (e) {}
+  }
+
+  function tryScrollPreviewToSelection(iframe, scrollIntent) {
+    var match = findPreviewSelectionMatch(iframe, scrollIntent);
+    if (!match) return false;
+
+    scrollPreviewIframeToTop(iframe, match.top);
+    return true;
+  }
+
+  function alignActivePreviewToSelection() {
+    var iframe = getActivePreviewIframe();
+    if (!iframe || !iframe.contentDocument) return false;
+
+    return tryScrollPreviewToSelection(iframe, capturePreviewScrollIntent("selection"));
+  }
+
+  function scrollPreviewIframeToTop(iframe, top) {
+    try {
+      var win = iframe.contentWindow;
+      if (!win) return;
+
+      var safeTop = Math.max(0, Math.round(Number(top || 0)));
+      win.scrollTo(0, safeTop);
+    } catch (e) {}
+  }
+
+  function findPreviewSelectionMatch(iframe, scrollIntent) {
+    if (!scrollIntent || !scrollIntent.nodes || !scrollIntent.nodes.length) return null;
+
+    var doc = iframe.contentDocument;
+    if (!doc || !doc.body) return null;
+
+    var directMatch = findPreviewDirectNodeMatch(doc, scrollIntent.nodes);
+    if (directMatch) {
+      return buildPreviewSelectionMatch(iframe, directMatch.element, directMatch.page, directMatch.node, directMatch.score);
+    }
+
+    var elements = getPreviewSearchElements(doc);
+    var best = null;
+
+    for (var i = 0; i < elements.length; i++) {
+      var element = elements[i];
+      var elementText = normalisePreviewMatchText(getPreviewElementMatchText(element));
+      if (!elementText) continue;
+
+      var page = findPreviewPageContainer(element);
+      var pageText = page ? normalisePreviewMatchText(getPreviewElementMatchText(page)) : "";
+
+      for (var j = 0; j < scrollIntent.nodes.length; j++) {
+        var node = scrollIntent.nodes[j];
+        var score = scorePreviewElementMatch(element, elementText, pageText, node, j);
+        if (score <= 0) continue;
+
+        if (!best || score > best.score) {
+          best = {
+            element: element,
+            page: page,
+            node: node,
+            score: score
+          };
+        }
+      }
+    }
+
+    if (!best) return null;
+
+    return buildPreviewSelectionMatch(iframe, best.element, best.page, best.node, best.score);
+  }
+
+  function findPreviewDirectNodeMatch(doc, nodes) {
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      if (!node || !node.id) continue;
+
+      var idMatch = doc.getElementById(node.id);
+      if (idMatch) {
+        return {
+          element: idMatch,
+          page: findPreviewPageContainer(idMatch),
+          node: node,
+          score: 1000
+        };
+      }
+
+      if (doc.getElementsByName) {
+        var nameMatches = doc.getElementsByName(node.id);
+        if (nameMatches && nameMatches.length) {
+          return {
+            element: nameMatches[0],
+            page: findPreviewPageContainer(nameMatches[0]),
+            node: node,
+            score: 950
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function getPreviewSearchElements(doc) {
+    var selectors = PREVIEW_CONFIG.previewHeadingSelectors.concat(PREVIEW_CONFIG.previewTextSelectors);
+    var query = selectors.join(",");
+    if (!query) return [];
+
+    var raw = doc.querySelectorAll(query);
+    var out = [];
+    var token = "wise-doc-preview-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
+
+    for (var i = 0; i < raw.length; i++) {
+      var el = raw[i];
+      if (!el || el.nodeType !== 1) continue;
+      if (el._wiseDocPreviewSeenToken === token) continue;
+
+      el._wiseDocPreviewSeenToken = token;
+
+      var text = getPreviewElementMatchText(el);
+      if (!text || text.length < 2) continue;
+
+      if (!isHeadingLikePreviewElement(el)) {
+        if (text.length > PREVIEW_CONFIG.previewMaxMatchTextLength) continue;
+        if ((el.children && el.children.length > 8) || (el.childElementCount && el.childElementCount > 8)) continue;
+      }
+
+      out.push(el);
+    }
+
+    return out;
+  }
+
+  function getPreviewElementMatchText(el) {
+    if (!el) return "";
+    return normaliseWhitespace(String(el.innerText || el.textContent || ""));
+  }
+
+  function scorePreviewElementMatch(element, elementText, pageText, node, nodeIndex) {
+    if (!node || !node.normalizedText || !elementText) return 0;
+
+    var score = 0;
+    var nodeText = node.normalizedText;
+
+    if (elementText === nodeText) {
+      score = 420;
+    } else if (elementText.indexOf(nodeText) === 0 && nodeText.length >= 3) {
+      score = 320;
+    } else if (nodeText.length >= 4 && elementText.indexOf(nodeText) >= 0) {
+      score = 260;
+    } else if (elementText.length >= 8 && nodeText.indexOf(elementText) >= 0) {
+      score = 180;
+    } else {
+      return 0;
+    }
+
+    if (isHeadingLikePreviewElement(element)) {
+      score += 50;
+    }
+
+    if (pageText && node.normalizedAncestorTexts && node.normalizedAncestorTexts.length) {
+      for (var i = 0; i < node.normalizedAncestorTexts.length && i < 2; i++) {
+        if (pageText.indexOf(node.normalizedAncestorTexts[i]) >= 0) {
+          score += 25 - (i * 10);
+        }
+      }
+    }
+
+    score -= nodeIndex * 20;
+
+    if (elementText.length > nodeText.length + 80) {
+      score -= 25;
+    }
+
+    return score;
+  }
+
+  function buildPreviewSelectionMatch(iframe, element, page, node, score) {
+    var top = getPreviewElementScrollTop(iframe, page || element);
+
+    if (!page) {
+      top = Math.max(0, top - 24);
+    } else {
+      top = Math.max(0, top - 8);
+    }
+
+    return {
+      element: element,
+      page: page,
+      node: node,
+      top: top,
+      score: score || 0
+    };
+  }
+
+  function getPreviewElementScrollTop(iframe, element) {
+    try {
+      var win = iframe.contentWindow;
+      if (!win || !element || !element.getBoundingClientRect) return 0;
+
+      var rect = element.getBoundingClientRect();
+      var currentTop = win.scrollY || iframe.contentDocument.documentElement.scrollTop || iframe.contentDocument.body.scrollTop || 0;
+      return currentTop + rect.top;
+    } catch (e) {
+      return 0;
+    }
   }
 
   function ensurePreviewStyleTag(doc) {
@@ -592,6 +1089,7 @@
         "margin:0 !important;" +
         "padding:0 !important;" +
         "overflow-x:hidden !important;" +
+        "scroll-behavior:auto !important;" +
         "background:#e9eaec !important;" +
       "}" +
       "body {" +
@@ -698,11 +1196,61 @@
     return frames;
   }
 
+  function clearPreviewFrameTimers(iframe) {
+    if (!iframe) return;
+
+    var timers = iframe._wiseDocPreviewTimers || [];
+    for (var i = 0; i < timers.length; i++) {
+      clearTimeout(timers[i]);
+    }
+
+    iframe._wiseDocPreviewTimers = [];
+  }
+
+  function clearAllPreviewFrameTimers() {
+    var frames = getPreviewFrames();
+
+    for (var i = 0; i < frames.length; i++) {
+      clearPreviewFrameTimers(frames[i]);
+    }
+  }
+
+  function queuePreviewFrameTimer(iframe, fn, delay) {
+    if (!iframe) return 0;
+
+    if (!iframe._wiseDocPreviewTimers) {
+      iframe._wiseDocPreviewTimers = [];
+    }
+
+    var timerId = setTimeout(function () {
+      removePreviewFrameTimer(iframe, timerId);
+      fn();
+    }, delay);
+
+    iframe._wiseDocPreviewTimers.push(timerId);
+    return timerId;
+  }
+
+  function removePreviewFrameTimer(iframe, timerId) {
+    if (!iframe || !iframe._wiseDocPreviewTimers) return;
+
+    var next = [];
+    for (var i = 0; i < iframe._wiseDocPreviewTimers.length; i++) {
+      if (iframe._wiseDocPreviewTimers[i] !== timerId) {
+        next.push(iframe._wiseDocPreviewTimers[i]);
+      }
+    }
+
+    iframe._wiseDocPreviewTimers = next;
+  }
+
   function resetPreviewFrameState() {
     var frames = getPreviewFrames();
 
     for (var i = 0; i < frames.length; i++) {
+      clearPreviewFrameTimers(frames[i]);
       frames[i]._wiseDocPreviewAwaitingSwap = false;
+      frames[i]._wiseDocPreviewLoadState = null;
     }
   }
 
@@ -739,22 +1287,14 @@
     iframe.addEventListener("load", function () {
       if (!iframe._wiseDocPreviewAwaitingSwap) return;
 
-      iframe._wiseDocPreviewAwaitingSwap = false;
+      var loadState = iframe._wiseDocPreviewLoadState;
+      if (!loadState) return;
 
       try {
-        patchLoadedPreviewDocument(iframe);
-        restoreIframeScrollState(iframe);
-        setActivePreviewIframe(iframe);
+        beginPreviewFrameActivation(iframe, loadState);
       } catch (err) {
         try { console.warn("[WiseHireHop] iframe load patch failed", err); } catch (e) {}
-      } finally {
-        previewRefreshInFlight = false;
-
-        if (pendingRefreshReason) {
-          var queued = pendingRefreshReason;
-          pendingRefreshReason = null;
-          refreshPreviewSoon(queued);
-        }
+        completePreviewRefreshCycle(loadState);
       }
     });
 
@@ -773,6 +1313,148 @@
 
     activePreviewFrameId = iframe.id;
     previewHasLoaded = true;
+  }
+
+  function beginPreviewFrameActivation(iframe, loadState) {
+    if (!isCurrentPreviewLoadState(iframe, loadState)) return;
+
+    clearPreviewFrameTimers(iframe);
+    applyPreviewFrameLayoutAndScroll(iframe, loadState);
+
+    queuePreviewFrameTimer(iframe, function () {
+      if (!isCurrentPreviewLoadState(iframe, loadState)) return;
+
+      applyPreviewFrameLayoutAndScroll(iframe, loadState);
+      setActivePreviewIframe(iframe);
+      completePreviewRefreshCycle(loadState);
+    }, PREVIEW_CONFIG.previewLoadActivateDelayMs);
+
+    var followUpDelays = PREVIEW_CONFIG.previewLoadFollowUpDelaysMs || [];
+    for (var i = 0; i < followUpDelays.length; i++) {
+      queuePreviewFrameTimer(iframe, createPreviewFollowUpHandler(iframe, loadState), followUpDelays[i]);
+    }
+  }
+
+  function createPreviewFollowUpHandler(iframe, loadState) {
+    return function () {
+      if (!isCurrentPreviewLoadState(iframe, loadState)) return;
+      applyPreviewFrameLayoutAndScroll(iframe, loadState);
+    };
+  }
+
+  function completePreviewRefreshCycle(loadState) {
+    previewRefreshInFlight = false;
+
+    var frames = getPreviewFrames();
+    for (var i = 0; i < frames.length; i++) {
+      if (!loadState || !frames[i]._wiseDocPreviewLoadState) continue;
+      if (frames[i]._wiseDocPreviewLoadState.loadId === loadState.loadId) {
+        frames[i]._wiseDocPreviewAwaitingSwap = false;
+      }
+    }
+
+    if (pendingRefreshReason) {
+      var queued = pendingRefreshReason;
+      pendingRefreshReason = null;
+      if (isDirectRefreshReason(queued)) {
+        refreshPreviewNow(queued);
+      } else {
+        refreshPreviewSoon(queued);
+      }
+    }
+  }
+
+  function isCurrentPreviewLoadState(iframe, loadState) {
+    return !!(
+      iframe &&
+      loadState &&
+      iframe._wiseDocPreviewLoadState &&
+      iframe._wiseDocPreviewLoadState.loadId === loadState.loadId
+    );
+  }
+
+  function findPreviewPageContainer(element) {
+    if (!element) return null;
+
+    var selector = PREVIEW_CONFIG.previewPageSelectors.join(",");
+    if (!selector) return null;
+
+    if (element.closest) {
+      return element.closest(selector);
+    }
+
+    var node = element;
+    while (node && node.nodeType === 1) {
+      if ($(node).is(selector)) return node;
+      node = node.parentNode;
+    }
+
+    return null;
+  }
+
+  function isHeadingLikePreviewElement(element) {
+    if (!element || !element.tagName) return false;
+
+    var tag = String(element.tagName || "").toLowerCase();
+    if (/^h[1-6]$/.test(tag)) return true;
+    if (tag === "strong" || tag === "b") return true;
+    if (String(element.getAttribute("role") || "").toLowerCase() === "heading") return true;
+
+    var className = " " + String(element.className || "").toLowerCase() + " ";
+    return (
+      className.indexOf(" title ") >= 0 ||
+      className.indexOf(" heading ") >= 0 ||
+      className.indexOf(" page-title ") >= 0 ||
+      className.indexOf(" section-title ") >= 0 ||
+      className.indexOf(" dept-title ") >= 0
+    );
+  }
+
+  function buildNodeIdsKey(nodes) {
+    var ids = [];
+
+    for (var i = 0; i < (nodes || []).length; i++) {
+      if (nodes[i] && nodes[i].id) ids.push(nodes[i].id);
+    }
+
+    return ids.join("|");
+  }
+
+  function uniqueTextValues(values) {
+    var seen = {};
+    var out = [];
+
+    for (var i = 0; i < (values || []).length; i++) {
+      var value = normaliseWhitespace(String(values[i] || ""));
+      if (!value || seen[value]) continue;
+
+      seen[value] = true;
+      out.push(value);
+    }
+
+    return out;
+  }
+
+  function normaliseTextValues(values) {
+    var out = [];
+
+    for (var i = 0; i < (values || []).length; i++) {
+      var value = normalisePreviewMatchText(values[i]);
+      if (value) out.push(value);
+    }
+
+    return uniqueTextValues(out);
+  }
+
+  function normalisePreviewMatchText(value) {
+    return normaliseWhitespace(String(value || ""))
+      .replace(/^section\s*:\s*/i, "")
+      .replace(/^dept\s*:\s*/i, "")
+      .toLowerCase();
+  }
+
+  function normaliseWhitespace(value) {
+    return $.trim(String(value || "").replace(/\u00a0/g, " ").replace(/\s+/g, " "));
   }
 
   // =========================================================
@@ -860,7 +1542,7 @@
     if (!target) return;
 
     domObserver = new MutationObserver(function (mutations) {
-      if (!panelOpen || !autoRefreshEnabled) return;
+      if (!panelOpen) return;
 
       for (var i = 0; i < mutations.length; i++) {
         var m = mutations[i];
@@ -868,6 +1550,7 @@
         if (m.type === "childList") {
           if (mutationTouchesTreeNodes(m)) {
             lastSelectedNodeIdsKey = getSelectedNodeIdsKey();
+            if (!autoRefreshEnabled) continue;
             refreshPreviewSoon("dom-child");
             return;
           }
@@ -880,6 +1563,10 @@
           if (nextSelectionKey === lastSelectedNodeIdsKey) continue;
 
           lastSelectedNodeIdsKey = nextSelectionKey;
+          if (!autoRefreshEnabled) {
+            alignActivePreviewToSelection();
+            return;
+          }
           refreshPreviewSoon("selection");
           return;
         }
@@ -942,6 +1629,14 @@
 
   function clearStatus() {
     $("#wise-doc-preview-status").hide().text("");
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
 })();
