@@ -132,52 +132,48 @@
   }
 
   function tryAddPreviewButton() {
-    if ($("#" + TOGGLE_ID).length) return;
+  if ($("#" + TOGGLE_ID).length) return;
 
-    var $host = findToolbarHost();
-    if (!$host.length) {
-      setTimeout(tryAddPreviewButton, 1000);
-      return;
+  var $host = findToolbarHost();
+  if (!$host.length) {
+    setTimeout(tryAddPreviewButton, 1000);
+    return;
+  }
+
+  var $btn = $(
+    '<button id="' + TOGGLE_ID + '" type="button" ' +
+      'class="items_func_btn ui-button ui-widget ui-state-default ui-corner-all ui-button-text-icon-primary" ' +
+      'style="width: 199.2px; margin: 0px 0.5em;" ' +
+      'role="button">' +
+      '<span class="ui-button-icon-primary ui-icon ui-icon-document"></span>' +
+      '<span class="ui-button-text">Preview Doc</span>' +
+    '</button>'
+  );
+
+  $btn.on("click", function () {
+    if (panelOpen) {
+      closePanel();
+    } else {
+      openPanel();
     }
+  });
 
-    var $btn = $(
-      '<button id="' + TOGGLE_ID + '" type="button" style="margin-left:8px;">Preview Doc</button>'
-    );
+  var $gearBtn = $host.children("button.fixed_width").first();
 
-    $btn.on("click", function () {
-      if (panelOpen) {
-        closePanel();
-      } else {
-        openPanel();
-      }
-    });
-
+  if ($gearBtn.length) {
+    $btn.insertBefore($gearBtn);
+  } else {
     $host.append($btn);
   }
+}
 
-  function findToolbarHost() {
-    var selectors = [
-      ".hh_buttons",
-      ".page_buttons",
-      ".ui-buttonset",
-      ".actions",
-      ".header_buttons",
-      ".top_buttons"
-    ];
+function findToolbarHost() {
+  var $host = $("#items_tab > div:first-child");
 
-    for (var i = 0; i < selectors.length; i++) {
-      var $el = $(selectors[i]).first();
-      if ($el.length) return $el;
-    }
+  if ($host.length) return $host;
 
-    // Fallback: place near visible page controls if none matched
-    var $fallback = $("button:visible, a:visible").filter(function () {
-      var txt = $.trim($(this).text()).toLowerCase();
-      return txt === "refresh" || txt === "save" || txt === "print";
-    }).first().parent();
-
-    return $fallback.length ? $fallback : $();
-  }
+  return $();
+}
 
   function openPanel() {
     ensurePreviewPanel();
