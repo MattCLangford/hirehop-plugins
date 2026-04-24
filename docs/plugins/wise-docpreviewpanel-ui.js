@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-24.03"); } catch (e) {}
+  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-24.04"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -13,14 +13,17 @@
   var PANEL_ID = "wise-doc-preview-panel";
   var IFRAME_ID = "wise-doc-preview-iframe";
 
-  var PREVIEW_RATIO = 0.25;            // ~1/4 width
   var MIN_PREVIEW_WIDTH = 360;
-  var REFRESH_DEBOUNCE_MS = 900;
+  var REFRESH_DEBOUNCE_MS = 1500;
 
   var panelOpen = false;
   var autoRefreshEnabled = true;
   var refreshTimer = null;
   var domObserver = null;
+
+  var lastIframeScrollTop = 0;
+  var previewRefreshInFlight = false;
+  var pendingRefreshReason = null;
 
   waitForItemsTabAndInit();
 
@@ -183,7 +186,6 @@
 
   function closeDockedPreview() {
     panelOpen = false;
-
     removeTargetedDomObserver();
 
     var $workspace = $("#" + OUTER_WRAP_ID);
@@ -278,73 +280,37 @@
   // PREVIEW URL
   // =========================================================
   function buildPreviewUrl() {
-  var jobId = getCurrentJobId();
-  if (!jobId) {
-    setStatus("Could not determine the current job ID.");
-    return "";
-  }
-
-  clearStatus();
-
-  var params = new URLSearchParams();
-  params.set("main_id", jobId);
-  params.set("type", "1");
-  params.set("sub_id", "0");
-  params.set("sub_type", "16");
-  params.set("doc", "166");
-  params.set("local", formatLocalDateTime(new Date()));
-  params.set("tz", "Europe/London");
-  params.set("format", "html");
-
-  var selectedIds = getSelectedSupplyingNodeIds();
-  for (var i = 0; i < selectedIds.length; i++) {
-    params.append("params[selected][]", selectedIds[i]);
-  }
-
-  params.set("stn", "0");
-  params.set("or", "0");
-  params.set("nums", "0");
-  params.set("engine", "1");
-  params.set("_ts", String(Date.now()));
-
-  return "/modules/docmaker/merge-html.php?" + params.toString();
-}
-
-  function getSelectedSupplyingNodeIds() {
-  var ids = [];
-
-  // jstree selected nodes usually carry this class
-  $("#items_tab .jstree-clicked").each(function () {
-    var $anchor = $(this);
-    var $li = $anchor.closest("li");
-
-    if ($li.length) {
-      var id = $.trim(String($li.attr("id") || ""));
-      if (id) ids.push(id);
+    var jobId = getCurrentJobId();
+    if (!jobId) {
+      setStatus("Could not determine the current job ID.");
+      return "";
     }
-  });
 
-  // Fallback: active/selected node styles
-  if (!ids.length) {
-    $("#items_tab li.jstree-node.jstree-clicked, #items_tab li.jstree-selected, #items_tab li[aria-selected='true']").each(function () {
-      var id = $.trim(String($(this).attr("id") || ""));
-      if (id) ids.push(id);
-    });
-  }
+    clearStatus();
 
-  // De-duplicate
-  var seen = {};
-  var out = [];
+    var params = new URLSearchParams();
+    params.set("main_id", jobId);
+    params.set("type", "1");
+    params.set("sub_id", "0");
+    params.set("sub_type", "16");
+    params.set("doc", "166");
+    params.set("local", formatLocalDateTime(new Date()));
+    params.set("tz", "Europe/London");
+    params.set("format", "html");
 
-  for (var i = 0; i < ids.length; i++) {
-    if (!seen[ids[i]]) {
-      seen[ids[i]] = true;
-      out.push(ids[i]);
+    var selectedIds = getSelectedSupplyingNodeIds();
+    for (var i = 0; i < selectedIds.length; i++) {
+      params.append("params[selected][]", selectedIds[i]);
     }
-  }
 
-  return out;
-}
+    params.set("stn", "0");
+    params.set("or", "0");
+    params.set("nums", "0");
+    params.set("engine", "1");
+    params.set("_ts", String(Date.now()));
+
+    return "/modules/docmaker/merge-html.php?" + params.toString();
+  }
 
   function getCurrentJobId() {
     var href = window.location.href || "";
@@ -376,6 +342,39 @@
     if (window.job_id && /^\d+$/.test(String(window.job_id))) return String(window.job_id);
 
     return "";
+  }
+
+  function getSelectedSupplyingNodeIds() {
+    var ids = [];
+
+    $("#items_tab .jstree-clicked").each(function () {
+      var $anchor = $(this);
+      var $li = $anchor.closest("li");
+
+      if ($li.length) {
+        var id = $.trim(String($li.attr("id") || ""));
+        if (id) ids.push(id);
+      }
+    });
+
+    if (!ids.length) {
+      $("#items_tab li.jstree-node.jstree-clicked, #items_tab li.jstree-selected, #items_tab li[aria-selected='true']").each(function () {
+        var id = $.trim(String($(this).attr("id") || ""));
+        if (id) ids.push(id);
+      });
+    }
+
+    var seen = {};
+    var out = [];
+
+    for (var i = 0; i < ids.length; i++) {
+      if (!seen[ids[i]]) {
+        seen[ids[i]] = true;
+        out.push(ids[i]);
+      }
+    }
+
+    return out;
   }
 
   function formatLocalDateTime(date) {
@@ -411,14 +410,157 @@
   function refreshPreviewNow(reason) {
     if (!panelOpen) return;
 
+    if (previewRefreshInFlight) {
+      pendingRefreshReason = reason || "queued";
+      return;
+    }
+
     var url = buildPreviewUrl();
     if (!url) return;
 
-    var $iframe = $("#" + IFRAME_ID);
-    if (!$iframe.length) return;
+    var iframe = document.getElementById(IFRAME_ID);
+    if (!iframe) return;
 
-    clearStatus();
-    $iframe.attr("src", url);
+    previewRefreshInFlight = true;
+    captureIframeScroll();
+
+    fetch(url, {
+      credentials: "same-origin"
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error("Preview fetch failed: " + response.status);
+        }
+        return response.text();
+      })
+      .then(function (html) {
+        var patchedHtml = patchPreviewHtml(html);
+
+        var doc = iframe.contentDocument || iframe.contentWindow.document;
+        doc.open();
+        doc.write(patchedHtml);
+        doc.close();
+
+        waitForIframeReadyAndRestoreScroll(iframe, function () {
+          previewRefreshInFlight = false;
+
+          if (pendingRefreshReason) {
+            var queued = pendingRefreshReason;
+            pendingRefreshReason = null;
+            refreshPreviewSoon(queued);
+          }
+        });
+      })
+      .catch(function (err) {
+        previewRefreshInFlight = false;
+        setStatus("Preview failed to refresh.");
+        try { console.warn("[WiseHireHop] preview refresh failed", err); } catch (e) {}
+      });
+  }
+
+  function captureIframeScroll() {
+    var iframe = document.getElementById(IFRAME_ID);
+    if (!iframe) return;
+
+    try {
+      var win = iframe.contentWindow;
+      if (win) {
+        lastIframeScrollTop = win.scrollY || win.pageYOffset || 0;
+        return;
+      }
+    } catch (e) {}
+
+    try {
+      var doc = iframe.contentDocument;
+      if (doc) {
+        lastIframeScrollTop =
+          (doc.documentElement && doc.documentElement.scrollTop) ||
+          (doc.body && doc.body.scrollTop) ||
+          0;
+      }
+    } catch (e) {}
+  }
+
+  function waitForIframeReadyAndRestoreScroll(iframe, done) {
+    var attempts = 0;
+    var maxAttempts = 60;
+
+    function tryRestore() {
+      attempts++;
+
+      try {
+        var doc = iframe.contentDocument;
+        var win = iframe.contentWindow;
+
+        if (doc && doc.body) {
+          if (win && typeof win.scrollTo === "function") {
+            win.scrollTo(0, lastIframeScrollTop || 0);
+          } else {
+            if (doc.documentElement) doc.documentElement.scrollTop = lastIframeScrollTop || 0;
+            if (doc.body) doc.body.scrollTop = lastIframeScrollTop || 0;
+          }
+
+          if (typeof done === "function") done();
+          return;
+        }
+      } catch (e) {}
+
+      if (attempts < maxAttempts) {
+        setTimeout(tryRestore, 50);
+      } else {
+        if (typeof done === "function") done();
+      }
+    }
+
+    setTimeout(tryRestore, 30);
+  }
+
+  function patchPreviewHtml(html) {
+    var injectedCss =
+      '<style id="wise-preview-fit-style">' +
+        'html, body {' +
+          'margin: 0 !important;' +
+          'padding: 0 !important;' +
+          'width: 100% !important;' +
+          'overflow-x: hidden !important;' +
+          'background: #e9eaec !important;' +
+        '}' +
+        'body {' +
+          'box-sizing: border-box !important;' +
+        '}' +
+        '.page, .sheet, .print-page, .paper, .doc-page, [class*="page"] {' +
+          'box-sizing: border-box !important;' +
+          'width: 100% !important;' +
+          'max-width: 100% !important;' +
+          'margin-left: auto !important;' +
+          'margin-right: auto !important;' +
+        '}' +
+        'img, svg, canvas {' +
+          'max-width: 100% !important;' +
+          'height: auto !important;' +
+        '}' +
+        'table {' +
+          'max-width: 100% !important;' +
+        '}' +
+        '[style*="width: 210mm"], [style*="width:210mm"], ' +
+        '[style*="width: 297mm"], [style*="width:297mm"], ' +
+        '[style*="width: 2480px"], [style*="width:2480px"], ' +
+        '[style*="width: 1240px"], [style*="width:1240px"], ' +
+        '[style*="width: 1123px"], [style*="width:1123px"] {' +
+          'width: 100% !important;' +
+          'max-width: 100% !important;' +
+        '}' +
+      '</style>';
+
+    if (/<head[^>]*>/i.test(html)) {
+      return html.replace(/<head([^>]*)>/i, "<head$1>" + injectedCss);
+    }
+
+    if (/<body[^>]*>/i.test(html)) {
+      return html.replace(/<body([^>]*)>/i, "<body$1>" + injectedCss);
+    }
+
+    return injectedCss + html;
   }
 
   // =========================================================
