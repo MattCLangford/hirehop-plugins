@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-24.10"); } catch (e) {}
+  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-24.11"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -58,44 +58,11 @@
       /\/php_functions\/items?(?:_[a-z]+)?(?:\.php)?(?:\?|$)/i
     ],
     selectionAttributeFilter: ["class", "aria-selected"],
-    previewLoadActivateDelayMs: 90,
-    previewLoadFollowUpDelaysMs: [220, 420],
+    previewLoadActivateDelayMs: 180,
+    previewLoadFollowUpDelaysMs: [55, 120],
     widePreviewMinWidth: 620,
     widePreviewWidthPercent: 42,
-    widePreviewScaleThreshold: 0.72,
-    previewPageSelectors: [
-      ".page",
-      ".print-page",
-      ".doc-page",
-      ".paper",
-      ".sheet",
-      "[data-page]"
-    ],
-    previewHeadingSelectors: [
-      "h1",
-      "h2",
-      "h3",
-      "h4",
-      "h5",
-      "h6",
-      ".title",
-      ".heading",
-      ".page-title",
-      ".section-title",
-      ".dept-title",
-      "[role='heading']",
-      "strong",
-      "b"
-    ],
-    previewTextSelectors: [
-      "p",
-      "div",
-      "span",
-      "td",
-      "th",
-      "li"
-    ],
-    previewMaxMatchTextLength: 180
+    widePreviewScaleThreshold: 0.72
   };
 
   var MIN_PREVIEW_WIDTH = PREVIEW_CONFIG.minPreviewWidth;
@@ -106,6 +73,7 @@
   var refreshTimer = null;
   var domObserver = null;
 
+  var lastIframeScrollTop = 0;
   var lastIframeScrollRatio = 0;
   var previewRefreshInFlight = false;
   var pendingRefreshReason = null;
@@ -267,7 +235,7 @@
       '  opacity:0;',
       '  visibility:hidden;',
       '  pointer-events:none;',
-      '  transition:opacity 120ms ease;',
+      '  transition:none;',
       '}',
       '#' + PANEL_ID + ' .wise-doc-preview-frame.is-active {',
       '  opacity:1;',
@@ -732,22 +700,9 @@
     var id = $.trim(String($li.attr("id") || ""));
     if (!id) return null;
 
-    var text = getTreeNodeText($li, $anchorHint);
-    var ancestorTexts = [];
-
-    $li.parents("li.jstree-node").each(function () {
-      var ancestorText = getTreeNodeText($(this));
-      if (ancestorText) ancestorTexts.push(ancestorText);
-    });
-
-    ancestorTexts = uniqueTextValues(ancestorTexts);
-
     return {
       id: id,
-      text: text,
-      normalizedText: normalisePreviewMatchText(text),
-      ancestorTexts: ancestorTexts,
-      normalizedAncestorTexts: normaliseTextValues(ancestorTexts)
+      text: getTreeNodeText($li, $anchorHint)
     };
   }
 
@@ -795,16 +750,6 @@
     ].join("");
   }
 
-  function capturePreviewScrollIntent(reason) {
-    var nodes = getSelectedSupplyingNodes();
-
-    return {
-      reason: reason || "",
-      nodes: nodes,
-      selectedNodeIdsKey: buildNodeIdsKey(nodes)
-    };
-  }
-
   // =========================================================
   // REFRESH
   // =========================================================
@@ -839,8 +784,8 @@
       reason: reason || "",
       documentVariantKey: activeVariant ? activeVariant.key : activeDocumentVariantKey,
       previewMode: getPreviewModeForVariant(activeVariant),
-      scrollRatio: lastIframeScrollRatio,
-      scrollIntent: capturePreviewScrollIntent(reason || "")
+      scrollTop: lastIframeScrollTop,
+      scrollRatio: lastIframeScrollRatio
     };
 
     previewRefreshInFlight = true;
@@ -858,6 +803,7 @@
 
   function captureIframeScrollState(iframe) {
     if (!iframe) {
+      lastIframeScrollTop = 0;
       lastIframeScrollRatio = 0;
       return;
     }
@@ -866,6 +812,7 @@
       var win = iframe.contentWindow;
       var doc = iframe.contentDocument;
       if (!win || !doc) {
+        lastIframeScrollTop = 0;
         lastIframeScrollRatio = 0;
         return;
       }
@@ -876,11 +823,13 @@
         (doc.documentElement.scrollHeight || 0) - (win.innerHeight || 0)
       );
 
+      lastIframeScrollTop = Math.max(0, scrollTop);
       lastIframeScrollRatio = scrollTop / maxScroll;
       if (!isFinite(lastIframeScrollRatio) || lastIframeScrollRatio < 0) {
         lastIframeScrollRatio = 0;
       }
     } catch (e) {
+      lastIframeScrollTop = 0;
       lastIframeScrollRatio = 0;
     }
   }
@@ -897,262 +846,39 @@
   }
 
   function applyPreviewScrollState(iframe, loadState) {
-    if (tryScrollPreviewToSelection(iframe, loadState && loadState.scrollIntent)) {
-      return true;
-    }
-
-    applyPreviewScrollRatio(iframe, loadState ? loadState.scrollRatio : lastIframeScrollRatio);
-    return false;
+    return applyPreviewSavedScrollState(iframe, loadState);
   }
 
-  function applyPreviewScrollRatio(iframe, scrollRatio) {
+  function applyPreviewSavedScrollState(iframe, loadState) {
     try {
       var win = iframe.contentWindow;
       var doc = iframe.contentDocument;
       if (!win || !doc) return;
 
-      var safeRatio = Number(scrollRatio || 0);
-      if (!isFinite(safeRatio) || safeRatio < 0) safeRatio = 0;
+      var scrollTop = Number(loadState && loadState.scrollTop);
+      var scrollRatio = Number(loadState && loadState.scrollRatio);
 
       var maxScroll = Math.max(
         0,
         (doc.documentElement.scrollHeight || 0) - (win.innerHeight || 0)
       );
 
-      win.scrollTo(0, Math.round(maxScroll * safeRatio));
+      var targetTop = 0;
+
+      if (isFinite(scrollTop) && scrollTop > 0) {
+        targetTop = Math.min(scrollTop, maxScroll);
+
+        if (targetTop === maxScroll && isFinite(scrollRatio) && scrollRatio > 0 && scrollTop > maxScroll) {
+          targetTop = Math.round(maxScroll * Math.min(scrollRatio, 1));
+        }
+      } else if (isFinite(scrollRatio) && scrollRatio > 0) {
+        targetTop = Math.round(maxScroll * Math.min(scrollRatio, 1));
+      }
+
+      win.scrollTo(0, Math.max(0, targetTop));
+      return true;
     } catch (e) {}
-  }
-
-  function tryScrollPreviewToSelection(iframe, scrollIntent) {
-    var match = findPreviewSelectionMatch(iframe, scrollIntent);
-    if (!match) return false;
-
-    scrollPreviewIframeToTop(iframe, match.top);
-    return true;
-  }
-
-  function alignActivePreviewToSelection() {
-    var iframe = getActivePreviewIframe();
-    if (!iframe || !iframe.contentDocument) return false;
-
-    return tryScrollPreviewToSelection(iframe, capturePreviewScrollIntent("selection"));
-  }
-
-  function scrollPreviewIframeToTop(iframe, top) {
-    try {
-      var win = iframe.contentWindow;
-      if (!win) return;
-
-      var safeTop = Math.max(0, Math.round(Number(top || 0)));
-      win.scrollTo(0, safeTop);
-    } catch (e) {}
-  }
-
-  function findPreviewSelectionMatch(iframe, scrollIntent) {
-    if (!scrollIntent || !scrollIntent.nodes || !scrollIntent.nodes.length) return null;
-
-    var doc = iframe.contentDocument;
-    if (!doc || !doc.body) return null;
-
-    var directMatch = findPreviewDirectNodeMatch(doc, scrollIntent.nodes);
-    if (directMatch) {
-      return buildPreviewSelectionMatch(iframe, directMatch.element, directMatch.page, directMatch.node, directMatch.score);
-    }
-
-    var elements = getPreviewSearchElements(doc);
-    var best = null;
-
-    for (var i = 0; i < elements.length; i++) {
-      var element = elements[i];
-      var elementText = normalisePreviewMatchText(getPreviewElementMatchText(element));
-      if (!elementText) continue;
-
-      var page = findPreviewPageContainer(element);
-      var pageText = page ? normalisePreviewMatchText(getPreviewElementMatchText(page)) : "";
-
-      for (var j = 0; j < scrollIntent.nodes.length; j++) {
-        var node = scrollIntent.nodes[j];
-        var score = scorePreviewElementMatch(element, elementText, pageText, node, j);
-        if (score <= 0) continue;
-
-        if (!best || score > best.score) {
-          best = {
-            element: element,
-            page: page,
-            node: node,
-            score: score
-          };
-        }
-      }
-    }
-
-    if (!best) return null;
-
-    return buildPreviewSelectionMatch(iframe, best.element, best.page, best.node, best.score);
-  }
-
-  function findPreviewDirectNodeMatch(doc, nodes) {
-    for (var i = 0; i < nodes.length; i++) {
-      var node = nodes[i];
-      if (!node || !node.id) continue;
-
-      var attrMatch = findPreviewNodeByItemId(doc, node.id);
-      if (attrMatch) {
-        return {
-          element: attrMatch,
-          page: findPreviewPageContainer(attrMatch),
-          node: node,
-          score: 980
-        };
-      }
-
-      var idMatch = doc.getElementById(node.id);
-      if (idMatch) {
-        return {
-          element: idMatch,
-          page: findPreviewPageContainer(idMatch),
-          node: node,
-          score: 1000
-        };
-      }
-
-      if (doc.getElementsByName) {
-        var nameMatches = doc.getElementsByName(node.id);
-        if (nameMatches && nameMatches.length) {
-          return {
-            element: nameMatches[0],
-            page: findPreviewPageContainer(nameMatches[0]),
-            node: node,
-            score: 950
-          };
-        }
-      }
-    }
-
-    return null;
-  }
-
-  function findPreviewNodeByItemId(doc, nodeId) {
-    if (!doc || !nodeId) return null;
-
-    var selectors = [
-      "[data-item-id='" + escapeCssValue(nodeId) + "']",
-      "[data-hh-item-id='" + escapeCssValue(nodeId) + "']",
-      "[data-node-id='" + escapeCssValue(nodeId) + "']",
-      "[data-id='" + escapeCssValue(nodeId) + "']"
-    ];
-
-    for (var i = 0; i < selectors.length; i++) {
-      var match = doc.querySelector(selectors[i]);
-      if (match) return match;
-    }
-
-    return null;
-  }
-
-  function getPreviewSearchElements(doc) {
-    var selectors = PREVIEW_CONFIG.previewHeadingSelectors.concat(PREVIEW_CONFIG.previewTextSelectors);
-    var query = selectors.join(",");
-    if (!query) return [];
-
-    var raw = doc.querySelectorAll(query);
-    var out = [];
-    var token = "wise-doc-preview-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
-
-    for (var i = 0; i < raw.length; i++) {
-      var el = raw[i];
-      if (!el || el.nodeType !== 1) continue;
-      if (el._wiseDocPreviewSeenToken === token) continue;
-
-      el._wiseDocPreviewSeenToken = token;
-
-      var text = getPreviewElementMatchText(el);
-      if (!text || text.length < 2) continue;
-
-      if (!isHeadingLikePreviewElement(el)) {
-        if (text.length > PREVIEW_CONFIG.previewMaxMatchTextLength) continue;
-        if ((el.children && el.children.length > 8) || (el.childElementCount && el.childElementCount > 8)) continue;
-      }
-
-      out.push(el);
-    }
-
-    return out;
-  }
-
-  function getPreviewElementMatchText(el) {
-    if (!el) return "";
-    return normaliseWhitespace(String(el.innerText || el.textContent || ""));
-  }
-
-  function scorePreviewElementMatch(element, elementText, pageText, node, nodeIndex) {
-    if (!node || !node.normalizedText || !elementText) return 0;
-
-    var score = 0;
-    var nodeText = node.normalizedText;
-
-    if (elementText === nodeText) {
-      score = 420;
-    } else if (elementText.indexOf(nodeText) === 0 && nodeText.length >= 3) {
-      score = 320;
-    } else if (nodeText.length >= 4 && elementText.indexOf(nodeText) >= 0) {
-      score = 260;
-    } else if (elementText.length >= 8 && nodeText.indexOf(elementText) >= 0) {
-      score = 180;
-    } else {
-      return 0;
-    }
-
-    if (isHeadingLikePreviewElement(element)) {
-      score += 50;
-    }
-
-    if (pageText && node.normalizedAncestorTexts && node.normalizedAncestorTexts.length) {
-      for (var i = 0; i < node.normalizedAncestorTexts.length && i < 2; i++) {
-        if (pageText.indexOf(node.normalizedAncestorTexts[i]) >= 0) {
-          score += 25 - (i * 10);
-        }
-      }
-    }
-
-    score -= nodeIndex * 20;
-
-    if (elementText.length > nodeText.length + 80) {
-      score -= 25;
-    }
-
-    return score;
-  }
-
-  function buildPreviewSelectionMatch(iframe, element, page, node, score) {
-    var top = getPreviewElementScrollTop(iframe, page || element);
-
-    if (!page) {
-      top = Math.max(0, top - 24);
-    } else {
-      top = Math.max(0, top - 8);
-    }
-
-    return {
-      element: element,
-      page: page,
-      node: node,
-      top: top,
-      score: score || 0
-    };
-  }
-
-  function getPreviewElementScrollTop(iframe, element) {
-    try {
-      var win = iframe.contentWindow;
-      if (!win || !element || !element.getBoundingClientRect) return 0;
-
-      var rect = element.getBoundingClientRect();
-      var currentTop = win.scrollY || iframe.contentDocument.documentElement.scrollTop || iframe.contentDocument.body.scrollTop || 0;
-      return currentTop + rect.top;
-    } catch (e) {
-      return 0;
-    }
+    return false;
   }
 
   function ensurePreviewStyleTag(doc, previewMode) {
@@ -1551,102 +1277,6 @@
     );
   }
 
-  function findPreviewPageContainer(element) {
-    if (!element) return null;
-
-    var selector = PREVIEW_CONFIG.previewPageSelectors.join(",");
-    if (!selector) return null;
-
-    if (element.closest) {
-      return element.closest(selector);
-    }
-
-    var node = element;
-    while (node && node.nodeType === 1) {
-      if ($(node).is(selector)) return node;
-      node = node.parentNode;
-    }
-
-    return null;
-  }
-
-  function isHeadingLikePreviewElement(element) {
-    if (!element || !element.tagName) return false;
-
-    var tag = String(element.tagName || "").toLowerCase();
-    if (/^h[1-6]$/.test(tag)) return true;
-    if (tag === "strong" || tag === "b") return true;
-    if (String(element.getAttribute("role") || "").toLowerCase() === "heading") return true;
-
-    var className = " " + String(element.className || "").toLowerCase() + " ";
-    return (
-      className.indexOf(" title ") >= 0 ||
-      className.indexOf(" heading ") >= 0 ||
-      className.indexOf(" page-title ") >= 0 ||
-      className.indexOf(" section-title ") >= 0 ||
-      className.indexOf(" dept-title ") >= 0
-    );
-  }
-
-  function buildNodeIdsKey(nodes) {
-    var ids = [];
-
-    for (var i = 0; i < (nodes || []).length; i++) {
-      if (nodes[i] && nodes[i].id) ids.push(nodes[i].id);
-    }
-
-    return ids.join("|");
-  }
-
-  function uniqueTextValues(values) {
-    var seen = {};
-    var out = [];
-
-    for (var i = 0; i < (values || []).length; i++) {
-      var value = normaliseWhitespace(String(values[i] || ""));
-      if (!value || seen[value]) continue;
-
-      seen[value] = true;
-      out.push(value);
-    }
-
-    return out;
-  }
-
-  function normaliseTextValues(values) {
-    var out = [];
-
-    for (var i = 0; i < (values || []).length; i++) {
-      var value = normalisePreviewMatchText(values[i]);
-      if (value) out.push(value);
-    }
-
-    return uniqueTextValues(out);
-  }
-
-  function normalisePreviewMatchText(value) {
-    var text = normaliseWhitespace(String(value || ""));
-    var changed = true;
-
-    while (changed) {
-      changed = false;
-
-      if (/^\/\/\s*/.test(text)) {
-        text = text.replace(/^\/\/\s*/, "");
-        changed = true;
-      }
-
-      if (/^\$\s*/.test(text)) {
-        text = text.replace(/^\$\s*/, "");
-        changed = true;
-      }
-    }
-
-    return text
-      .replace(/^(?:section|dept|heading|subheading)\s*:\s*/i, "")
-      .toLowerCase();
-  }
-
   function normaliseWhitespace(value) {
     return $.trim(String(value || "").replace(/\u00a0/g, " ").replace(/\s+/g, " "));
   }
@@ -1757,10 +1387,7 @@
           if (nextSelectionKey === lastSelectedNodeIdsKey) continue;
 
           lastSelectedNodeIdsKey = nextSelectionKey;
-          if (!autoRefreshEnabled) {
-            alignActivePreviewToSelection();
-            return;
-          }
+          if (!autoRefreshEnabled) continue;
           refreshPreviewSoon("selection");
           return;
         }
@@ -1831,10 +1458,6 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
-  }
-
-  function escapeCssValue(value) {
-    return String(value || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   }
 
 })();
