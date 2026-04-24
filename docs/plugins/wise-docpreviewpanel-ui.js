@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-24.06"); } catch (e) {}
+  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-24.07"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -15,8 +15,31 @@
   var IFRAME_PRIMARY_ID = "wise-doc-preview-iframe-primary";
   var IFRAME_SECONDARY_ID = "wise-doc-preview-iframe-secondary";
 
-  var MIN_PREVIEW_WIDTH = 360;
-  var REFRESH_DEBOUNCE_MS = 1500;
+  var PREVIEW_CONFIG = {
+    minPreviewWidth: 360,
+    refreshDebounceMs: 1500,
+    timezone: "Europe/London",
+    mergeHtmlPath: "/modules/docmaker/merge-html.php",
+    staticParams: {
+      type: "1",
+      sub_id: "0",
+      sub_type: "16",
+      doc: "166",
+      format: "html",
+      stn: "0",
+      or: "0",
+      nums: "0",
+      engine: "1"
+    },
+    refreshUrlPatterns: [
+      /\/php_functions\/items_(?:save|delete|sort|move|copy|duplicate|load)(?:\.php)?(?:\?|$)/i,
+      /\/php_functions\/items?(?:_[a-z]+)?(?:\.php)?(?:\?|$)/i
+    ],
+    selectionAttributeFilter: ["class", "aria-selected"]
+  };
+
+  var MIN_PREVIEW_WIDTH = PREVIEW_CONFIG.minPreviewWidth;
+  var REFRESH_DEBOUNCE_MS = PREVIEW_CONFIG.refreshDebounceMs;
 
   var panelOpen = false;
   var autoRefreshEnabled = true;
@@ -234,6 +257,7 @@
     activePreviewFrameId = IFRAME_PRIMARY_ID;
     previewHasLoaded = false;
     lastSelectedNodeIdsKey = "";
+    resetPreviewFrameState();
     removeTargetedDomObserver();
 
     var $workspace = $("#" + OUTER_WRAP_ID);
@@ -349,26 +373,24 @@
 
     var params = new URLSearchParams();
     params.set("main_id", jobId);
-    params.set("type", "1");
-    params.set("sub_id", "0");
-    params.set("sub_type", "16");
-    params.set("doc", "166");
+
+    var staticParamKeys = Object.keys(PREVIEW_CONFIG.staticParams);
+    for (var k = 0; k < staticParamKeys.length; k++) {
+      var key = staticParamKeys[k];
+      params.set(key, PREVIEW_CONFIG.staticParams[key]);
+    }
+
     params.set("local", formatLocalDateTime(new Date()));
-    params.set("tz", "Europe/London");
-    params.set("format", "html");
+    params.set("tz", PREVIEW_CONFIG.timezone);
 
     var selectedIds = getSelectedSupplyingNodeIds();
     for (var i = 0; i < selectedIds.length; i++) {
       params.append("params[selected][]", selectedIds[i]);
     }
 
-    params.set("stn", "0");
-    params.set("or", "0");
-    params.set("nums", "0");
-    params.set("engine", "1");
     params.set("_ts", String(Date.now()));
 
-    return "/modules/docmaker/merge-html.php?" + params.toString();
+    return PREVIEW_CONFIG.mergeHtmlPath + "?" + params.toString();
   }
 
   function getCurrentJobId() {
@@ -676,6 +698,14 @@
     return frames;
   }
 
+  function resetPreviewFrameState() {
+    var frames = getPreviewFrames();
+
+    for (var i = 0; i < frames.length; i++) {
+      frames[i]._wiseDocPreviewAwaitingSwap = false;
+    }
+  }
+
   function getActivePreviewIframe() {
     var iframe = document.getElementById(activePreviewFrameId);
     if (iframe) return iframe;
@@ -807,16 +837,13 @@
 
     url = String(url || "");
 
-    return (
-      /\/php_functions\/items_save\.php/i.test(url) ||
-      /\/php_functions\/items_delete/i.test(url) ||
-      /\/php_functions\/items_sort/i.test(url) ||
-      /\/php_functions\/items_move/i.test(url) ||
-      /\/php_functions\/items_copy/i.test(url) ||
-      /\/php_functions\/items_duplicate/i.test(url) ||
-      /\/php_functions\/items_load/i.test(url) ||
-      /\/php_functions\/item/i.test(url)
-    );
+    for (var i = 0; i < PREVIEW_CONFIG.refreshUrlPatterns.length; i++) {
+      if (PREVIEW_CONFIG.refreshUrlPatterns[i].test(url)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   // =========================================================
@@ -863,7 +890,7 @@
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["class", "aria-selected"]
+      attributeFilter: PREVIEW_CONFIG.selectionAttributeFilter
     });
 
     lastSelectedNodeIdsKey = getSelectedNodeIdsKey();
