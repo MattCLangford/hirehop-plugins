@@ -1,21 +1,28 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-23.09"); } catch (e) {}
+  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-24.10"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
 
   var applyTimer = null;
-  var PENDING_PARENT_SAVE_PLAN = null;
+  var PENDING_PARENT_SAVE_PLANS = [];
+  var NEXT_PENDING_PARENT_SAVE_PLAN_ID = 1;
   var DIRECT_CREATE_QUEUE = [];
   var DIRECT_CREATE_RUNNING = false;
+  var ACTIVE_CHILD_CREATE_SIGNATURES = {};
+  var RECENT_CHILD_CREATE_SIGNATURES = {};
 
-  var AUTO_CREATE_SECTION_NAMES = {
-    "details": true,
-    "suffix": true,
-    "proposal summary": true,
-    "labour & general requirements": true
+  var PENDING_PARENT_SAVE_PLAN_TTL_MS = 30000;
+  var RECENT_CHILD_CREATE_TTL_MS = 120000;
+  var HEADING_SAVE_FINGERPRINT_FIELDS = ["id", "kind", "parent", "job", "name", "desc", "memo", "flag"];
+  var HEADING_SAVE_REQUIRED_FINGERPRINT_FIELDS = {
+    id: true,
+    kind: true,
+    parent: true,
+    job: true,
+    name: true
   };
 
   // =========================================================
@@ -49,17 +56,17 @@
       ]
     },
     {
-  key: "thank_you_variant",
-  renderType: "dept",
-  name: "thank you",
-  parentRenderType: "section",
-  parentName: "suffix",
-  label: "Thank you page style",
-  options: [
-    { value: "none", label: "Standard", suffix: "" },
-    { value: "alt",  label: "Alt",      suffix: " -Alt" }
-  ]
-}
+      key: "thank_you_variant",
+      renderType: "dept",
+      name: "thank you",
+      parentRenderType: "section",
+      parentName: "suffix",
+      label: "Thank you page style",
+      options: [
+        { value: "none", label: "Standard", suffix: "" },
+        { value: "alt",  label: "Alt",      suffix: " -Alt" }
+      ]
+    }
   ];
 
   // =========================================================
@@ -67,7 +74,7 @@
   // =========================================================
   var PAGE_TEMPLATES = [
     { key: "section_hero", renderType: "section", name: "Hero", parentRenderType: null, parentName: null, sectionRank: 1, deptRank: null },
-    { key: "section_details", renderType: "section", name: "Details", parentRenderType: null, parentName: null, sectionRank: 2, deptRank: null },
+    { key: "section_details", renderType: "section", name: "Details", autoCreateChildren: true, parentRenderType: null, parentName: null, sectionRank: 2, deptRank: null },
 
     { key: "dept_experience_expertise", renderType: "dept", name: "Experience<br>& Expertise", parentRenderType: "section", parentName: "Details", sectionRank: 2, deptRank: 1 },
     { key: "dept_fpv_proven_process", renderType: "dept", name: "FPV Proven Process", parentRenderType: "section", parentName: "Details", sectionRank: 2, deptRank: 2 },
@@ -82,14 +89,14 @@
     { key: "section_area", renderType: "section", name: "Area", parentRenderType: null, parentName: null, sectionRank: 4, deptRank: null },
     { key: "dept_department_area", renderType: "dept", name: "Department", parentRenderType: "section", parentName: "Area", sectionRank: 4, deptRank: 1 },
 
-    { key: "section_labour_general_requirements", renderType: "section", name: "Labour & General Requirements", parentRenderType: null, parentName: null, sectionRank: 5, deptRank: null },
+    { key: "section_labour_general_requirements", renderType: "section", name: "Labour & General Requirements", autoCreateChildren: true, parentRenderType: null, parentName: null, sectionRank: 5, deptRank: null },
     { key: "dept_labour", renderType: "dept", name: "Labour", parentRenderType: "section", parentName: "Labour & General Requirements", sectionRank: 5, deptRank: 1 },
     { key: "dept_general_requirements", renderType: "dept", name: "General Requirements", parentRenderType: "section", parentName: "Labour & General Requirements", sectionRank: 5, deptRank: 2 },
 
-    { key: "section_proposal_summary", renderType: "section", name: "Proposal Summary", parentRenderType: null, parentName: null, sectionRank: 6, deptRank: null },
+    { key: "section_proposal_summary", renderType: "section", name: "Proposal Summary", autoCreateChildren: true, parentRenderType: null, parentName: null, sectionRank: 6, deptRank: null },
     { key: "dept_project_total", renderType: "dept", name: "Project Total", parentRenderType: "section", parentName: "Proposal Summary", sectionRank: 6, deptRank: 1 },
 
-    { key: "section_suffix", renderType: "section", name: "Suffix", parentRenderType: null, parentName: null, sectionRank: 7, deptRank: null },
+    { key: "section_suffix", renderType: "section", name: "Suffix", autoCreateChildren: true, parentRenderType: null, parentName: null, sectionRank: 7, deptRank: null },
     { key: "dept_critical_path", renderType: "dept", name: "Critical Path", parentRenderType: "section", parentName: "Suffix", sectionRank: 7, deptRank: 1 },
     { key: "dept_sustainability", renderType: "dept", name: "Sustainability", parentRenderType: "section", parentName: "Suffix", sectionRank: 7, deptRank: 2 },
     { key: "dept_about_us", renderType: "dept", name: "About Us", parentRenderType: "section", parentName: "Suffix", sectionRank: 7, deptRank: 2 },
@@ -101,6 +108,8 @@
     { key: "section_additional_options", renderType: "section", name: "Additional Options", parentRenderType: null, parentName: null, sectionRank: 9, deptRank: null },
     { key: "dept_department_additional_options", renderType: "dept", name: "Department", parentRenderType: "section", parentName: "Additional Options", sectionRank: 9, deptRank: 1 }
   ];
+
+  var TEMPLATE_INDEX_BY_KEY = buildTemplateIndex(PAGE_TEMPLATES);
 
   // =========================================================
   // BOOTSTRAP
@@ -140,11 +149,13 @@
     }
   });
 
-  var obs = new MutationObserver(function () {
-    scheduleApply();
+  var obs = new MutationObserver(function (mutations) {
+    if (mutationsMayAffectHeadingDialogs(mutations)) {
+      scheduleApply();
+    }
   });
 
-  obs.observe(document.documentElement, {
+  obs.observe(document.body || document.documentElement, {
     subtree: true,
     childList: true,
     attributes: true,
@@ -195,6 +206,47 @@
     refreshAutoCreateState($dialog, ui);
   }
 
+  function mutationsMayAffectHeadingDialogs(mutations) {
+    if (!mutations || !mutations.length) return false;
+
+    for (var i = 0; i < mutations.length; i++) {
+      var mutation = mutations[i];
+
+      if (mutation.type === "attributes") {
+        if (isWithinHeadingDialogContext(mutation.target)) return true;
+        continue;
+      }
+
+      if (mutation.type === "childList") {
+        if (nodeListTouchesHeadingDialog(mutation.addedNodes)) return true;
+        if (nodeListTouchesHeadingDialog(mutation.removedNodes)) return true;
+      }
+    }
+
+    return false;
+  }
+
+  function nodeListTouchesHeadingDialog(nodes) {
+    if (!nodes || !nodes.length) return false;
+
+    for (var i = 0; i < nodes.length; i++) {
+      if (isWithinHeadingDialogContext(nodes[i])) return true;
+    }
+
+    return false;
+  }
+
+  function isWithinHeadingDialogContext(node) {
+    if (!node || node.nodeType !== 1) return false;
+
+    var $node = $(node);
+    return (
+      $node.is(".ui-dialog, .ui-dialog-content, form.edit_type") ||
+      !!$node.closest(".ui-dialog, .ui-dialog-content").length ||
+      !!$node.find(".ui-dialog, .ui-dialog-content, form.edit_type").length
+    );
+  }
+
   // =========================================================
   // DIALOG / FORM HELPERS
   // =========================================================
@@ -231,9 +283,14 @@
   }
 
   function getSaveButton($dialog) {
-    return $dialog.find(".ui-dialog-buttonpane button").filter(function () {
-      return $.trim($(this).text()).toLowerCase() === "save";
+    var $buttons = $dialog.find(".ui-dialog-buttonpane button, .ui-dialog-buttonpane input[type='button'], .ui-dialog-buttonpane input[type='submit']");
+    var $exact = $buttons.filter(function () {
+      return /^save\b/i.test($.trim($(this).text() || $(this).val() || ""));
     }).first();
+
+    if ($exact.length) return $exact;
+
+    return $buttons.filter("[type='submit']").first();
   }
 
   function getParentSelect($dialog) {
@@ -450,10 +507,10 @@
       $parentSelect.data("wiseDocgenBound", "1");
     }
 
-    bindSaveAssurance($dialog, $actualNameInput, ui);
+    bindSaveAssurance($form, $dialog, $actualNameInput, ui);
   }
 
-  function bindSaveAssurance($dialog, $actualNameInput, ui) {
+  function bindSaveAssurance($form, $dialog, $actualNameInput, ui) {
     var $saveButton = getSaveButton($dialog);
     if (!$saveButton.length) return;
 
@@ -467,14 +524,14 @@
         refreshModifierState($dialog, ui, ui.$modifier.val() || "none");
         refreshAutoCreateState($dialog, ui);
         syncActualFromUi($dialog, $actualNameInput, ui);
-        maybeStorePendingAutoChildPlan($dialog, $actualNameInput, ui);
+        maybeStorePendingAutoChildPlan($form, $dialog, $actualNameInput, ui);
       }
 
       btn.addEventListener("pointerdown", ensureLatestActualValue, true);
       btn.addEventListener("mousedown", ensureLatestActualValue, true);
       btn.addEventListener("click", ensureLatestActualValue, true);
 
-      var formEl = $actualNameInput.closest("form").get(0);
+      var formEl = ($form && $form.length ? $form.get(0) : null) || $actualNameInput.closest("form").get(0);
       if (formEl && !formEl._wiseDocgenSubmitBound) {
         formEl.addEventListener("submit", ensureLatestActualValue, true);
         formEl._wiseDocgenSubmitBound = true;
@@ -518,8 +575,9 @@
 
   function getDefaultDeptTemplatesForSectionName(sectionName) {
     var cleanSectionName = normaliseText(sectionName);
+    var sectionTemplate = findRootSectionTemplateByName(cleanSectionName);
 
-    if (!AUTO_CREATE_SECTION_NAMES[cleanSectionName]) {
+    if (!sectionTemplate || !sectionTemplate.autoCreateChildren) {
       return [];
     }
 
@@ -530,28 +588,39 @@
     }).sort(sortTemplates);
   }
 
-  function maybeStorePendingAutoChildPlan($dialog, $actualNameInput, ui) {
+  function maybeStorePendingAutoChildPlan($form, $dialog, $actualNameInput, ui) {
+    var dialogInstanceId = getDialogInstanceId($dialog);
+
     if (!isAutoCreateEligible($dialog, ui)) {
       console.log("[WiseHireHop] auto-create not eligible for this heading");
-      PENDING_PARENT_SAVE_PLAN = null;
+      clearPendingParentSavePlansForDialog(dialogInstanceId);
       return;
     }
 
     if (!ui.$autoChildren.prop("checked")) {
       console.log("[WiseHireHop] auto-create checkbox not ticked");
-      PENDING_PARENT_SAVE_PLAN = null;
+      clearPendingParentSavePlansForDialog(dialogInstanceId);
       return;
     }
 
     var childTemplates = getDefaultDeptTemplatesForSectionName(ui.$proxy.val() || "");
     if (!childTemplates.length) {
       console.log("[WiseHireHop] no default child dept templates found for section:", ui.$proxy.val() || "");
-      PENDING_PARENT_SAVE_PLAN = null;
+      clearPendingParentSavePlansForDialog(dialogInstanceId);
       return;
     }
 
-    PENDING_PARENT_SAVE_PLAN = {
+    var fingerprint = captureHeadingSaveFingerprint($form);
+    fingerprint.name = $actualNameInput.val() || fingerprint.name || "";
+    if (!("kind" in fingerprint)) fingerprint.kind = "0";
+    if (!("id" in fingerprint)) fingerprint.id = "0";
+    if (!("parent" in fingerprint)) fingerprint.parent = "0";
+
+    var plan = {
+      planId: "wise-docgen-plan-" + (NEXT_PENDING_PARENT_SAVE_PLAN_ID++),
+      dialogInstanceId: dialogInstanceId,
       parentStoredValue: $actualNameInput.val() || "",
+      requestFingerprint: fingerprint,
       sectionName: ui.$proxy.val() || "",
       childTemplates: childTemplates.map(function (tpl) {
         return {
@@ -565,7 +634,8 @@
       armedAt: Date.now()
     };
 
-    console.log("[WiseHireHop] pending auto-child plan stored:", PENDING_PARENT_SAVE_PLAN);
+    upsertPendingParentSavePlan(plan);
+    console.log("[WiseHireHop] pending auto-child plan stored:", plan);
   }
 
   function installItemsSaveInterceptor() {
@@ -613,36 +683,25 @@
   }
 
   function handleItemsSaveResponse(url, body, status, responseText) {
-    if (!PENDING_PARENT_SAVE_PLAN) return;
+    if (status && Number(status) >= 400) return;
+
+    prunePendingParentSavePlans();
+    if (!PENDING_PARENT_SAVE_PLANS.length) return;
 
     var req = parseFormEncodedBody(body);
-
-    if (String(req.kind || "") !== "0") return;
-    if (String(req.id || "") !== "0") return;
-    if (String(req.parent || "") !== "0") return;
-
-    if (normaliseText(req.name || "") !== normaliseText(PENDING_PARENT_SAVE_PLAN.parentStoredValue || "")) {
-      return;
-    }
-
-    if ((Date.now() - (PENDING_PARENT_SAVE_PLAN.armedAt || 0)) > 30000) {
-      console.warn("[WiseHireHop] pending auto-child plan expired");
-      PENDING_PARENT_SAVE_PLAN = null;
-      return;
-    }
+    var plan = findMatchingPendingParentSavePlan(req);
+    if (!plan) return;
 
     var json = tryParseJson(responseText);
     var parentId = getCreatedHeadingIdFromResponse(json);
 
     if (!parentId) {
       console.warn("[WiseHireHop] could not read created parent heading ID from items_save response", json);
-      PENDING_PARENT_SAVE_PLAN = null;
+      removePendingParentSavePlan(plan.planId);
       return;
     }
 
-    var plan = PENDING_PARENT_SAVE_PLAN;
-    PENDING_PARENT_SAVE_PLAN = null;
-
+    removePendingParentSavePlan(plan.planId);
     plan.parentId = String(parentId);
     plan.job = String(req.job || "");
 
@@ -715,16 +774,22 @@
         if (!plan) continue;
 
         console.log("[WiseHireHop] running direct child create plan for:", plan.sectionName, plan);
+        var didCreateChildren = false;
 
         for (var i = 0; i < plan.childTemplates.length; i++) {
           try {
-            await createHeadingDirect(plan, plan.childTemplates[i]);
+            var result = await createHeadingDirect(plan, plan.childTemplates[i]);
+            if (result && result.created) {
+              didCreateChildren = true;
+            }
           } catch (err) {
             console.warn("[WiseHireHop] direct child create failed for:", plan.childTemplates[i], err);
           }
         }
 
-        triggerSupplyingRefresh();
+        if (didCreateChildren) {
+          triggerSupplyingRefresh();
+        }
       }
     } finally {
       DIRECT_CREATE_RUNNING = false;
@@ -732,6 +797,25 @@
   }
 
   async function createHeadingDirect(plan, childTemplate) {
+    if (!plan || !plan.parentId || !plan.job) {
+      throw new Error("child create plan is missing required parent/job identifiers");
+    }
+
+    pruneRecentChildCreateSignatures();
+
+    var createSignature = getChildCreateSignature(plan, childTemplate);
+    if (ACTIVE_CHILD_CREATE_SIGNATURES[createSignature]) {
+      console.warn("[WiseHireHop] skipping duplicate in-flight child create:", createSignature);
+      return { created: false, skipped: true, reason: "in-flight" };
+    }
+
+    if (RECENT_CHILD_CREATE_SIGNATURES[createSignature]) {
+      console.warn("[WiseHireHop] skipping recently-created child duplicate:", createSignature);
+      return { created: false, skipped: true, reason: "recent" };
+    }
+
+    ACTIVE_CHILD_CREATE_SIGNATURES[createSignature] = Date.now();
+
     var payload = {
       parent: String(plan.parentId || "0"),
       flag: "0",
@@ -749,26 +833,40 @@
       ignore: "0"
     };
 
-    console.log("[WiseHireHop] creating child heading via HTTP:", payload);
+    try {
+      console.log("[WiseHireHop] creating child heading via HTTP:", payload);
 
-    var response = await fetch("/php_functions/items_save.php", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
-      },
-      body: new URLSearchParams(payload).toString()
-    });
+      var response = await fetch("/php_functions/items_save.php", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+        },
+        body: new URLSearchParams(payload).toString()
+      });
 
-    var text = await response.text();
-    var json = tryParseJson(text);
+      var text = await response.text();
+      var json = tryParseJson(text);
 
-    if (!response.ok) {
-      throw new Error("items_save failed with status " + response.status + " :: " + text);
+      if (!response.ok) {
+        throw new Error("items_save failed with status " + response.status + " :: " + text);
+      }
+
+      var createdId = getCreatedHeadingIdFromResponse(json);
+      if (!createdId) {
+        throw new Error("items_save response missing created heading ID :: " + text);
+      }
+
+      markRecentChildCreateSignature(createSignature, createdId);
+      console.log("[WiseHireHop] child heading created:", json);
+      return {
+        created: true,
+        id: String(createdId),
+        json: json
+      };
+    } finally {
+      delete ACTIVE_CHILD_CREATE_SIGNATURES[createSignature];
     }
-
-    console.log("[WiseHireHop] child heading created:", json);
-    return json;
   }
 
   function composeStoredHeadingFromTemplate(template) {
@@ -804,16 +902,7 @@
   }
 
   function triggerSupplyingRefresh() {
-    var $btn = $('button, a, [role="button"], input[type="button"], input[type="submit"]')
-      .filter(":visible")
-      .filter(function () {
-        return $(this).closest(".ui-dialog").length === 0;
-      })
-      .filter(function () {
-        var txt = $.trim($(this).text() || $(this).val() || $(this).attr("title") || $(this).attr("aria-label") || "").toLowerCase();
-        return txt === "refresh";
-      })
-      .first();
+    var $btn = findSupplyingRefreshControl();
 
     if ($btn.length) {
       console.log("[WiseHireHop] refreshing supplying list");
@@ -821,6 +910,33 @@
     } else {
       console.warn("[WiseHireHop] could not find Refresh button");
     }
+  }
+
+  function findSupplyingRefreshControl() {
+    var selector = 'button, a, [role="button"], input[type="button"], input[type="submit"]';
+    var scopes = [
+      $("#items_tab > div:first-child").get(0),
+      $("#items_tab").get(0),
+      document.body
+    ];
+
+    for (var i = 0; i < scopes.length; i++) {
+      if (!scopes[i]) continue;
+
+      var $match = $(scopes[i]).find(selector).filter(":visible").filter(function () {
+        if ($(this).closest(".ui-dialog").length) return false;
+        return isRefreshControl($(this));
+      }).first();
+
+      if ($match.length) return $match;
+    }
+
+    return $();
+  }
+
+  function isRefreshControl($el) {
+    var txt = $.trim($el.text() || $el.val() || $el.attr("title") || $el.attr("aria-label") || "");
+    return /^refresh\b/i.test(txt);
   }
 
   // =========================================================
@@ -1087,7 +1203,7 @@
 
     if (!parentName && parentRenderType === "normal") {
       return PAGE_TEMPLATES.filter(function (tpl) {
-        return tpl.renderType === "section" && !tpl.parentRenderType && !tpl.parentName;
+        return isRootSectionTemplate(tpl);
       }).sort(sortTemplates);
     }
 
@@ -1142,10 +1258,7 @@
   }
 
   function findTemplateByKey(key) {
-    for (var i = 0; i < PAGE_TEMPLATES.length; i++) {
-      if (PAGE_TEMPLATES[i].key === key) return PAGE_TEMPLATES[i];
-    }
-    return null;
+    return TEMPLATE_INDEX_BY_KEY[key] || null;
   }
 
   function findTemplateForValues(renderType, name, parentMeta) {
@@ -1371,6 +1484,189 @@
 
   function endsWithIgnoreCase(full, suffix) {
     return full.toLowerCase().slice(-suffix.length) === suffix.toLowerCase();
+  }
+
+  function isRootSectionTemplate(template) {
+    return !!(
+      template &&
+      template.renderType === "section" &&
+      !template.parentRenderType &&
+      !template.parentName
+    );
+  }
+
+  function findRootSectionTemplateByName(name) {
+    var cleanName = normaliseText(name);
+
+    for (var i = 0; i < PAGE_TEMPLATES.length; i++) {
+      var template = PAGE_TEMPLATES[i];
+      if (!isRootSectionTemplate(template)) continue;
+      if (normaliseText(template.name) !== cleanName) continue;
+      return template;
+    }
+
+    return null;
+  }
+
+  function buildTemplateIndex(templates) {
+    var index = {};
+
+    for (var i = 0; i < templates.length; i++) {
+      index[templates[i].key] = templates[i];
+    }
+
+    return index;
+  }
+
+  function getDialogInstanceId($dialog) {
+    if (!$dialog || !$dialog.length) return "dialog-none";
+
+    var id = $dialog.data("wiseDocgenDialogId");
+    if (!id) {
+      id = "wise-docgen-dialog-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
+      $dialog.data("wiseDocgenDialogId", id);
+    }
+
+    return String(id);
+  }
+
+  function captureHeadingSaveFingerprint($form) {
+    var fingerprint = {};
+    if (!$form || !$form.length) return fingerprint;
+
+    var entries = $form.serializeArray();
+    for (var i = 0; i < entries.length; i++) {
+      var entry = entries[i];
+      var key = String(entry.name || "");
+      if (HEADING_SAVE_FINGERPRINT_FIELDS.indexOf(key) === -1) continue;
+      if (Object.prototype.hasOwnProperty.call(fingerprint, key)) continue;
+
+      var value = String(entry.value || "");
+      if (!value && !HEADING_SAVE_REQUIRED_FINGERPRINT_FIELDS[key]) continue;
+      fingerprint[key] = value;
+    }
+
+    return fingerprint;
+  }
+
+  function upsertPendingParentSavePlan(plan) {
+    prunePendingParentSavePlans();
+
+    var nextPlans = [];
+    for (var i = 0; i < PENDING_PARENT_SAVE_PLANS.length; i++) {
+      var existing = PENDING_PARENT_SAVE_PLANS[i];
+      if (!existing) continue;
+      if (existing.dialogInstanceId === plan.dialogInstanceId) continue;
+      nextPlans.push(existing);
+    }
+
+    nextPlans.push(plan);
+    PENDING_PARENT_SAVE_PLANS = nextPlans;
+  }
+
+  function clearPendingParentSavePlansForDialog(dialogInstanceId) {
+    if (!dialogInstanceId) return;
+
+    PENDING_PARENT_SAVE_PLANS = PENDING_PARENT_SAVE_PLANS.filter(function (plan) {
+      return plan && plan.dialogInstanceId !== dialogInstanceId;
+    });
+  }
+
+  function removePendingParentSavePlan(planId) {
+    if (!planId) return;
+
+    PENDING_PARENT_SAVE_PLANS = PENDING_PARENT_SAVE_PLANS.filter(function (plan) {
+      return plan && plan.planId !== planId;
+    });
+  }
+
+  function prunePendingParentSavePlans() {
+    var now = Date.now();
+
+    PENDING_PARENT_SAVE_PLANS = PENDING_PARENT_SAVE_PLANS.filter(function (plan) {
+      return plan && (now - (plan.armedAt || 0)) <= PENDING_PARENT_SAVE_PLAN_TTL_MS;
+    });
+  }
+
+  function findMatchingPendingParentSavePlan(req) {
+    var matches = [];
+
+    for (var i = 0; i < PENDING_PARENT_SAVE_PLANS.length; i++) {
+      var plan = PENDING_PARENT_SAVE_PLANS[i];
+      var score = getPendingParentSavePlanMatchScore(plan, req);
+      if (score > 0) {
+        matches.push({
+          plan: plan,
+          score: score
+        });
+      }
+    }
+
+    if (!matches.length) return null;
+
+    matches.sort(function (a, b) {
+      if (a.score !== b.score) return b.score - a.score;
+      return (b.plan.armedAt || 0) - (a.plan.armedAt || 0);
+    });
+
+    if (matches.length > 1 && matches[0].score === matches[1].score) {
+      console.warn("[WiseHireHop] multiple pending auto-child plans matched the same save request; using the most recent plan", matches);
+    }
+
+    return matches[0].plan;
+  }
+
+  function getPendingParentSavePlanMatchScore(plan, req) {
+    if (!plan || !req) return 0;
+
+    var fingerprint = plan.requestFingerprint || {};
+    var keys = Object.keys(fingerprint);
+    if (!keys.length) return 0;
+
+    var score = 0;
+
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      var expected = String(fingerprint[key] || "");
+      var actual = String(req[key] || "");
+
+      if (expected !== actual) {
+        return 0;
+      }
+
+      if (expected || HEADING_SAVE_REQUIRED_FINGERPRINT_FIELDS[key]) {
+        score++;
+      }
+    }
+
+    return score;
+  }
+
+  function getChildCreateSignature(plan, childTemplate) {
+    return [
+      String((plan && plan.job) || ""),
+      String((plan && plan.parentId) || ""),
+      String((childTemplate && childTemplate.renderType) || ""),
+      normaliseText(composeStoredHeadingFromTemplate(childTemplate))
+    ].join("|");
+  }
+
+  function pruneRecentChildCreateSignatures() {
+    var now = Date.now();
+    var keys = Object.keys(RECENT_CHILD_CREATE_SIGNATURES);
+
+    for (var i = 0; i < keys.length; i++) {
+      if ((now - RECENT_CHILD_CREATE_SIGNATURES[keys[i]].at) > RECENT_CHILD_CREATE_TTL_MS) {
+        delete RECENT_CHILD_CREATE_SIGNATURES[keys[i]];
+      }
+    }
+  }
+
+  function markRecentChildCreateSignature(signature, createdId) {
+    RECENT_CHILD_CREATE_SIGNATURES[signature] = {
+      at: Date.now(),
+      id: String(createdId || "")
+    };
   }
 
   // =========================================================
