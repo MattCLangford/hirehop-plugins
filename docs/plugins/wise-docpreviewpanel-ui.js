@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-24.09"); } catch (e) {}
+  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-24.10"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -27,6 +27,7 @@
         key: "proposal_default",
         family: "Proposal",
         label: "Default",
+        previewMode: "page",
         params: {
           doc: "166",
           engine: "1"
@@ -36,6 +37,7 @@
         key: "jobtrack_gp_predictor",
         family: "Job Track",
         label: "GP% Predictor",
+        previewMode: "wide",
         params: {
           doc: "162",
           engine: "0"
@@ -58,6 +60,9 @@
     selectionAttributeFilter: ["class", "aria-selected"],
     previewLoadActivateDelayMs: 90,
     previewLoadFollowUpDelaysMs: [220, 420],
+    widePreviewMinWidth: 620,
+    widePreviewWidthPercent: 42,
+    widePreviewScaleThreshold: 0.72,
     previewPageSelectors: [
       ".page",
       ".print-page",
@@ -134,7 +139,7 @@
           if (!iframe || !iframe.contentDocument) return;
 
           try {
-            fitPreviewToPane(iframe, iframe.contentDocument);
+            fitPreviewToPane(iframe, iframe.contentDocument, getActivePreviewMode());
           } catch (e) {}
         });
 
@@ -176,6 +181,11 @@
       '  background:#fff;',
       '  display:flex;',
       '  flex-direction:column;',
+      '}',
+      '#' + RIGHT_PANE_ID + '.is-wide-doc {',
+      '  flex-basis:max(' + PREVIEW_CONFIG.widePreviewMinWidth + 'px, ' + PREVIEW_CONFIG.widePreviewWidthPercent + '%);',
+      '  width:max(' + PREVIEW_CONFIG.widePreviewMinWidth + 'px, ' + PREVIEW_CONFIG.widePreviewWidthPercent + '%);',
+      '  min-width:' + PREVIEW_CONFIG.widePreviewMinWidth + 'px;',
       '}',
       '#' + PANEL_ID + ' {',
       '  display:flex;',
@@ -242,6 +252,9 @@
       '  min-height:640px;',
       '  background:#fff;',
       '  overflow:hidden;',
+      '}',
+      '#' + IFRAME_VIEWPORT_ID + '.is-wide-doc {',
+      '  overflow:visible;',
       '}',
       '#' + PANEL_ID + ' .wise-doc-preview-frame {',
       '  position:absolute;',
@@ -327,6 +340,7 @@
     panelOpen = true;
     $("#" + RIGHT_PANE_ID).show();
     setButtonActive(true);
+    applyPreviewVariantLayout();
     activePreviewFrameId = IFRAME_PRIMARY_ID;
     previewHasLoaded = false;
     lastSelectedNodeIdsKey = getSelectedNodeIdsKey();
@@ -415,6 +429,7 @@
 
   function bindPreviewPanelEvents() {
     syncActiveDocumentVariantControl();
+    applyPreviewVariantLayout();
 
     $("#wise-doc-preview-close").off("click").on("click", function () {
       closeDockedPreview();
@@ -590,6 +605,7 @@
 
     activeDocumentVariantKey = next ? next.key : getDefaultDocumentVariantKey();
     syncActiveDocumentVariantControl();
+    applyPreviewVariantLayout();
   }
 
   function syncActiveDocumentVariantControl() {
@@ -602,6 +618,36 @@
     } else if ($select.find("option").length) {
       $select.prop("selectedIndex", 0);
       activeDocumentVariantKey = String($select.val() || "");
+    }
+  }
+
+  function getPreviewModeForVariant(variant) {
+    return String((variant && variant.previewMode) || "page").toLowerCase() === "wide" ? "wide" : "page";
+  }
+
+  function getActivePreviewMode() {
+    return getPreviewModeForVariant(getActiveDocumentVariant());
+  }
+
+  function applyPreviewVariantLayout() {
+    var previewMode = getActivePreviewMode();
+    var isWide = previewMode === "wide";
+    var $rightPane = $("#" + RIGHT_PANE_ID);
+    var $viewport = $("#" + IFRAME_VIEWPORT_ID);
+
+    if ($rightPane.length) {
+      $rightPane.toggleClass("is-wide-doc", isWide);
+    }
+
+    if ($viewport.length) {
+      $viewport.toggleClass("is-wide-doc", isWide);
+    }
+
+    var iframe = getActivePreviewIframe();
+    if (iframe && iframe.contentDocument) {
+      try {
+        fitPreviewToPane(iframe, iframe.contentDocument, previewMode);
+      } catch (e) {}
     }
   }
 
@@ -779,6 +825,7 @@
       return;
     }
 
+    var activeVariant = getActiveDocumentVariant();
     var url = buildPreviewUrl();
     if (!url) return;
 
@@ -790,6 +837,8 @@
     var loadState = {
       loadId: nextPreviewLoadId++,
       reason: reason || "",
+      documentVariantKey: activeVariant ? activeVariant.key : activeDocumentVariantKey,
+      previewMode: getPreviewModeForVariant(activeVariant),
       scrollRatio: lastIframeScrollRatio,
       scrollIntent: capturePreviewScrollIntent(reason || "")
     };
@@ -842,8 +891,8 @@
     var doc = iframe.contentDocument;
     if (!doc) return false;
 
-    ensurePreviewStyleTag(doc);
-    fitPreviewToPane(iframe, doc);
+    ensurePreviewStyleTag(doc, loadState ? loadState.previewMode : getActivePreviewMode());
+    fitPreviewToPane(iframe, doc, loadState ? loadState.previewMode : getActivePreviewMode());
     return applyPreviewScrollState(iframe, loadState);
   }
 
@@ -947,6 +996,16 @@
       var node = nodes[i];
       if (!node || !node.id) continue;
 
+      var attrMatch = findPreviewNodeByItemId(doc, node.id);
+      if (attrMatch) {
+        return {
+          element: attrMatch,
+          page: findPreviewPageContainer(attrMatch),
+          node: node,
+          score: 980
+        };
+      }
+
       var idMatch = doc.getElementById(node.id);
       if (idMatch) {
         return {
@@ -968,6 +1027,24 @@
           };
         }
       }
+    }
+
+    return null;
+  }
+
+  function findPreviewNodeByItemId(doc, nodeId) {
+    if (!doc || !nodeId) return null;
+
+    var selectors = [
+      "[data-item-id='" + escapeCssValue(nodeId) + "']",
+      "[data-hh-item-id='" + escapeCssValue(nodeId) + "']",
+      "[data-node-id='" + escapeCssValue(nodeId) + "']",
+      "[data-id='" + escapeCssValue(nodeId) + "']"
+    ];
+
+    for (var i = 0; i < selectors.length; i++) {
+      var match = doc.querySelector(selectors[i]);
+      if (match) return match;
     }
 
     return null;
@@ -1078,13 +1155,40 @@
     }
   }
 
-  function ensurePreviewStyleTag(doc) {
-    if (doc.getElementById("wise-preview-fit-style")) return;
+  function ensurePreviewStyleTag(doc, previewMode) {
+    var style = doc.getElementById("wise-preview-fit-style");
+    if (!style) {
+      style = doc.createElement("style");
+      style.id = "wise-preview-fit-style";
+      style.type = "text/css";
+      (doc.head || doc.documentElement).appendChild(style);
+    }
 
-    var style = doc.createElement("style");
-    style.id = "wise-preview-fit-style";
-    style.type = "text/css";
-    style.textContent =
+    style.textContent = getPreviewFitStyleText(previewMode);
+  }
+
+  function getPreviewFitStyleText(previewMode) {
+    if (previewMode === "wide") {
+      return (
+        "html, body {" +
+          "margin:0 !important;" +
+          "padding:0 !important;" +
+          "overflow:auto !important;" +
+          "scroll-behavior:auto !important;" +
+          "background:#ffffff !important;" +
+        "}" +
+        "body {" +
+          "transform-origin:top left !important;" +
+          "margin:0 !important;" +
+          "padding:0 !important;" +
+        "}" +
+        "img, svg, canvas {" +
+          "max-width:none !important;" +
+        "}"
+      );
+    }
+
+    return (
       "html, body {" +
         "margin:0 !important;" +
         "padding:0 !important;" +
@@ -1099,12 +1203,11 @@
       "}" +
       "img, svg, canvas {" +
         "max-width:none !important;" +
-      "}";
-
-    (doc.head || doc.documentElement).appendChild(style);
+      "}"
+    );
   }
 
-  function fitPreviewToPane(iframe, doc) {
+  function fitPreviewToPane(iframe, doc, previewMode) {
     var body = doc.body;
     var html = doc.documentElement;
     if (!body || !html) return;
@@ -1114,6 +1217,13 @@
     body.style.width = "";
     body.style.marginLeft = "auto";
     body.style.marginRight = "auto";
+
+    if (previewMode === "wide") {
+      body.style.marginLeft = "0";
+      body.style.marginRight = "0";
+      fitWidePreviewToPane(iframe, doc, body, html);
+      return;
+    }
 
     var iframeWidth = iframe.clientWidth || 0;
     if (!iframeWidth) return;
@@ -1132,6 +1242,74 @@
       body.style.transform = "scale(" + scale + ")";
       body.style.transformOrigin = "top left";
       body.style.width = (100 / scale) + "%";
+    }
+  }
+
+  function fitWidePreviewToPane(iframe, doc, body, html) {
+    var iframeWidth = iframe.clientWidth || 0;
+    if (!iframeWidth) return;
+
+    var sourceWidth = getWidePreviewSourceWidth(doc, body, html);
+    if (!sourceWidth) return;
+
+    var availableWidth = Math.max(100, iframeWidth - 16);
+    if (sourceWidth <= availableWidth) return;
+
+    var scale = availableWidth / sourceWidth;
+    if (!isFinite(scale) || scale <= 0) return;
+    if (scale < PREVIEW_CONFIG.widePreviewScaleThreshold) return;
+
+    if ("zoom" in body.style) {
+      body.style.zoom = String(scale);
+    } else {
+      body.style.transform = "scale(" + scale + ")";
+      body.style.transformOrigin = "top left";
+      body.style.width = (100 / scale) + "%";
+    }
+  }
+
+  function getWidePreviewSourceWidth(doc, body, html) {
+    var selectors = [
+      "table",
+      ".ui-jqgrid",
+      ".jqgrow",
+      ".summary",
+      ".report",
+      ".hh_table",
+      "[style*='width']"
+    ];
+    var best = 0;
+
+    for (var i = 0; i < selectors.length; i++) {
+      var nodes = doc.querySelectorAll(selectors[i]);
+      for (var j = 0; j < nodes.length && j < 24; j++) {
+        var el = nodes[j];
+        var w = getElementNaturalWidth(el);
+        if (w > best) best = w;
+      }
+      if (best > (iframeWidthGuessFromDocument(doc) * 1.2)) {
+        break;
+      }
+    }
+
+    if (!best) {
+      best = Math.max(
+        body.scrollWidth || 0,
+        html.scrollWidth || 0,
+        body.offsetWidth || 0,
+        html.offsetWidth || 0
+      );
+    }
+
+    return best;
+  }
+
+  function iframeWidthGuessFromDocument(doc) {
+    try {
+      var win = doc.defaultView;
+      return win && win.innerWidth ? win.innerWidth : 0;
+    } catch (e) {
+      return 0;
     }
   }
 
@@ -1447,9 +1625,25 @@
   }
 
   function normalisePreviewMatchText(value) {
-    return normaliseWhitespace(String(value || ""))
-      .replace(/^section\s*:\s*/i, "")
-      .replace(/^dept\s*:\s*/i, "")
+    var text = normaliseWhitespace(String(value || ""));
+    var changed = true;
+
+    while (changed) {
+      changed = false;
+
+      if (/^\/\/\s*/.test(text)) {
+        text = text.replace(/^\/\/\s*/, "");
+        changed = true;
+      }
+
+      if (/^\$\s*/.test(text)) {
+        text = text.replace(/^\$\s*/, "");
+        changed = true;
+      }
+    }
+
+    return text
+      .replace(/^(?:section|dept|heading|subheading)\s*:\s*/i, "")
       .toLowerCase();
   }
 
@@ -1637,6 +1831,10 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  function escapeCssValue(value) {
+    return String(value || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   }
 
 })();
