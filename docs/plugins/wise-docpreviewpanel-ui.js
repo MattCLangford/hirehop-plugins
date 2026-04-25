@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-25.12"); } catch (e) {}
+  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-25.13"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -17,8 +17,14 @@
     blockWhenUndetected: true
   };
 
-  var activeDepotContext = getActiveDepotContext();
-  if (!isAllowedDepot(activeDepotContext)) return;
+  var DEPOT_BOOTSTRAP_MAX_TRIES = 120;
+  var DEPOT_BOOTSTRAP_RETRY_MS = 500;
+  var activeDepotContext = {
+    id: "",
+    name: ""
+  };
+  var lastDepotDecisionSignature = "";
+  var docPreviewBootstrapStarted = false;
 
   var TOGGLE_ID = "wise-doc-preview-toggle";
   var OUTER_WRAP_ID = "wise-doc-preview-workspace";
@@ -97,9 +103,47 @@
   var activeDocumentVariantKey = getDefaultDocumentVariantKey();
   var nextPreviewLoadId = 1;
 
-  waitForItemsTabAndInit();
+  waitForAllowedDepotAndInit();
 
-  function isAllowedDepot(context) {
+  function waitForAllowedDepotAndInit() {
+    var tries = 0;
+
+    function stopWatching() {
+      $(window).off(".wiseDocPreviewDepot");
+      $(document).off(".wiseDocPreviewDepot");
+    }
+
+    function attempt() {
+      if (docPreviewBootstrapStarted) return;
+
+      tries++;
+      activeDepotContext = getActiveDepotContext();
+
+      if (isAllowedDepot(activeDepotContext)) {
+        docPreviewBootstrapStarted = true;
+        stopWatching();
+        waitForItemsTabAndInit();
+        return;
+      }
+
+      if (tries < DEPOT_BOOTSTRAP_MAX_TRIES) {
+        setTimeout(attempt, DEPOT_BOOTSTRAP_RETRY_MS);
+      }
+    }
+
+    if (document.readyState === "loading") {
+      $(attempt);
+    } else {
+      attempt();
+    }
+
+    $(window).on("load.wiseDocPreviewDepot focus.wiseDocPreviewDepot", attempt);
+    $(document).on("ajaxComplete.wiseDocPreviewDepot", attempt);
+  }
+
+  function isAllowedDepot(context, options) {
+    options = options || {};
+
     if (!DEPOT_RULE.enabled) return true;
 
     var allowedIds = normaliseAllowedDepotValues(DEPOT_RULE.allowedIds, true);
@@ -108,33 +152,47 @@
     var hasDetectedDepot = !!(context && (context.id || context.name));
 
     if (!hasRule) {
-      try {
-        console.warn("[WiseHireHop] depot rule enabled but no allowed depots configured", context);
-      } catch (e) {}
-
+      logDepotDecision("misconfigured", "[WiseHireHop] depot rule enabled but no allowed depots configured", context, options);
       return !DEPOT_RULE.blockWhenUndetected;
     }
 
     if (context && context.id && allowedIds.indexOf(normaliseDepotId(context.id)) !== -1) {
-      try { console.warn("[WiseHireHop] depot matched", context); } catch (e) {}
+      logDepotDecision("matched", "[WiseHireHop] depot matched", context, options);
       return true;
     }
 
     if (context && context.name && allowedNames.indexOf(normaliseDepotText(context.name)) !== -1) {
-      try { console.warn("[WiseHireHop] depot matched", context); } catch (e) {}
+      logDepotDecision("matched", "[WiseHireHop] depot matched", context, options);
       return true;
     }
 
-    try {
-      console.warn(
-        hasDetectedDepot
-          ? "[WiseHireHop] blocked outside allowed depot"
-          : "[WiseHireHop] blocked because no depot could be detected",
-        context
-      );
-    } catch (e) {}
+    logDepotDecision(
+      hasDetectedDepot ? "blocked" : "undetected",
+      hasDetectedDepot
+        ? "[WiseHireHop] blocked outside allowed depot"
+        : "[WiseHireHop] blocked because no depot could be detected",
+      context,
+      options
+    );
 
     return hasDetectedDepot ? false : !DEPOT_RULE.blockWhenUndetected;
+  }
+
+  function logDepotDecision(key, message, context, options) {
+    if (options && options.silent) return;
+
+    var signature = [
+      key,
+      String((context && context.id) || ""),
+      String((context && context.name) || "")
+    ].join("|");
+
+    if (signature === lastDepotDecisionSignature) return;
+    lastDepotDecisionSignature = signature;
+
+    try {
+      console.warn(message, context);
+    } catch (e) {}
   }
 
   function getActiveDepotContext() {
@@ -145,6 +203,16 @@
 
     context.id = firstNonEmpty([
       getDepotIdFromUrl(),
+      readFirstNamedFieldValue([
+        "depot_id",
+        "depot",
+        "branch_id",
+        "branch",
+        "location_id",
+        "location",
+        "site_id",
+        "site"
+      ]),
       readFirstValue([
         'input[name="depot_id"]',
         'input[name="depot"]',
@@ -196,6 +264,16 @@
     ]);
 
     context.name = firstNonEmpty([
+      readFirstNamedSelectText([
+        "depot_id",
+        "depot",
+        "branch_id",
+        "branch",
+        "location_id",
+        "location",
+        "site_id",
+        "site"
+      ]),
       readFirstText([
         'select[name="depot_id"] option:selected',
         'select[name="depot"] option:selected',
@@ -255,16 +333,40 @@
 
   function getDepotIdFromUrl() {
     try {
-      var params = new URLSearchParams(window.location.search || "");
       var keys = ["depot_id", "depot", "branch_id", "branch", "location_id", "location", "site_id", "site"];
+      var fromQuery = readQueryParamValue(keys);
 
-      for (var i = 0; i < keys.length; i++) {
-        var value = $.trim(String(params.get(keys[i]) || ""));
-        if (value) return value;
+      if (fromQuery) return fromQuery;
+
+      var href = String(window.location.href || "");
+      var match =
+        href.match(/[?&](?:depot_id|depot|branch_id|branch|location_id|location|site_id|site)=([^&#]+)/i) ||
+        href.match(/\/(?:depots?|branches?|locations?|sites?)\/(\d+)(?:\/|$|\?)/i);
+
+      if (match && match[1]) {
+        return $.trim(String(decodeURIComponent(match[1]).replace(/\+/g, " ")));
       }
     } catch (e) {}
 
     return "";
+  }
+
+  function readQueryParamValue(keys) {
+    try {
+      var params = new URLSearchParams(window.location.search || "");
+      var keyLookup = buildFieldLookup(keys);
+      var value = "";
+
+      params.forEach(function (paramValue, key) {
+        if (value) return;
+        if (!keyLookup[normaliseFieldKey(key)]) return;
+        value = $.trim(String(paramValue || ""));
+      });
+
+      return value;
+    } catch (e) {
+      return "";
+    }
   }
 
   function readFirstValue(selectors) {
@@ -277,6 +379,42 @@
     }
 
     return "";
+  }
+
+  function readFirstNamedFieldValue(fieldNames) {
+    var lookup = buildFieldLookup(fieldNames);
+    var value = "";
+
+    $("input, select, textarea").each(function () {
+      if (value) return false;
+      if (!matchesNamedField(this, lookup)) return;
+
+      var nextValue = $.trim(String($(this).val() || ""));
+      if (!nextValue) return;
+
+      value = nextValue;
+      return false;
+    });
+
+    return value;
+  }
+
+  function readFirstNamedSelectText(fieldNames) {
+    var lookup = buildFieldLookup(fieldNames);
+    var text = "";
+
+    $("select").each(function () {
+      if (text) return false;
+      if (!matchesNamedField(this, lookup)) return;
+
+      var nextText = $.trim(String($(this).find("option:selected").text() || ""));
+      if (!nextText) return;
+
+      text = nextText;
+      return false;
+    });
+
+    return text;
   }
 
   function readFirstText(selectors) {
@@ -322,6 +460,30 @@
     }
 
     return "";
+  }
+
+  function buildFieldLookup(values) {
+    var lookup = {};
+
+    for (var i = 0; i < (values || []).length; i++) {
+      var key = normaliseFieldKey(values[i]);
+      if (!key) continue;
+      lookup[key] = true;
+    }
+
+    return lookup;
+  }
+
+  function matchesNamedField(element, lookup) {
+    if (!element) return false;
+
+    var nameKey = normaliseFieldKey(element.name);
+    var idKey = normaliseFieldKey(element.id);
+    return !!(lookup[nameKey] || lookup[idKey]);
+  }
+
+  function normaliseFieldKey(value) {
+    return $.trim(String(value == null ? "" : value)).toLowerCase();
   }
 
   function normaliseAllowedDepotValues(values, isId) {
