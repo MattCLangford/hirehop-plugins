@@ -1,10 +1,24 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-24.11"); } catch (e) {}
+  try { console.warn("[WiseHireHop] docked doc preview loaded - v2026-04-25.12"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
+
+  var DEPOT_RULE = {
+    enabled: true,
+    allowedIds: [
+      "14"
+    ],
+    allowedNames: [
+      "Project Costs"
+    ],
+    blockWhenUndetected: true
+  };
+
+  var activeDepotContext = getActiveDepotContext();
+  if (!isAllowedDepot(activeDepotContext)) return;
 
   var TOGGLE_ID = "wise-doc-preview-toggle";
   var OUTER_WRAP_ID = "wise-doc-preview-workspace";
@@ -84,6 +98,258 @@
   var nextPreviewLoadId = 1;
 
   waitForItemsTabAndInit();
+
+  function isAllowedDepot(context) {
+    if (!DEPOT_RULE.enabled) return true;
+
+    var allowedIds = normaliseAllowedDepotValues(DEPOT_RULE.allowedIds, true);
+    var allowedNames = normaliseAllowedDepotValues(DEPOT_RULE.allowedNames, false);
+    var hasRule = allowedIds.length || allowedNames.length;
+    var hasDetectedDepot = !!(context && (context.id || context.name));
+
+    if (!hasRule) {
+      try {
+        console.warn("[WiseHireHop] depot rule enabled but no allowed depots configured", context);
+      } catch (e) {}
+
+      return !DEPOT_RULE.blockWhenUndetected;
+    }
+
+    if (context && context.id && allowedIds.indexOf(normaliseDepotId(context.id)) !== -1) {
+      try { console.warn("[WiseHireHop] depot matched", context); } catch (e) {}
+      return true;
+    }
+
+    if (context && context.name && allowedNames.indexOf(normaliseDepotText(context.name)) !== -1) {
+      try { console.warn("[WiseHireHop] depot matched", context); } catch (e) {}
+      return true;
+    }
+
+    try {
+      console.warn(
+        hasDetectedDepot
+          ? "[WiseHireHop] blocked outside allowed depot"
+          : "[WiseHireHop] blocked because no depot could be detected",
+        context
+      );
+    } catch (e) {}
+
+    return hasDetectedDepot ? false : !DEPOT_RULE.blockWhenUndetected;
+  }
+
+  function getActiveDepotContext() {
+    var context = {
+      id: "",
+      name: ""
+    };
+
+    context.id = firstNonEmpty([
+      getDepotIdFromUrl(),
+      readFirstValue([
+        'input[name="depot_id"]',
+        'input[name="depot"]',
+        'input[name="branch_id"]',
+        'input[name="branch"]',
+        'input[name="location_id"]',
+        'input[name="location"]',
+        'input[name="site_id"]',
+        'input[name="site"]',
+        'select[name="depot_id"]',
+        'select[name="depot"]',
+        'select[name="branch_id"]',
+        'select[name="branch"]',
+        'select[name="location_id"]',
+        'select[name="location"]',
+        'select[name="site_id"]',
+        'select[name="site"]',
+        '#depot_id',
+        '#depot',
+        '#branch_id',
+        '#branch',
+        '#location_id',
+        '#location',
+        '#site_id',
+        '#site'
+      ]),
+      readFirstAttribute([
+        { selector: "[data-depot-id]", attr: "data-depot-id" },
+        { selector: "[data-current-depot-id]", attr: "data-current-depot-id" },
+        { selector: "[data-branch-id]", attr: "data-branch-id" },
+        { selector: "[data-current-branch-id]", attr: "data-current-branch-id" },
+        { selector: "[data-location-id]", attr: "data-location-id" },
+        { selector: "[data-site-id]", attr: "data-site-id" }
+      ]),
+      readWindowValue([
+        "depot_id",
+        "depotId",
+        "current_depot_id",
+        "currentDepotId",
+        "branch_id",
+        "branchId",
+        "current_branch_id",
+        "currentBranchId",
+        "location_id",
+        "locationId",
+        "site_id",
+        "siteId"
+      ])
+    ]);
+
+    context.name = firstNonEmpty([
+      readFirstText([
+        'select[name="depot_id"] option:selected',
+        'select[name="depot"] option:selected',
+        'select[name="branch_id"] option:selected',
+        'select[name="branch"] option:selected',
+        'select[name="location_id"] option:selected',
+        'select[name="location"] option:selected',
+        'select[name="site_id"] option:selected',
+        'select[name="site"] option:selected',
+        '#depot_id option:selected',
+        '#depot option:selected',
+        '#branch_id option:selected',
+        '#branch option:selected',
+        '#location_id option:selected',
+        '#location option:selected',
+        '#site_id option:selected',
+        '#site option:selected',
+        "#depot_name",
+        "#branch_name",
+        "#location_name",
+        "#site_name",
+        ".depot-name",
+        ".branch-name",
+        ".location-name",
+        ".site-name"
+      ]),
+      readFirstAttribute([
+        { selector: "[data-depot-name]", attr: "data-depot-name" },
+        { selector: "[data-current-depot-name]", attr: "data-current-depot-name" },
+        { selector: "[data-branch-name]", attr: "data-branch-name" },
+        { selector: "[data-current-branch-name]", attr: "data-current-branch-name" },
+        { selector: "[data-location-name]", attr: "data-location-name" },
+        { selector: "[data-site-name]", attr: "data-site-name" }
+      ]),
+      readWindowValue([
+        "depot_name",
+        "depotName",
+        "current_depot_name",
+        "currentDepotName",
+        "branch_name",
+        "branchName",
+        "current_branch_name",
+        "currentBranchName",
+        "location_name",
+        "locationName",
+        "site_name",
+        "siteName"
+      ])
+    ]);
+
+    context.id = normaliseDepotId(context.id);
+    context.name = normaliseDepotText(context.name, true);
+    window.__wiseHireHopDepotContext = context;
+
+    return context;
+  }
+
+  function getDepotIdFromUrl() {
+    try {
+      var params = new URLSearchParams(window.location.search || "");
+      var keys = ["depot_id", "depot", "branch_id", "branch", "location_id", "location", "site_id", "site"];
+
+      for (var i = 0; i < keys.length; i++) {
+        var value = $.trim(String(params.get(keys[i]) || ""));
+        if (value) return value;
+      }
+    } catch (e) {}
+
+    return "";
+  }
+
+  function readFirstValue(selectors) {
+    for (var i = 0; i < selectors.length; i++) {
+      var $el = $(selectors[i]).first();
+      if (!$el.length) continue;
+
+      var value = $.trim(String($el.val() || ""));
+      if (value) return value;
+    }
+
+    return "";
+  }
+
+  function readFirstText(selectors) {
+    for (var i = 0; i < selectors.length; i++) {
+      var $el = $(selectors[i]).first();
+      if (!$el.length) continue;
+
+      var text = $.trim(String($el.text() || $el.val() || ""));
+      if (text) return text;
+    }
+
+    return "";
+  }
+
+  function readFirstAttribute(candidates) {
+    for (var i = 0; i < candidates.length; i++) {
+      var candidate = candidates[i];
+      var $el = $(candidate.selector).first();
+      if (!$el.length) continue;
+
+      var value = $.trim(String($el.attr(candidate.attr) || ""));
+      if (value) return value;
+    }
+
+    return "";
+  }
+
+  function readWindowValue(keys) {
+    for (var i = 0; i < keys.length; i++) {
+      var value = window[keys[i]];
+      if (value == null) continue;
+
+      var text = $.trim(String(value));
+      if (text) return text;
+    }
+
+    return "";
+  }
+
+  function firstNonEmpty(values) {
+    for (var i = 0; i < values.length; i++) {
+      if (values[i]) return values[i];
+    }
+
+    return "";
+  }
+
+  function normaliseAllowedDepotValues(values, isId) {
+    var list = [];
+
+    for (var i = 0; i < (values || []).length; i++) {
+      var normalised = isId ? normaliseDepotId(values[i]) : normaliseDepotText(values[i]);
+      if (!normalised || list.indexOf(normalised) !== -1) continue;
+      list.push(normalised);
+    }
+
+    return list;
+  }
+
+  function normaliseDepotId(value) {
+    var text = $.trim(String(value == null ? "" : value));
+    if (!text) return "";
+
+    var match = text.match(/(\d+)/);
+    return match && match[1] ? match[1] : text.toLowerCase();
+  }
+
+  function normaliseDepotText(value, preserveCase) {
+    var text = $.trim(String(value == null ? "" : value)).replace(/\s+/g, " ");
+    if (!text) return "";
+
+    return preserveCase ? text : text.toLowerCase();
+  }
 
   // =========================================================
   // BOOTSTRAP
