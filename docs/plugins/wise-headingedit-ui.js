@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-25.12"); } catch (e) {}
+  try { console.warn("[WiseHireHop] heading docgen meta plugin loaded - v2026-04-25.13"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -138,12 +138,14 @@
   }
 
   function getActiveDepotContext() {
+    var headerDepotContext = getHeaderDepotContext();
     var context = {
       id: "",
       name: ""
     };
 
     context.id = firstNonEmpty([
+      headerDepotContext.id,
       getDepotIdFromUrl(),
       readFirstNamedFieldValue([
         "depot_id",
@@ -206,6 +208,7 @@
     ]);
 
     context.name = firstNonEmpty([
+      headerDepotContext.name,
       readFirstNamedSelectText([
         "depot_id",
         "depot",
@@ -271,6 +274,50 @@
     window.__wiseHireHopDepotContext = context;
 
     return context;
+  }
+
+  function getHeaderDepotContext() {
+    var $select = findHeaderDepotSelect();
+    var $selected = $select.length ? $select.find("option:selected").first() : $();
+
+    return {
+      id: $.trim(String($select.length ? ($select.val() || $selected.attr("value") || "") : "")),
+      name: $.trim(String($selected.length ? ($selected.text() || "") : ""))
+    };
+  }
+
+  function findHeaderDepotSelect() {
+    var $label = $('[data-label="depotTxt"]').first();
+    var $select = findSelectNearDepotLabel($label);
+    if ($select.length) return $select;
+
+    var $textLabel = $("b, strong, label, span, td, th").filter(function () {
+      var text = $.trim(String($(this).text() || "")).replace(/\s+/g, " ");
+      return /^warehouse name\s*:?\s*$/i.test(text) || /^depot\s*:?\s*$/i.test(text);
+    }).first();
+
+    $select = findSelectNearDepotLabel($textLabel);
+    if ($select.length) return $select;
+
+    return $();
+  }
+
+  function findSelectNearDepotLabel($label) {
+    if (!$label || !$label.length) return $();
+
+    var $select = $label.siblings("select").first();
+    if ($select.length) return $select;
+
+    $select = $label.nextAll("select").first();
+    if ($select.length) return $select;
+
+    $select = $label.parent().find("select").first();
+    if ($select.length) return $select;
+
+    $select = $label.closest("td, th, div, span").find("select").first();
+    if ($select.length) return $select;
+
+    return $();
   }
 
   function getDepotIdFromUrl() {
