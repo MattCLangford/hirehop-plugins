@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] page editor loaded - v2026-04-27.01"); } catch (e) {}
+  try { console.warn("[WiseHireHop] page editor loaded - v2026-04-27.02"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -50,6 +50,7 @@
   var editorInitialised = false;
   var saveInFlight = false;
   var currentSession = null;
+  var lastClickedSupplyingNodeId = "";
 
   var PAGE_TEMPLATES = [
     { key: "section_hero", renderType: "section", name: "Hero", parentRenderType: null, parentName: null, sectionRank: 1, deptRank: null },
@@ -137,6 +138,7 @@
       if ($("#items_tab").length) {
         injectBaseStyles();
         ensureModal();
+        installSupplyingSelectionTracker();
         tryAddBuilderButton();
         return;
       }
@@ -541,6 +543,15 @@
       setBuilderStatus("", "");
     });
 
+    $("#" + FORM_ID).on("change", '[data-field="profile-key"]', function () {
+      if (!currentSession || saveInFlight) return;
+
+      currentSession.context.manualProfileKey = String($(this).val() || "");
+      currentSession = buildEditorSession(currentSession.context);
+      renderCurrentSession();
+      setBuilderStatus("", "");
+    });
+
     $("#" + FORM_ID).on("click", "[data-action]", function (e) {
       if (saveInFlight) return;
       e.preventDefault();
@@ -615,6 +626,27 @@
       var text = $.trim($(this).text() || $(this).val() || $(this).attr("title") || $(this).attr("aria-label") || "");
       return pattern.test(text);
     }).first();
+  }
+
+  function installSupplyingSelectionTracker() {
+    $(document)
+      .off(".wiseSectionBuilderSelection")
+      .on(
+        "mousedown.wiseSectionBuilderSelection click.wiseSectionBuilderSelection dblclick.wiseSectionBuilderSelection",
+        "#items_tab li.jstree-node, #items_tab a.jstree-anchor",
+        function () {
+          rememberSupplyingTreeNodeFromElement(this);
+        }
+      );
+  }
+
+  function rememberSupplyingTreeNodeFromElement(element) {
+    var $li = $(element).is("li.jstree-node")
+      ? $(element)
+      : $(element).closest("li.jstree-node");
+
+    if (!$li.length) return;
+    lastClickedSupplyingNodeId = $.trim(String($li.attr("id") || ""));
   }
 
   function openBuilderModal() {
@@ -717,6 +749,10 @@
 
     if (summaryText) {
       lines.push('<div class="wise-page-editor-context-line"><strong>Mode:</strong> ' + escapeHtml(summaryText) + "</div>");
+    }
+
+    if (context && context.manualProfileKey) {
+      lines.push('<div class="wise-page-editor-context-line"><strong>Matched by:</strong> Page type selector</div>');
     }
 
     $("#" + CONTEXT_ID).html(
@@ -977,14 +1013,14 @@
       };
     }
 
-    var selectedNodes = tree.get_selected(true) || [];
+    var selectedNodes = getSelectedSupplyingTreeNodes(tree);
     if (selectedNodes.length !== 1) {
       return {
         error: "Select one Section or Dept heading in the list, then click Edit Page."
       };
     }
 
-    var selectedNode = selectedNodes[0];
+    var selectedNode = getSingleSelectedHeadingNode(tree, selectedNodes);
     if (!selectedNode || !selectedNode.data || Number(selectedNode.data.kind) !== 0) {
       return {
         error: "Select a Section or Dept heading. This editor only works on folder-type headings."
@@ -1000,6 +1036,7 @@
     var selectedRootTemplate = findRootSectionTemplateByName(getNodeTitle(selectedNode));
     var rootNode = null;
     var rootTemplate = null;
+    var manualProfileKey = "";
 
     if (selectedStoredTemplate && selectedStoredTemplate.renderType === "section") {
       rootNode = selectedNode;
@@ -1023,9 +1060,8 @@
     }
 
     if (!rootNode) {
-      return {
-        error: "This heading is not recognised as a supported page section or dept yet."
-      };
+      rootNode = parentHeadingNode || selectedNode;
+      manualProfileKey = PROFILE_EVENT_OVERVIEW;
     }
 
     var rootMetaInfo = extractStoredPageMeta(getNodeTechnical(rootNode));
@@ -1049,7 +1085,8 @@
         rootTemplate: rootTemplate,
         rootMetaInfo: rootMetaInfo,
         selectedTemplate: selectedTemplate,
-        selectedHeadingType: selectedNode === rootNode ? "section" : "dept"
+        selectedHeadingType: selectedNode === rootNode ? "section" : "dept",
+        manualProfileKey: manualProfileKey
       }
     };
   }
@@ -1059,6 +1096,7 @@
 
     var meta = normalisePageMeta(context.rootMetaInfo && context.rootMetaInfo.meta);
     if (meta.profileKey) return String(meta.profileKey);
+    if (context.manualProfileKey) return String(context.manualProfileKey);
 
     if (context.rootTemplate && context.rootTemplate.key === "section_event_overview") {
       return PROFILE_EVENT_OVERVIEW;
@@ -1223,6 +1261,14 @@
           '</div>' +
         "</div>" +
         '<div class="wise-page-editor-grid">' +
+          renderFieldSelect({
+            wide: true,
+            label: "Page type",
+            field: "profile-key",
+            options: getPageProfileSelectOptions(),
+            value: PROFILE_EVENT_OVERVIEW,
+            note: "Use this when the selected heading has a custom name and cannot be recognised automatically."
+          }) +
           renderFieldSelect({
             wide: false,
             label: "Layout variant",
@@ -1391,6 +1437,7 @@
       '  <select class="wise-page-editor-select" data-field="' + escapeAttribute(options.field || "") + '">',
            optionHtml.join(""),
       "  </select>",
+         options.note ? '<div class="wise-page-editor-note">' + escapeHtml(options.note) + "</div>" : "",
       "</div>"
     ].join("");
   }
@@ -1489,6 +1536,12 @@
     }
 
     return "Page editor";
+  }
+
+  function getPageProfileSelectOptions() {
+    return [
+      { value: PROFILE_EVENT_OVERVIEW, label: "Event Overview + schedule" }
+    ];
   }
 
   function getRequiredSlotKeys(variant) {
@@ -1807,6 +1860,90 @@
     return null;
   }
 
+  function getSelectedSupplyingTreeNodes(tree) {
+    var nodes = [];
+    var seen = {};
+
+    if (tree && typeof tree.get_selected === "function") {
+      var selected = tree.get_selected(true) || [];
+      for (var i = 0; i < selected.length; i++) {
+        addSupplyingTreeNode(selected[i], nodes, seen);
+      }
+    }
+
+    collectSupplyingTreeNodesFromDom(tree, $("#items_tab .jstree-clicked"), nodes, seen);
+
+    if (!nodes.length) {
+      collectSupplyingTreeNodesFromDom(
+        tree,
+        $("#items_tab li.jstree-node.jstree-clicked, #items_tab li.jstree-selected, #items_tab li[aria-selected='true'], #items_tab a.jstree-anchor[aria-selected='true']"),
+        nodes,
+        seen
+      );
+    }
+
+    if (!nodes.length && lastClickedSupplyingNodeId) {
+      addSupplyingTreeNode(tree.get_node(lastClickedSupplyingNodeId), nodes, seen);
+    }
+
+    if (!nodes.length && document.activeElement) {
+      collectSupplyingTreeNodesFromDom(tree, $(document.activeElement), nodes, seen);
+    }
+
+    if (nodes.length > 1 && lastClickedSupplyingNodeId) {
+      var lastClickedNode = tree.get_node(lastClickedSupplyingNodeId);
+      if (lastClickedNode && lastClickedNode.id) {
+        return [lastClickedNode];
+      }
+    }
+
+    return nodes;
+  }
+
+  function collectSupplyingTreeNodesFromDom(tree, $elements, out, seen) {
+    if (!tree || !$elements || !$elements.length) return;
+
+    $elements.each(function () {
+      var $li = $(this).is("li.jstree-node")
+        ? $(this)
+        : $(this).closest("li.jstree-node");
+
+      if (!$li.length) return;
+      addSupplyingTreeNode(tree.get_node($.trim(String($li.attr("id") || ""))), out, seen);
+    });
+  }
+
+  function addSupplyingTreeNode(node, out, seen) {
+    if (!node || !node.id || seen[node.id]) return;
+    seen[node.id] = true;
+    out.push(node);
+  }
+
+  function getSingleSelectedHeadingNode(tree, selectedNodes) {
+    var headingNodes = [];
+    var seen = {};
+
+    for (var i = 0; i < (selectedNodes || []).length; i++) {
+      var node = selectedNodes[i];
+      if (!node || !node.data) continue;
+
+      if (Number(node.data.kind) === 0) {
+        if (!seen[node.id]) {
+          seen[node.id] = true;
+          headingNodes.push(node);
+        }
+      }
+    }
+
+    if (headingNodes.length === 1) return headingNodes[0];
+
+    if (!headingNodes.length && selectedNodes && selectedNodes.length === 1) {
+      return getParentHeadingNode(tree, selectedNodes[0]);
+    }
+
+    return null;
+  }
+
   function findTreeNodeByDataId(tree, kind, dataId) {
     if (!tree || typeof tree.get_node !== "function") return null;
 
@@ -1929,9 +2066,17 @@
 
   function getNodeTitle(node) {
     if (!node) return "";
-    if (node.data && node.data.title != null) return normaliseWhitespace(node.data.title);
-    if (node.text != null) return normaliseWhitespace(node.text);
-    return "";
+    var raw = "";
+
+    if (node.data) {
+      raw = node.data.title != null ? node.data.title : (node.data.TITLE != null ? node.data.TITLE : node.data.name);
+    }
+
+    if (!$.trim(String(raw || "")) && node.text != null) {
+      raw = node.text;
+    }
+
+    return normaliseWhitespace(parseHeadingBaseMeta(raw).name);
   }
 
   function getNodeDescription(node) {
@@ -2178,6 +2323,44 @@
     if (!text) return "";
 
     return preserveCase ? text : text.toLowerCase();
+  }
+
+  function parseHeadingBaseMeta(value) {
+    var raw = $.trim(String(value || ""));
+    var meta = {
+      additionalOptions: false,
+      hidden: false,
+      renderType: "normal",
+      name: raw
+    };
+
+    var changed = true;
+    while (changed) {
+      changed = false;
+
+      if (/^\/\/\s*/i.test(raw)) {
+        meta.hidden = true;
+        raw = raw.replace(/^\/\/\s*/i, "");
+        changed = true;
+      }
+
+      if (/^\$\s*/i.test(raw)) {
+        meta.additionalOptions = true;
+        raw = raw.replace(/^\$\s*/i, "");
+        changed = true;
+      }
+    }
+
+    if (/^section\s*:\s*/i.test(raw)) {
+      meta.renderType = "section";
+      raw = raw.replace(/^section\s*:\s*/i, "");
+    } else if (/^dept\s*:\s*/i.test(raw)) {
+      meta.renderType = "dept";
+      raw = raw.replace(/^dept\s*:\s*/i, "");
+    }
+
+    meta.name = $.trim(raw);
+    return meta;
   }
 
   function normaliseDisplayText(value) {
