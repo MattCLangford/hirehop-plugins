@@ -254,25 +254,34 @@
     setStatus("", "");
     setSaveEnabled(false);
 
-    var tree = getTree();
-    if (!tree) {
-      showMessage("Items list not ready", "The items list could not be detected yet. Open the supplying list and try again.");
-      showOverlay();
-      return;
-    }
+    try {
+      var tree = getTree();
+      if (!tree) {
+        showMessage("Items list not ready", "The items list could not be detected yet. Open the supplying list and try again.");
+        showOverlay();
+        return;
+      }
 
-    var match = chooseEventOverviewSection(tree);
-    if (match.error) {
-      showMessage(match.title || "Event Overview not found", match.error);
-      showOverlay();
-      return;
-    }
+      var match = chooseEventOverviewSection(tree);
+      if (match.error) {
+        showMessage(match.title || "Event Overview not found", match.error);
+        showOverlay();
+        return;
+      }
 
-    editor.rootNode = match.node;
-    editor.original = readEventOverviewState(tree, match.node);
-    editor.current = clone(editor.original);
-    renderEditor(editor.current);
-    showOverlay();
+      editor.rootNode = match.node;
+      editor.original = readEventOverviewState(tree, match.node);
+      editor.current = clone(editor.original);
+      renderEditor(editor.current);
+      showOverlay();
+    } catch (err) {
+      editor.rootNode = null;
+      editor.original = null;
+      editor.current = null;
+      warn("openEditor failed", err);
+      showMessage("Could not open Event Overview", getErrorMessage(err, "The editor hit an unexpected error while reading the selected section."));
+      showOverlay();
+    }
   }
 
   function closeEditor() {
@@ -884,15 +893,15 @@
 
   function chooseEventOverviewSection(tree) {
     var matches = getAllHeadingNodes(tree).filter(isEventOverviewSection);
+    var selectedRoot = getSelectedEventOverviewRoot(tree);
+
+    if (selectedRoot) return { node: selectedRoot };
+
     if (!matches.length) {
-      return { title: "Event Overview not found", error: "Add a hidden section called “" + CFG.requiredRawSectionName + "” to the supplying list." };
+      return { title: "Event Overview not found", error: "Select the Event Overview section (or its Proposed Timings child), or add a hidden section called “" + CFG.requiredRawSectionName + "” to the supplying list." };
     }
 
     if (matches.length === 1) return { node: matches[0] };
-
-    var selected = getSelectedTreeNode(tree);
-    var selectedRoot = selected ? findEventOverviewAncestor(tree, selected) : null;
-    if (selectedRoot) return { node: selectedRoot };
 
     return {
       title: "More than one Event Overview found",
@@ -906,6 +915,32 @@
     return heading.hidden === true && heading.renderType === "section" && normaliseText(heading.name) === normaliseText(CFG.sectionName);
   }
 
+  function isNamedEventOverviewSection(node) {
+    if (!node || !node.data || Number(node.data.kind) !== 0) return false;
+    return normaliseText(getNodeTitle(node)) === normaliseText(CFG.sectionName);
+  }
+
+  function isEventOverviewRootMetaNode(node) {
+    if (!node || !node.data || Number(node.data.kind) !== 0) return false;
+    var metaInfo = extractStoredPageMeta(getNodeTechnical(node));
+    var meta = normaliseMeta(metaInfo.meta);
+    return !!(meta && String(meta.templateKey || "") === CFG.rootTemplateKey);
+  }
+
+  function isEventOverviewDeptNode(node) {
+    if (!node || !node.data || Number(node.data.kind) !== 0) return false;
+
+    var metaInfo = extractStoredPageMeta(getNodeTechnical(node));
+    var meta = normaliseMeta(metaInfo.meta);
+    if (meta && String(meta.templateKey || "") === CFG.deptTemplateKey) return true;
+
+    return normaliseText(getNodeTitle(node)) === normaliseText("Proposed Timings");
+  }
+
+  function isSelectableEventOverviewRoot(node) {
+    return isEventOverviewSection(node) || isNamedEventOverviewSection(node) || isEventOverviewRootMetaNode(node);
+  }
+
   function findEventOverviewAncestor(tree, node) {
     var current = node;
     while (current && current.id && current.id !== "#") {
@@ -915,6 +950,25 @@
       current = tree.get_node(parentId);
     }
     return null;
+  }
+
+  function getSelectedEventOverviewRoot(tree) {
+    var selected = getSelectedTreeNode(tree);
+    if (!selected) return null;
+
+    var headingNode = selected;
+    if (!headingNode.data || Number(headingNode.data.kind) !== 0) {
+      headingNode = getParentHeadingNode(tree, headingNode);
+    }
+    if (!headingNode) return null;
+
+    if (isSelectableEventOverviewRoot(headingNode)) return headingNode;
+
+    var parentHeading = getParentHeadingNode(tree, headingNode);
+    if (isEventOverviewDeptNode(headingNode) && parentHeading) return parentHeading;
+    if (parentHeading && isSelectableEventOverviewRoot(parentHeading)) return parentHeading;
+
+    return findEventOverviewAncestor(tree, headingNode);
   }
 
   function getTree() {
@@ -960,20 +1014,68 @@
     });
   }
 
-  function getSelectedTreeNode(tree) {
-    try {
-      var selected = tree.get_selected(true) || [];
-      if (selected.length === 1) return selected[0];
-    } catch (e) {}
+  function getSelectedTreeNodes(tree) {
+    var nodes = [];
+    var seen = {};
 
-    var $clicked = $("#items_tab .jstree-clicked").first();
-    if ($clicked.length) {
-      var $li = $clicked.closest("li.jstree-node");
-      if ($li.length) return tree.get_node(String($li.attr("id") || ""));
+    if (tree && typeof tree.get_selected === "function") {
+      var selected = tree.get_selected(true) || [];
+      for (var i = 0; i < selected.length; i++) {
+        addTreeNode(selected[i], nodes, seen);
+      }
     }
 
-    if (editor.lastClickedNodeId) return tree.get_node(editor.lastClickedNodeId);
-    return null;
+    collectTreeNodesFromDom(tree, $("#items_tab .jstree-clicked"), nodes, seen);
+
+    if (!nodes.length) {
+      collectTreeNodesFromDom(
+        tree,
+        $("#items_tab li.jstree-node.jstree-clicked, #items_tab li.jstree-selected, #items_tab li[aria-selected='true'], #items_tab a.jstree-anchor[aria-selected='true']"),
+        nodes,
+        seen
+      );
+    }
+
+    if (!nodes.length && editor.lastClickedNodeId) {
+      addTreeNode(tree.get_node(editor.lastClickedNodeId), nodes, seen);
+    }
+
+    if (!nodes.length && document.activeElement) {
+      collectTreeNodesFromDom(tree, $(document.activeElement), nodes, seen);
+    }
+
+    if (nodes.length > 1 && editor.lastClickedNodeId) {
+      var lastClickedNode = tree.get_node(editor.lastClickedNodeId);
+      if (lastClickedNode && lastClickedNode.id) {
+        return [lastClickedNode];
+      }
+    }
+
+    return nodes;
+  }
+
+  function collectTreeNodesFromDom(tree, $elements, out, seen) {
+    if (!tree || !$elements || !$elements.length) return;
+
+    $elements.each(function () {
+      var $li = $(this).is("li.jstree-node")
+        ? $(this)
+        : $(this).closest("li.jstree-node");
+
+      if (!$li.length) return;
+      addTreeNode(tree.get_node($.trim(String($li.attr("id") || ""))), out, seen);
+    });
+  }
+
+  function addTreeNode(node, out, seen) {
+    if (!node || !node.id || seen[node.id]) return;
+    seen[node.id] = true;
+    out.push(node);
+  }
+
+  function getSelectedTreeNode(tree) {
+    var nodes = getSelectedTreeNodes(tree);
+    return nodes.length ? nodes[0] : null;
   }
 
   function getDirectChildNodes(tree, node) {
