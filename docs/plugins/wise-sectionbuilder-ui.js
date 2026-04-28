@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] page editor loaded - v2026-04-28.05"); } catch (e) {}
+  try { console.warn("[WiseHireHop] page editor loaded - v2026-04-28.06"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -1071,6 +1071,8 @@
         if (context.rootNode && context.rootNode.data) {
           context.rootNode.data.DESCRIPTION = nextState.sectionBlurb || "";
         }
+      } else {
+        await deleteEventOverviewExtraColumns(jobId, nextState);
       }
 
       currentSession.state = nextState;
@@ -1159,6 +1161,88 @@
       FLAG: getSnapshotFlag(slot.nodeData),
       CUSTOM_FIELDS: getSnapshotCustomFields(slot.nodeData)
     });
+  }
+
+  async function deleteEventOverviewExtraColumns(jobId, state) {
+    var extraSlots = [
+      findSlotByKey(state.slots, SLOT_SECONDARY),
+      findSlotByKey(state.slots, SLOT_TERTIARY)
+    ];
+    var hasExtraColumns = false;
+
+    for (var i = 0; i < extraSlots.length; i++) {
+      if (hasEventOverviewSlotSavedContent(extraSlots[i])) {
+        hasExtraColumns = true;
+        break;
+      }
+    }
+
+    if (!hasExtraColumns) return;
+
+    setBuilderStatus("Removing unused column Dept headings...", "info");
+
+    for (var j = 0; j < extraSlots.length; j++) {
+      if (!hasEventOverviewSlotSavedContent(extraSlots[j])) continue;
+      await deleteEventOverviewSlot(jobId, extraSlots[j]);
+      resetEventOverviewSlot(extraSlots[j]);
+    }
+  }
+
+  async function deleteEventOverviewSlot(jobId, slot) {
+    var itemIds = getSlotCustomItemIds(slot);
+
+    if (itemIds.length) {
+      setBuilderStatus("Removing " + slot.label.toLowerCase() + " milestones...", "info");
+      await deleteItemsDirect(itemIds, jobId, 3);
+    }
+
+    if (slot.headingId) {
+      setBuilderStatus("Removing " + slot.label.toLowerCase() + " Dept heading...", "info");
+      await deleteItemsDirect([slot.headingId], jobId, 0);
+    }
+  }
+
+  function hasEventOverviewSlotSavedContent(slot) {
+    return !!(
+      slot &&
+      (
+        slot.headingId ||
+        normaliseIdList(slot.itemIds).length ||
+        getSlotCustomItemIds(slot).length
+      )
+    );
+  }
+
+  function getSlotCustomItemIds(slot) {
+    var ids = normaliseIdList(slot && slot.itemIds);
+    var rows = slot && slot.rows ? slot.rows : [];
+
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i] || {};
+      var rowId = $.trim(String(row.rowId || ""));
+      var nodeId = row.nodeData && row.nodeData.ID != null ? $.trim(String(row.nodeData.ID || "")) : "";
+
+      if (rowId && ids.indexOf(rowId) === -1) ids.push(rowId);
+      if (nodeId && ids.indexOf(nodeId) === -1) ids.push(nodeId);
+    }
+
+    return ids;
+  }
+
+  function resetEventOverviewSlot(slot) {
+    if (!slot) return;
+
+    slot.headingId = "";
+    slot.title = "";
+    slot.blurb = "";
+    slot.baseMemo = "";
+    slot.pageMetaInfo = {
+      baseText: "",
+      meta: null
+    };
+    slot.itemIds = [];
+    slot.rows = [makeBlankRow()];
+    slot.nodeData = null;
   }
 
   async function syncCustomRowsForSlot(jobId, slot) {
