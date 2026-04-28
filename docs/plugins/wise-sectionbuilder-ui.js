@@ -40,6 +40,10 @@
   var VARIANT_THREE_COLUMNS = "three_columns";
   var LEGACY_VARIANT_COLUMNS = "no_image_multi";
   var SLOT_KEYS = ["primary", "secondary", "tertiary"];
+  var REGION_IMAGE = "image";
+  var REGION_OPENING = "opening";
+  var REGION_SCHEDULE_PREFIX = "schedule-";
+  var LAYOUT_SCHEMAS = buildLayoutSchemas();
 
   var editor = {
     ready: false,
@@ -47,6 +51,7 @@
     original: null,
     current: null,
     rootNode: null,
+    selectedRegionId: "",
     lastClickedNodeId: "",
     lastWriteAt: 0,
     uid: 0,
@@ -85,6 +90,89 @@
 
     $(window).on("load.wiseEventOverview focus.wiseEventOverview", attempt);
     $(document).on("ajaxComplete.wiseEventOverview", attempt);
+  }
+
+  function buildLayoutSchemas() {
+    return {
+      image: {
+        id: LAYOUT_IMAGE,
+        label: "Image split",
+        defaultRegionId: REGION_IMAGE,
+        regions: [
+          { id: REGION_IMAGE, kind: REGION_IMAGE, label: "Feature image", pageLabel: "Left image", note: "Shown on the left half of the page." },
+          { id: buildScheduleRegionId(0), kind: "schedule", scheduleIndex: 0, label: "Main schedule", pageLabel: "Right schedule", note: "Shown beside the image." },
+          { id: buildScheduleRegionId(1), kind: "schedule", scheduleIndex: 1, label: "Extra saved schedule", pageLabel: "Hidden extra 1", note: "Saved in HireHop but hidden in this layout.", isHiddenSlot: true },
+          { id: buildScheduleRegionId(2), kind: "schedule", scheduleIndex: 2, label: "Extra saved schedule", pageLabel: "Hidden extra 2", note: "Saved in HireHop but hidden in this layout.", isHiddenSlot: true }
+        ]
+      },
+      columns: {
+        id: LAYOUT_COLUMNS,
+        label: "Three columns",
+        defaultRegionId: REGION_OPENING,
+        regions: [
+          { id: REGION_OPENING, kind: REGION_OPENING, label: "Opening text", pageLabel: "Top opening", note: "Shown above the three visible schedule columns." },
+          { id: buildScheduleRegionId(0), kind: "schedule", scheduleIndex: 0, label: "Column 1", pageLabel: "Column 1", note: "First visible schedule column." },
+          { id: buildScheduleRegionId(1), kind: "schedule", scheduleIndex: 1, label: "Column 2", pageLabel: "Column 2", note: "Second visible schedule column." },
+          { id: buildScheduleRegionId(2), kind: "schedule", scheduleIndex: 2, label: "Column 3", pageLabel: "Column 3", note: "Third visible schedule column." }
+        ]
+      }
+    };
+  }
+
+  function getLayoutSchema(layout) {
+    return LAYOUT_SCHEMAS[normaliseLayout(layout)] || LAYOUT_SCHEMAS[LAYOUT_IMAGE];
+  }
+
+  function getLayoutRegions(state) {
+    return getLayoutSchema(state && state.layout).regions.slice();
+  }
+
+  function getRegionDefinition(state, regionId) {
+    var regions = getLayoutRegions(state);
+
+    for (var i = 0; i < regions.length; i++) {
+      if (regions[i].id === regionId) return $.extend({}, regions[i]);
+    }
+
+    return null;
+  }
+
+  function buildScheduleRegionId(index) {
+    return REGION_SCHEDULE_PREFIX + String(index);
+  }
+
+  function getScheduleIndexFromRegionId(regionId) {
+    var match = String(regionId || "").match(/^schedule-(\d+)$/);
+    return match && match[1] ? toInt(match[1], -1) : -1;
+  }
+
+  function getDefaultSelectedRegionId(state) {
+    state = normaliseEditorState(state || blankState());
+
+    if (state.layout === LAYOUT_IMAGE) {
+      if (!$.trim(String(state.imageUrl || ""))) return REGION_IMAGE;
+      return buildScheduleRegionId(0);
+    }
+
+    if (!$.trim(String(state.openingText || ""))) return REGION_OPENING;
+    return buildScheduleRegionId(0);
+  }
+
+  function normaliseSelectedRegionId(regionId, state) {
+    var regions = getLayoutRegions(state);
+    var target = String(regionId || "");
+
+    for (var i = 0; i < regions.length; i++) {
+      if (regions[i].id === target) return target;
+    }
+
+    return getDefaultSelectedRegionId(state);
+  }
+
+  function getScheduleAtIndex(state, index) {
+    var schedules = state && state.schedules ? state.schedules : [];
+    var fallbackTitle = index === 0 ? "Day of event" : "";
+    return normaliseSchedule(schedules[index] || blankSchedule(fallbackTitle));
   }
 
   function injectStyles() {
@@ -163,45 +251,56 @@
       "#" + CFG.modalId + " .weo-warning{border:1px solid #fedf89;background:#fffaeb;color:#93370d;border-radius:10px;padding:7px 9px;font-size:11px;line-height:1.35;}",
       "#" + CFG.modalId + " .weo-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:0;}",
       "#" + CFG.modalId + " .weo-footer{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-top:8px;border-top:1px solid #e4e8ef;}",
-      "#" + CFG.modalId + " .weo-preview-card{background:linear-gradient(180deg,#12213c 0%,#182946 100%);border-color:#102448;color:#e5edf8;}",
-      "#" + CFG.modalId + " .weo-preview-card .weo-card-title{color:#fff;}",
-      "#" + CFG.modalId + " .weo-preview-card .weo-card-note{color:rgba(226,232,240,.8);}",
-      "#" + CFG.modalId + " .weo-chip-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}",
-      "#" + CFG.modalId + " .weo-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(148,163,184,.28);border-radius:999px;background:rgba(255,255,255,.06);padding:5px 8px;}",
-      "#" + CFG.modalId + " .weo-chip strong{font-size:11px;font-weight:800;color:#fff;}",
-      "#" + CFG.modalId + " .weo-chip span{font-size:11px;color:rgba(226,232,240,.82);}",
-      "#" + CFG.modalId + " .weo-preview-page{border-radius:16px;background:linear-gradient(180deg,#ffffff 0%,#f4f7fb 100%);padding:10px;border:1px solid rgba(148,163,184,.22);display:grid;gap:10px;color:#101828;min-height:286px;}",
-      "#" + CFG.modalId + " .weo-preview-page.is-image{grid-template-columns:.88fr 1.12fr;}",
-      "#" + CFG.modalId + " .weo-preview-media{border-radius:12px;background:linear-gradient(160deg,#0ea5e9 0%,#1d4ed8 100%);padding:12px;display:flex;flex-direction:column;justify-content:space-between;min-height:250px;color:#eff6ff;}",
-      "#" + CFG.modalId + " .weo-preview-media-tag{align-self:flex-start;border-radius:999px;background:rgba(255,255,255,.16);padding:5px 8px;font-size:11px;font-weight:800;}",
-      "#" + CFG.modalId + " .weo-preview-media-url{font-size:12px;line-height:1.4;word-break:break-word;}",
-      "#" + CFG.modalId + " .weo-preview-copy{display:flex;flex-direction:column;gap:10px;background:#fff;border-radius:12px;padding:12px;box-shadow:inset 0 0 0 1px #e6ebf2;min-height:250px;}",
-      "#" + CFG.modalId + " .weo-preview-kicker{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#175cd3;}",
-      "#" + CFG.modalId + " .weo-preview-heading{font-size:18px;font-weight:800;line-height:1.08;letter-spacing:-.02em;}",
-      "#" + CFG.modalId + " .weo-preview-blurb{font-size:12px;color:#475467;line-height:1.45;min-height:36px;}",
-      "#" + CFG.modalId + " .weo-preview-list{display:grid;gap:8px;margin-top:auto;}",
-      "#" + CFG.modalId + " .weo-preview-time{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;padding-top:8px;border-top:1px solid #edf1f5;}",
-      "#" + CFG.modalId + " .weo-preview-time strong{font-size:11px;font-weight:800;color:#175cd3;}",
-      "#" + CFG.modalId + " .weo-preview-time span{font-size:11px;color:#344054;line-height:1.35;}",
-      "#" + CFG.modalId + " .weo-preview-page.is-columns{grid-template-rows:auto 1fr;}",
-      "#" + CFG.modalId + " .weo-preview-opening{padding:10px 12px;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #e6ebf2;font-size:12px;color:#475467;line-height:1.45;min-height:52px;}",
-      "#" + CFG.modalId + " .weo-preview-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}",
-      "#" + CFG.modalId + " .weo-preview-column{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #e6ebf2;min-height:192px;}",
-      "#" + CFG.modalId + " .weo-preview-column.is-empty{background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);opacity:.76;}",
-      "#" + CFG.modalId + " .weo-preview-column-label{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#98a2b3;}",
-      "#" + CFG.modalId + " .weo-preview-column-title{font-size:13px;font-weight:800;color:#101828;line-height:1.2;}",
-      "#" + CFG.modalId + " .weo-preview-column-intro{font-size:11px;color:#667085;line-height:1.35;min-height:28px;}",
-      "#" + CFG.modalId + " .weo-preview-column-list{display:grid;gap:6px;margin-top:auto;}",
-      "#" + CFG.modalId + " .weo-preview-empty{margin-top:auto;padding:10px;border:1px dashed #d0d5dd;border-radius:10px;font-size:11px;color:#98a2b3;text-align:center;background:#fbfcfd;}",
-      "#" + CFG.modalId + " .weo-preview-more{font-size:11px;font-weight:800;color:#667085;}",
-      "#" + CFG.modalId + " .weo-preview-help{margin-top:10px;font-size:11px;line-height:1.45;color:rgba(226,232,240,.82);}",
+      "#" + CFG.modalId + " .weo-helper-strip{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;}",
+      "#" + CFG.modalId + " .weo-helper-strip span{display:inline-flex;align-items:center;border:1px solid #d9e2ec;border-radius:999px;background:#fbfcfe;padding:4px 7px;font-size:10px;font-weight:800;color:#667085;}",
+      "#" + CFG.modalId + " .weo-composer{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(300px,340px);gap:8px;align-items:start;}",
+      "#" + CFG.modalId + " .weo-map-card,#" + CFG.modalId + " .weo-inspector-card{padding:9px;}",
+      "#" + CFG.modalId + " .weo-map-shell{display:grid;gap:8px;}",
+      "#" + CFG.modalId + " .weo-page-surface{border:1px solid #d8e0ea;border-radius:14px;background:linear-gradient(180deg,#fbfcfe 0%,#f3f6fa 100%);padding:8px;display:grid;gap:8px;}",
+      "#" + CFG.modalId + " .weo-page-surface.is-image{grid-template-columns:.82fr 1.18fr;min-height:260px;}",
+      "#" + CFG.modalId + " .weo-page-surface.is-columns{grid-template-rows:auto 1fr;}",
+      "#" + CFG.modalId + " .weo-page-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;min-height:210px;}",
+      "#" + CFG.modalId + " .weo-map-region{width:100%;border:1px solid #d6deea;border-radius:12px;background:#fff;padding:8px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;cursor:pointer;min-width:0;box-shadow:0 1px 2px rgba(15,23,42,.04);}",
+      "#" + CFG.modalId + " button.weo-map-region{font:inherit;color:inherit;appearance:none;-webkit-appearance:none;}",
+      "#" + CFG.modalId + " .weo-map-region:hover{border-color:#9ab6ea;box-shadow:0 8px 16px rgba(37,99,235,.08);}",
+      "#" + CFG.modalId + " .weo-map-region:focus-visible{outline:2px solid rgba(23,92,211,.26);outline-offset:1px;}",
+      "#" + CFG.modalId + " .weo-map-region.is-selected{border-color:#175cd3;background:#eff5ff;box-shadow:inset 0 0 0 1px rgba(23,92,211,.08),0 10px 18px rgba(23,92,211,.12);}",
+      "#" + CFG.modalId + " .weo-map-region.is-empty{background:#fcfdff;}",
+      "#" + CFG.modalId + " .weo-map-region.is-image-region{background:linear-gradient(160deg,#0ea5e9 0%,#1d4ed8 100%);border-color:#175cd3;color:#eff6ff;justify-content:space-between;}",
+      "#" + CFG.modalId + " .weo-map-region.is-image-region.is-selected{box-shadow:inset 0 0 0 1px rgba(255,255,255,.24),0 10px 18px rgba(23,92,211,.22);}",
+      "#" + CFG.modalId + " .weo-map-region.is-hidden-slot{background:#f9fafb;}",
+      "#" + CFG.modalId + " .weo-map-region.is-compact{min-height:118px;}",
+      "#" + CFG.modalId + " .weo-region-kicker{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#98a2b3;}",
+      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-kicker{color:rgba(239,246,255,.84);}",
+      "#" + CFG.modalId + " .weo-region-title{font-size:12px;font-weight:800;line-height:1.15;color:#101828;}",
+      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-title{color:#fff;}",
+      "#" + CFG.modalId + " .weo-region-copy{display:block;font-size:10px;line-height:1.35;color:#475467;min-width:0;}",
+      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-copy{color:rgba(239,246,255,.92);}",
+      "#" + CFG.modalId + " .weo-region-tag{display:inline-flex;align-items:center;border:1px solid #d8e2f0;border-radius:999px;background:#f8fafc;padding:3px 6px;font-size:9px;font-weight:800;color:#667085;}",
+      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-tag{border-color:rgba(255,255,255,.24);background:rgba(255,255,255,.12);color:#eff6ff;}",
+      "#" + CFG.modalId + " .weo-region-list{display:grid;gap:4px;width:100%;margin-top:auto;}",
+      "#" + CFG.modalId + " .weo-region-line{display:grid;grid-template-columns:56px minmax(0,1fr);gap:6px;padding-top:4px;border-top:1px solid #eef2f6;width:100%;}",
+      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-line{border-top-color:rgba(255,255,255,.22);}",
+      "#" + CFG.modalId + " .weo-region-line strong{font-size:10px;font-weight:800;color:#175cd3;}",
+      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-line strong{color:#fff;}",
+      "#" + CFG.modalId + " .weo-region-line span{font-size:10px;color:#344054;line-height:1.3;min-width:0;}",
+      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-line span{color:rgba(239,246,255,.9);}",
+      "#" + CFG.modalId + " .weo-region-empty{margin-top:auto;padding:8px;border:1px dashed #d3dbe6;border-radius:9px;background:#fbfcfe;font-size:10px;color:#98a2b3;width:100%;text-align:center;}",
+      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-empty{border-color:rgba(255,255,255,.26);background:rgba(255,255,255,.1);color:#e0ecff;}",
+      "#" + CFG.modalId + " .weo-hidden-strip{display:grid;gap:6px;}",
+      "#" + CFG.modalId + " .weo-hidden-strip-head{display:flex;align-items:center;justify-content:space-between;gap:8px;}",
+      "#" + CFG.modalId + " .weo-hidden-strip-title{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#667085;}",
+      "#" + CFG.modalId + " .weo-hidden-strip-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}",
+      "#" + CFG.modalId + " .weo-inspector-body{display:grid;gap:8px;}",
+      "#" + CFG.modalId + " .weo-inspector-tip{padding:7px 8px;border:1px solid #e4e8ef;border-radius:9px;background:#fbfcfd;font-size:10px;line-height:1.35;color:#667085;}",
+      "#" + CFG.modalId + " .weo-schedule-editor{display:grid;gap:8px;min-width:0;}",
       "#" + CFG.statusId + "{min-height:14px;font-size:11px;font-weight:700;padding-left:1px;}",
       "#" + CFG.statusId + ".is-error{color:#b42318;}",
       "#" + CFG.statusId + ".is-success{color:#027a48;}",
       "#" + CFG.statusId + ".is-warning{color:#b54708;}",
       "#" + CFG.statusId + ".is-info{color:#175cd3;}",
-      "@media(max-width:980px){#" + CFG.modalId + "{width:calc(100vw - 20px);max-height:calc(100vh - 20px);}#" + CFG.modalId + " .weo-schedule-grid{grid-template-columns:1fr 1fr;}#" + CFG.modalId + " .weo-schedule-grid-fields{grid-template-columns:1fr;}}",
-      "@media(max-width:760px){#" + CFG.overlayId + "{padding:8px;}#" + CFG.modalId + "{width:calc(100vw - 16px);max-height:calc(100vh - 16px);}#" + CFG.modalId + " .weo-head{padding:12px 12px 9px;}#" + CFG.modalId + " .weo-body{padding:8px;}#" + CFG.modalId + " .weo-choice-grid,#" + CFG.modalId + " .weo-fields,#" + CFG.modalId + " .weo-schedule-grid{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-choice{grid-template-columns:16px minmax(0,1fr);}#" + CFG.modalId + " .weo-choice-visual{display:none;}#" + CFG.modalId + " .weo-row{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-row .weo-btn{width:100%;}#" + CFG.modalId + " .weo-schedules-head{flex-direction:column;align-items:flex-start;}#" + CFG.modalId + " .weo-footer{flex-wrap:wrap;justify-content:stretch;}#" + CFG.modalId + " .weo-footer .weo-btn{flex:1 1 140px;}}"
+      "@media(max-width:980px){#" + CFG.modalId + "{width:calc(100vw - 20px);max-height:calc(100vh - 20px);}#" + CFG.modalId + " .weo-composer{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-page-surface.is-image{grid-template-columns:1fr;min-height:0;}#" + CFG.modalId + " .weo-page-columns{grid-template-columns:1fr 1fr;min-height:0;}#" + CFG.modalId + " .weo-hidden-strip-grid{grid-template-columns:1fr 1fr;}#" + CFG.modalId + " .weo-schedule-grid{grid-template-columns:1fr 1fr;}#" + CFG.modalId + " .weo-schedule-grid-fields{grid-template-columns:1fr;}}",
+      "@media(max-width:760px){#" + CFG.overlayId + "{padding:8px;}#" + CFG.modalId + "{width:calc(100vw - 16px);max-height:calc(100vh - 16px);}#" + CFG.modalId + " .weo-head{padding:12px 12px 9px;}#" + CFG.modalId + " .weo-body{padding:8px;}#" + CFG.modalId + " .weo-choice-grid,#" + CFG.modalId + " .weo-fields,#" + CFG.modalId + " .weo-schedule-grid,#" + CFG.modalId + " .weo-page-columns,#" + CFG.modalId + " .weo-hidden-strip-grid{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-choice{grid-template-columns:16px minmax(0,1fr);}#" + CFG.modalId + " .weo-choice-visual{display:none;}#" + CFG.modalId + " .weo-row{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-row .weo-btn{width:100%;}#" + CFG.modalId + " .weo-schedules-head{flex-direction:column;align-items:flex-start;}#" + CFG.modalId + " .weo-hidden-strip-head,#" + CFG.modalId + " .weo-footer{flex-direction:column;align-items:stretch;}#" + CFG.modalId + " .weo-footer{flex-wrap:wrap;justify-content:stretch;}#" + CFG.modalId + " .weo-footer .weo-btn{flex:1 1 140px;}}"
     ].join("");
 
     $("head").append('<style id="' + CFG.stylesId + '">' + css + "</style>");
@@ -243,6 +342,7 @@
     $("#" + CFG.bodyId).on("change", 'input[name="weo-layout"]', function () {
       if (editor.saving) return;
       editor.current = readFormState(editor.current);
+      editor.selectedRegionId = normaliseSelectedRegionId(editor.selectedRegionId, editor.current);
       renderEditor(editor.current);
       setStatus("", "");
     });
@@ -334,6 +434,7 @@
       editor.rootNode = match.node;
       editor.original = readEventOverviewState(tree, match.node);
       editor.current = clone(editor.original);
+      editor.selectedRegionId = "";
       renderEditor(editor.current);
       showOverlay();
     } catch (err) {
@@ -375,13 +476,14 @@
   function renderEditor(state) {
     state = normaliseEditorState(state || blankState());
     editor.current = state;
+    editor.selectedRegionId = normaliseSelectedRegionId(editor.selectedRegionId, state);
 
     var extraImageWarning = getImageLayoutExtraScheduleWarning(state);
     var html = '' +
       '<div class="weo-grid">' +
         pageSetupCardHtml(state) +
         (extraImageWarning ? '<div class="weo-warning">' + esc(extraImageWarning) + '</div>' : '') +
-        schedulesHtml(state) +
+        pageComposerHtml(state, editor.selectedRegionId) +
       '</div>';
 
     $("#" + CFG.bodyId).html(html);
@@ -391,40 +493,52 @@
   function pageSetupCardHtml(state) {
     return '' +
       '<div class="weo-card">' +
-        '<div class="weo-card-head"><div><div class="weo-card-title">Build controls</div><div class="weo-card-note">Choose the page shape first, then fill the content that should appear in the sketch.</div></div></div>' +
+        '<div class="weo-card-head"><div><div class="weo-card-title">Page layout</div><div class="weo-card-note">Pick the locked page shape first, then click a page area below to edit only that part of the proposal.</div></div></div>' +
+        '<div class="weo-helper-strip"><span>1. Choose layout</span><span>2. Click a page area</span><span>3. Fill the constrained fields</span></div>' +
         '<div class="weo-choice-grid">' +
           layoutChoiceHtml(LAYOUT_IMAGE, state.layout, "Image split", "One feature image with a single schedule beside it.") +
           layoutChoiceHtml(LAYOUT_COLUMNS, state.layout, "Three columns", "Opening copy above up to three schedule columns.") +
         '</div>' +
-        '<div class="weo-setup-grid">' +
-          (state.layout === LAYOUT_IMAGE ? imageCardHtml(state) : openingTextCardHtml(state)) +
-        '</div>' +
       '</div>';
   }
 
-  function livePreviewPanelHtml(state) {
-    var activeCount = Math.min(state.layout === LAYOUT_COLUMNS ? CFG.maxSchedules : 1, getActiveSchedules(state).length);
-    var totalRows = countScheduleRows(state.schedules || []);
+  function pageComposerHtml(state, selectedRegionId) {
+    return '' +
+      '<div class="weo-composer">' +
+        pageMapCardHtml(state, selectedRegionId) +
+        inspectorCardHtml(state, selectedRegionId) +
+      '</div>';
+  }
+
+  function pageMapCardHtml(state, selectedRegionId) {
+    return '' +
+      '<div class="weo-card weo-map-card">' +
+        '<div class="weo-card-head">' +
+          '<div><div class="weo-card-title">Page map</div><div class="weo-card-note">This is the constrained proposal layout. Click a block to edit the content that lands there.</div></div>' +
+          '<div class="weo-mini-meta">' + esc(String(countScheduleRows(state.schedules || [])) + " time rows") + '</div>' +
+        '</div>' +
+        pageMapHtml(state, selectedRegionId) +
+      '</div>';
+  }
+
+  function inspectorCardHtml(state, selectedRegionId) {
+    var region = getRegionDefinition(state, selectedRegionId);
+
+    if (!region) {
+      return '' +
+        '<div class="weo-card weo-inspector-card">' +
+          '<div class="weo-card-head"><div><div class="weo-card-title">Edit region</div><div class="weo-card-note">Choose a page area from the map first.</div></div></div>' +
+        '</div>';
+    }
 
     return '' +
-      '<div class="weo-card weo-preview-card">' +
-        '<div class="weo-card-head"><div><div class="weo-card-title">Live page map</div><div class="weo-card-note">A compact sketch of how this Event Overview will read on the proposal page.</div></div></div>' +
-        '<div class="weo-chip-row">' +
-          summaryChipHtml("Mode", getLayoutModeLabel(state.layout)) +
-          summaryChipHtml("Active", String(activeCount) + " / " + String(state.layout === LAYOUT_COLUMNS ? CFG.maxSchedules : 1)) +
-          summaryChipHtml("Times", String(totalRows)) +
+      '<div class="weo-card weo-inspector-card">' +
+        '<div class="weo-card-head"><div><div class="weo-card-title">Edit ' + esc(region.label) + '</div><div class="weo-card-note">' + esc(region.note) + '</div></div></div>' +
+        '<div class="weo-inspector-body">' +
+          '<div class="weo-inspector-tip">Only the highlighted page area is editable here. Save, then use the rendered document preview outside this popup to review the finished page.</div>' +
+          inspectorRegionHtml(state, region) +
         '</div>' +
-        livePreviewHtml(state) +
-        '<div class="weo-preview-help">The hidden section name stays untouched. This editor only shapes the visible page content beneath it.</div>' +
       '</div>';
-  }
-
-  function summaryChipHtml(label, value) {
-    return '<span class="weo-chip"><strong>' + esc(label) + '</strong><span>' + esc(value) + '</span></span>';
-  }
-
-  function getLayoutModeLabel(layout) {
-    return normaliseLayout(layout) === LAYOUT_COLUMNS ? "Three columns" : "Image split";
   }
 
   function countScheduleRows(schedules) {
@@ -436,6 +550,123 @@
     }
 
     return total;
+  }
+
+  function pageMapHtml(state, selectedRegionId) {
+    return normaliseLayout(state.layout) === LAYOUT_COLUMNS
+      ? columnsPageMapHtml(state, selectedRegionId)
+      : imagePageMapHtml(state, selectedRegionId);
+  }
+
+  function imagePageMapHtml(state, selectedRegionId) {
+    return '' +
+      '<div class="weo-map-shell">' +
+        '<div class="weo-page-surface is-image">' +
+          mapRegionButtonHtml(getRegionDefinition(state, REGION_IMAGE), state, selectedRegionId) +
+          mapRegionButtonHtml(getRegionDefinition(state, buildScheduleRegionId(0)), state, selectedRegionId) +
+        '</div>' +
+        imageHiddenSchedulesHtml(state, selectedRegionId) +
+      '</div>';
+  }
+
+  function columnsPageMapHtml(state, selectedRegionId) {
+    var columns = [];
+
+    for (var i = 0; i < CFG.maxSchedules; i++) {
+      columns.push(mapRegionButtonHtml(getRegionDefinition(state, buildScheduleRegionId(i)), state, selectedRegionId));
+    }
+
+    return '' +
+      '<div class="weo-map-shell">' +
+        '<div class="weo-page-surface is-columns">' +
+          mapRegionButtonHtml(getRegionDefinition(state, REGION_OPENING), state, selectedRegionId) +
+          '<div class="weo-page-columns">' + columns.join("") + '</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function imageHiddenSchedulesHtml(state, selectedRegionId) {
+    var tiles = [];
+
+    for (var i = 1; i < CFG.maxSchedules; i++) {
+      tiles.push(mapRegionButtonHtml(getRegionDefinition(state, buildScheduleRegionId(i)), state, selectedRegionId, { compact: true }));
+    }
+
+    return '' +
+      '<div class="weo-hidden-strip">' +
+        '<div class="weo-hidden-strip-head">' +
+          '<div class="weo-hidden-strip-title">Hidden saved schedules</div>' +
+          '<div class="weo-mini-meta">Switch to Three columns to show these</div>' +
+        '</div>' +
+        '<div class="weo-hidden-strip-grid">' + tiles.join("") + '</div>' +
+      '</div>';
+  }
+
+  function mapRegionButtonHtml(region, state, selectedRegionId, options) {
+    options = options || {};
+    if (!region) return "";
+
+    var classes = ["weo-map-region"];
+    var title = "";
+    var copy = "";
+    var detail = "";
+    var tag = "";
+    var isEmpty = false;
+
+    if (region.kind === REGION_IMAGE) {
+      classes.push("is-image-region");
+      title = "Feature image";
+      copy = previewText(state.imageUrl, "Add an image URL to fill this side of the page.", 84);
+      tag = state.imageUrl ? "Image linked" : "Required";
+      isEmpty = !$.trim(String(state.imageUrl || ""));
+    } else if (region.kind === REGION_OPENING) {
+      title = "Opening text";
+      copy = previewText(state.openingText, "Add the short introduction that appears above the columns.", 150);
+      tag = $.trim(String(state.openingText || "")) ? "Copy added" : "Optional";
+      isEmpty = !$.trim(String(state.openingText || ""));
+    } else if (region.kind === "schedule") {
+      var schedule = getScheduleAtIndex(state, region.scheduleIndex);
+      var rows = getRowsToSave(schedule);
+      title = previewText(schedule.title, region.scheduleIndex === 0 ? "Day of event" : "Add heading", 34);
+      copy = previewText(
+        schedule.intro,
+        region.isHiddenSlot ? "Saved in HireHop but hidden in this page layout." : "Add the heading, intro, and time rows for this schedule area.",
+        96
+      );
+      tag = rows.length ? String(rows.length) + " time row" + (rows.length === 1 ? "" : "s") : "No times yet";
+      detail = rows.length ? scheduleRegionLinesHtml(rows, options.compact ? 2 : 3) : '<div class="weo-region-empty">Add a heading and at least one time row</div>';
+      isEmpty = !isMeaningfulScheduleState(schedule);
+    }
+
+    if (selectedRegionId === region.id) classes.push("is-selected");
+    if (region.isHiddenSlot) classes.push("is-hidden-slot");
+    if (options.compact) classes.push("is-compact");
+    if (isEmpty) classes.push("is-empty");
+
+    return '' +
+      '<button type="button" class="' + classes.join(" ") + '" data-weo-action="select-region" data-region-id="' + attr(region.id) + '">' +
+        '<span class="weo-region-kicker">' + esc(region.pageLabel) + '</span>' +
+        '<span class="weo-region-title">' + esc(title) + '</span>' +
+        '<span class="weo-region-copy">' + esc(copy) + '</span>' +
+        (tag ? '<span class="weo-region-tag">' + esc(tag) + '</span>' : '') +
+        detail +
+      '</button>';
+  }
+
+  function scheduleRegionLinesHtml(rows, limit) {
+    var items = [];
+    var count = Math.min(rows.length, limit || 3);
+
+    for (var i = 0; i < count; i++) {
+      items.push(
+        '<span class="weo-region-line">' +
+          '<strong>' + esc(previewText(rows[i].time, "Time", 12)) + '</strong>' +
+          '<span>' + esc(previewText(rows[i].text, "Description", 44)) + '</span>' +
+        '</span>'
+      );
+    }
+
+    return '<div class="weo-region-list">' + items.join("") + '</div>';
   }
 
   function layoutChoiceHtml(value, current, title, note) {
@@ -479,56 +710,49 @@
       '</div>';
   }
 
-  function schedulesHtml(state) {
-    var schedules = state.schedules && state.schedules.length ? state.schedules.slice(0, CFG.maxSchedules) : [blankSchedule("Day of event")];
-    var cards = [];
-    var activeCount = getActiveSchedules(state).length;
-    var totalRows = countScheduleRows(schedules);
-
-    if (state.layout === LAYOUT_COLUMNS) {
-      while (schedules.length < CFG.maxSchedules) {
-        schedules.push(blankSchedule(""));
-      }
+  function inspectorRegionHtml(state, region) {
+    if (!region) return "";
+    if (region.kind === REGION_IMAGE) return imageCardHtml(state);
+    if (region.kind === REGION_OPENING) return openingTextCardHtml(state);
+    if (region.kind === "schedule") {
+      return scheduleCardHtml(getScheduleAtIndex(state, region.scheduleIndex), region.scheduleIndex, state.layout, {
+        plain: true,
+        slotLabel: region.pageLabel,
+        slotTitle: region.label,
+        slotNote: region.note
+      });
     }
 
-    for (var i = 0; i < schedules.length; i++) {
-      cards.push(scheduleCardHtml(schedules[i], i, state.layout));
-    }
-
-    return '' +
-      '<div class="weo-card">' +
-        '<div class="weo-schedules-head">' +
-          '<div><div class="weo-card-title">' + esc(state.layout === LAYOUT_COLUMNS ? "Schedule columns" : "Schedule content") + '</div><div class="weo-card-note">' + esc(state.layout === LAYOUT_COLUMNS ? "Each card feeds one visible page column. Blank cards are ignored until you add real content." : "The first card is the visible schedule. Extra saved cards stay muted until you switch to the three column layout.") + '</div></div>' +
-          '<div class="weo-head-actions"><div class="weo-mini-meta">' + esc(String(activeCount) + " active, " + String(totalRows) + " time rows") + '</div></div>' +
-        '</div>' +
-        '<div class="weo-schedule-grid">' + cards.join("") + '</div>' +
-      '</div>';
+    return "";
   }
 
-  function scheduleCardHtml(schedule, index, layout) {
+  function scheduleCardHtml(schedule, index, layout, options) {
+    options = options || {};
     schedule = normaliseSchedule(schedule);
     var isExtraInImageLayout = layout === LAYOUT_IMAGE && index > 0;
     var rows = schedule.rows && schedule.rows.length ? schedule.rows : [blankRow()];
     var rowHtml = [];
     var liveRows = getRowsToSave(schedule).length;
     var canClear = index > 0 && (schedule.id || $.trim(schedule.title) || $.trim(schedule.intro) || liveRows);
-    var slotLabel = getScheduleSlotLabel(index, layout);
+    var slotLabel = options.slotLabel || getScheduleSlotLabel(index, layout);
     var titleLabel = layout === LAYOUT_COLUMNS ? "Column heading" : "Schedule heading";
     var introLabel = layout === LAYOUT_COLUMNS ? "Column intro" : "Schedule intro";
-    var slotNote = isExtraInImageLayout
+    var slotTitle = options.slotTitle || getScheduleSlotTitle(index, layout);
+    var slotNote = options.slotNote || (isExtraInImageLayout
       ? "Hidden until you switch this page to the three column layout."
-      : (liveRows ? String(liveRows) + " time row" + (liveRows === 1 ? "" : "s") + " ready." : "Add the first time row below.");
+      : (liveRows ? String(liveRows) + " time row" + (liveRows === 1 ? "" : "s") + " ready." : "Add the first time row below."));
+    var shellClass = options.plain ? "weo-schedule-editor" : "weo-card weo-schedule-card";
 
     for (var i = 0; i < rows.length && i < CFG.maxRows; i++) {
       rowHtml.push(rowHtmlLine(rows[i], index, i));
     }
 
     return '' +
-      '<div class="weo-card weo-schedule-card' + (isExtraInImageLayout ? ' is-muted' : '') + '" data-schedule-index="' + index + '" data-schedule-uid="' + attr(schedule.uid) + '" data-schedule-id="' + attr(schedule.id) + '">' +
+      '<div class="' + shellClass + (isExtraInImageLayout && !options.plain ? ' is-muted' : '') + '" data-schedule-index="' + index + '" data-schedule-uid="' + attr(schedule.uid) + '" data-schedule-id="' + attr(schedule.id) + '">' +
         '<div class="weo-card-head">' +
           '<div class="weo-card-heading">' +
             '<span class="weo-eyebrow">' + esc(slotLabel) + '</span>' +
-            '<div class="weo-card-title">' + esc(getScheduleSlotTitle(index, layout)) + '</div>' +
+            '<div class="weo-card-title">' + esc(slotTitle) + '</div>' +
             '<div class="weo-card-note">' + esc(slotNote) + '</div>' +
           '</div>' +
           (canClear ? '<button type="button" class="weo-btn is-danger is-small" data-weo-action="remove-schedule" data-schedule-index="' + index + '">Clear</button>' : '') +
@@ -589,87 +813,6 @@
       '</div>';
   }
 
-  function livePreviewHtml(state) {
-    return state.layout === LAYOUT_COLUMNS
-      ? columnsPreviewHtml(state)
-      : imagePreviewHtml(state);
-  }
-
-  function imagePreviewHtml(state) {
-    var schedule = normaliseSchedule((state.schedules && state.schedules[0]) || blankSchedule("Day of event"));
-
-    return '' +
-      '<div class="weo-preview-page is-image">' +
-        '<div class="weo-preview-media">' +
-          '<div class="weo-preview-media-tag">' + esc(state.imageUrl ? "Image linked" : "Image needed") + '</div>' +
-          '<div class="weo-preview-media-url">' + esc(previewText(state.imageUrl, "Add an image URL to fill this side of the page.", 54)) + '</div>' +
-        '</div>' +
-        '<div class="weo-preview-copy">' +
-          '<div class="weo-preview-kicker">Event overview</div>' +
-          '<div class="weo-preview-heading">' + esc(previewText(schedule.title, "Day of event", 38)) + '</div>' +
-          '<div class="weo-preview-blurb">' + esc(previewText(schedule.intro, "The schedule intro appears here beside the image.", 120)) + '</div>' +
-          '<div class="weo-preview-list">' + previewRowsHtml(schedule, 4, "Add time rows to populate the visible schedule.") + '</div>' +
-        '</div>' +
-      '</div>';
-  }
-
-  function columnsPreviewHtml(state) {
-    var schedules = state.schedules && state.schedules.length ? state.schedules.slice(0, CFG.maxSchedules) : [];
-    var columns = [];
-
-    while (schedules.length < CFG.maxSchedules) {
-      schedules.push(blankSchedule(""));
-    }
-
-    for (var i = 0; i < CFG.maxSchedules; i++) {
-      columns.push(previewColumnHtml(schedules[i], i));
-    }
-
-    return '' +
-      '<div class="weo-preview-page is-columns">' +
-        '<div class="weo-preview-opening">' + esc(previewText(state.openingText, "Opening text appears above the schedule columns.", 160)) + '</div>' +
-        '<div class="weo-preview-columns">' + columns.join("") + '</div>' +
-      '</div>';
-  }
-
-  function previewColumnHtml(schedule, index) {
-    schedule = normaliseSchedule(schedule || blankSchedule(""));
-    var hasContent = !!($.trim(schedule.title) || $.trim(schedule.intro) || getRowsToSave(schedule).length);
-
-    return '' +
-      '<div class="weo-preview-column' + (hasContent ? '' : ' is-empty') + '">' +
-        '<div class="weo-preview-column-label">Column ' + (index + 1) + '</div>' +
-        '<div class="weo-preview-column-title">' + esc(previewText(schedule.title, index === 0 ? "Day of event" : "Add heading", 26)) + '</div>' +
-        '<div class="weo-preview-column-intro">' + esc(previewText(schedule.intro, hasContent ? "Optional intro text for this column." : "This column stays empty until you add content.", 84)) + '</div>' +
-        '<div class="weo-preview-column-list">' + previewRowsHtml(schedule, 3, "Empty column") + '</div>' +
-      '</div>';
-  }
-
-  function previewRowsHtml(schedule, limit, emptyText) {
-    var liveRows = getRowsToSave(schedule);
-    var rows = liveRows.slice(0, limit || 3);
-    var html = [];
-
-    if (!rows.length) {
-      return '<div class="weo-preview-empty">' + esc(emptyText || "Add time rows") + '</div>';
-    }
-
-    for (var i = 0; i < rows.length; i++) {
-      html.push(
-        '<div class="weo-preview-time">' +
-          '<strong>' + esc(previewText(rows[i].time, "Time", 14)) + '</strong>' +
-          '<span>' + esc(previewText(rows[i].text, "Description", 46)) + '</span>' +
-        '</div>'
-      );
-    }
-
-    if (liveRows.length > rows.length) {
-      html.push('<div class="weo-preview-more">+' + esc(String(liveRows.length - rows.length)) + ' more</div>');
-    }
-
-    return html.join("");
-  }
-
   function previewText(value, fallback, maxLen) {
     var text = $.trim(String(value || ""));
     if (!text) return fallback || "";
@@ -684,10 +827,19 @@
 
   function runEditorAction($btn) {
     var action = String($btn.attr("data-weo-action") || "");
+    var regionId = String($btn.attr("data-region-id") || "");
     var scheduleIndex = toInt($btn.attr("data-schedule-index"), -1);
     var rowIndex = toInt($btn.attr("data-row-index"), -1);
     var state = readFormState(editor.current);
     var layout = normaliseLayout(state.layout);
+
+    if (action === "select-region") {
+      editor.selectedRegionId = normaliseSelectedRegionId(regionId, state);
+      editor.current = normaliseEditorState(state);
+      renderEditor(editor.current);
+      setStatus("", "");
+      return;
+    }
 
     if (action === "add-schedule") {
       if (state.schedules.length >= CFG.maxSchedules) {
@@ -726,6 +878,7 @@
       state.schedules[scheduleIndex].rows = targetRows;
     }
 
+    editor.selectedRegionId = normaliseSelectedRegionId(editor.selectedRegionId, state);
     editor.current = normaliseEditorState(state);
     renderEditor(editor.current);
     setStatus("", "");
@@ -746,13 +899,22 @@
       state.openingText = String($body.find('[data-field="openingText"]').val() || "");
     }
 
-    var priorSchedules = indexByUid(prior.schedules);
-    var nextSchedules = [];
+    var priorSchedules = Array.isArray(prior.schedules) ? prior.schedules.slice(0, CFG.maxSchedules).map(normaliseSchedule) : [];
+    var nextSchedules = priorSchedules.slice(0);
+
+    if (!nextSchedules.length) nextSchedules.push(blankSchedule("Day of event"));
 
     $body.find("[data-schedule-uid]").each(function () {
       var $card = $(this);
-      var uid = String($card.attr("data-schedule-uid") || newUid("schedule"));
-      var oldSchedule = priorSchedules[uid] || {};
+      var scheduleIndex = toInt($card.attr("data-schedule-index"), -1);
+      if (scheduleIndex < 0 || scheduleIndex >= CFG.maxSchedules) return;
+
+      while (nextSchedules.length <= scheduleIndex) {
+        nextSchedules.push(blankSchedule(scheduleIndex === 0 ? "Day of event" : ""));
+      }
+
+      var oldSchedule = normaliseSchedule(nextSchedules[scheduleIndex] || {});
+      var uid = String($card.attr("data-schedule-uid") || oldSchedule.uid || newUid("schedule"));
       var oldRows = indexByUid(oldSchedule.rows || []);
       var title = cleanHeadingTitle($card.find('[data-field="scheduleTitle"]').val());
       var rows = [];
@@ -778,7 +940,7 @@
 
       if (!rows.length) rows.push(blankRow());
 
-      nextSchedules.push(normaliseSchedule({
+      nextSchedules[scheduleIndex] = normaliseSchedule({
         uid: uid,
         id: String($card.attr("data-schedule-id") || oldSchedule.id || ""),
         title: title,
@@ -787,10 +949,15 @@
         meta: oldSchedule.meta || null,
         nodeData: oldSchedule.nodeData || null,
         rows: rows
-      }));
+      });
     });
 
     if (nextSchedules.length) state.schedules = nextSchedules.slice(0, CFG.maxSchedules);
+    if (state.layout === LAYOUT_COLUMNS) {
+      while (state.schedules.length < CFG.maxSchedules) {
+        state.schedules.push(blankSchedule(""));
+      }
+    }
     if (!state.schedules.length) state.schedules = [blankSchedule("Day of event")];
 
     return normaliseEditorState(state);
