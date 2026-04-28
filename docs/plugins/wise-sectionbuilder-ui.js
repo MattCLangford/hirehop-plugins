@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] page editor loaded - v2026-04-27.02"); } catch (e) {}
+  try { console.warn("[WiseHireHop] page editor loaded - v2026-04-28.01"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -38,9 +38,11 @@
 
   var PROFILE_EVENT_OVERVIEW = "event_overview_schedule";
   var VARIANT_HALF_IMAGE = "half_image";
-  var VARIANT_NO_IMAGE_MULTI = "no_image_multi";
+  var VARIANT_THREE_COLUMNS = "three_columns";
+  var LEGACY_VARIANT_NO_IMAGE_MULTI = "no_image_multi";
   var SLOT_PRIMARY = "primary";
   var SLOT_SECONDARY = "secondary";
+  var MAX_SCHEDULE_ROWS = 10;
 
   var activeDepotContext = {
     id: "",
@@ -276,7 +278,7 @@
       '  z-index:100000;',
       '}',
       '#' + MODAL_ID + ' {',
-      '  width:min(980px, calc(100vw - 48px));',
+      '  width:min(1180px, calc(100vw - 48px));',
       '  max-height:calc(100vh - 48px);',
       '  overflow:auto;',
       '  background:#ffffff;',
@@ -399,6 +401,161 @@
       '  font-size:12px;',
       '  color:#6b7280;',
       '}',
+      '#' + MODAL_ID + ' .wise-event-editor-shell {',
+      '  display:flex;',
+      '  flex-direction:column;',
+      '  gap:16px;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-toolbar {',
+      '  display:grid;',
+      '  grid-template-columns:minmax(220px, 1fr) minmax(280px, 1.3fr);',
+      '  gap:12px;',
+      '  align-items:end;',
+      '  padding:14px;',
+      '  border:1px solid #e5e7eb;',
+      '  border-radius:12px;',
+      '  background:#fbfcfe;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-page-wrap {',
+      '  padding:18px;',
+      '  border:1px solid #d7dce5;',
+      '  border-radius:14px;',
+      '  background:#eef2f7;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-page {',
+      '  min-height:620px;',
+      '  border:1px solid #d4dae4;',
+      '  border-radius:8px;',
+      '  background:#ffffff;',
+      '  box-shadow:0 16px 38px rgba(16, 24, 40, 0.12);',
+      '  overflow:hidden;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-page-inner {',
+      '  min-height:620px;',
+      '  display:grid;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-page.is-half-image .wise-event-page-inner {',
+      '  grid-template-columns:minmax(260px, 1fr) minmax(340px, 1fr);',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-page.is-three-columns .wise-event-page-inner {',
+      '  grid-template-rows:auto 1fr;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-image-pane {',
+      '  position:relative;',
+      '  min-height:620px;',
+      '  padding:22px;',
+      '  display:flex;',
+      '  align-items:flex-end;',
+      '  background:#dfe7f1;',
+      '  background-size:cover;',
+      '  background-position:center;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-image-pane:before {',
+      '  content:"";',
+      '  position:absolute;',
+      '  inset:0;',
+      '  background:linear-gradient(180deg, rgba(15, 23, 42, 0.04), rgba(15, 23, 42, 0.35));',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-image-field {',
+      '  position:relative;',
+      '  width:100%;',
+      '  padding:12px;',
+      '  border-radius:10px;',
+      '  background:rgba(255, 255, 255, 0.88);',
+      '  box-shadow:0 8px 24px rgba(15, 23, 42, 0.14);',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-content-pane {',
+      '  padding:34px;',
+      '  display:flex;',
+      '  flex-direction:column;',
+      '  gap:14px;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-top-pane {',
+      '  padding:30px 34px 18px 34px;',
+      '  border-bottom:1px solid #e5e7eb;',
+      '  background:#fbfcfe;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-columns {',
+      '  display:grid;',
+      '  grid-template-columns:repeat(3, minmax(0, 1fr));',
+      '  gap:0;',
+      '  min-height:430px;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-column {',
+      '  padding:24px;',
+      '  border-left:1px solid #edf0f4;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-column:first-child {',
+      '  border-left:0;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-page-heading {',
+      '  display:grid;',
+      '  gap:10px;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-mini-label {',
+      '  margin-bottom:5px;',
+      '  font-size:11px;',
+      '  font-weight:700;',
+      '  letter-spacing:0.05em;',
+      '  text-transform:uppercase;',
+      '  color:#667085;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-title-input {',
+      '  font-size:26px;',
+      '  line-height:1.15;',
+      '  font-weight:700;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-blurb-input {',
+      '  min-height:92px;',
+      '  line-height:1.45;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-section-title {',
+      '  max-width:360px;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-schedule {',
+      '  display:flex;',
+      '  flex-direction:column;',
+      '  gap:10px;',
+      '  margin-top:8px;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-schedule-head {',
+      '  display:flex;',
+      '  align-items:center;',
+      '  justify-content:space-between;',
+      '  gap:12px;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-milestone-row {',
+      '  display:grid;',
+      '  grid-template-columns:82px minmax(0, 1fr) auto;',
+      '  gap:8px;',
+      '  align-items:start;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-milestone-row .wise-page-editor-input {',
+      '  padding:8px 9px;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-row-preview {',
+      '  grid-column:1 / -1;',
+      '  padding:6px 8px;',
+      '  border-left:3px solid #98a2b3;',
+      '  color:#344054;',
+      '  background:#f8fafc;',
+      '  font-size:12px;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-row-preview.is-empty {',
+      '  color:#98a2b3;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-remove-row {',
+      '  width:34px;',
+      '  min-width:34px;',
+      '  height:34px;',
+      '  padding:0;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-add-row {',
+      '  align-self:flex-start;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-column .wise-event-add-row {',
+      '  margin:0 0 12px 0;',
+      '}',
       '#' + MODAL_ID + ' .wise-page-editor-rows {',
       '  display:flex;',
       '  flex-direction:column;',
@@ -484,8 +641,20 @@
       '}',
       '@media (max-width: 860px) {',
       '  #' + MODAL_ID + ' .wise-page-editor-grid,',
-      '  #' + MODAL_ID + ' .wise-page-editor-row-grid {',
+      '  #' + MODAL_ID + ' .wise-page-editor-row-grid,',
+      '  #' + MODAL_ID + ' .wise-event-toolbar,',
+      '  #' + MODAL_ID + ' .wise-event-page.is-half-image .wise-event-page-inner,',
+      '  #' + MODAL_ID + ' .wise-event-columns {',
       '    grid-template-columns:1fr;',
+      '  }',
+      '  #' + MODAL_ID + ' .wise-event-image-pane,',
+      '  #' + MODAL_ID + ' .wise-event-page,',
+      '  #' + MODAL_ID + ' .wise-event-page-inner {',
+      '    min-height:0;',
+      '  }',
+      '  #' + MODAL_ID + ' .wise-event-column {',
+      '    border-left:0;',
+      '    border-top:1px solid #edf0f4;',
       '  }',
       '}',
       '</style>'
@@ -550,6 +719,12 @@
       currentSession = buildEditorSession(currentSession.context);
       renderCurrentSession();
       setBuilderStatus("", "");
+    });
+
+    $("#" + FORM_ID).on("input change", "input, textarea, select", function () {
+      var field = String($(this).attr("data-field") || "");
+      if (saveInFlight || field === "variant" || field === "profile-key") return;
+      syncEventOverviewVisualPreview();
     });
 
     $("#" + FORM_ID).on("click", "[data-action]", function (e) {
@@ -790,6 +965,10 @@
       if (!slot) return;
 
       if (action === "add-row") {
+        if (slot.rows.length >= MAX_SCHEDULE_ROWS) {
+          setBuilderStatus("Schedule rows are capped at " + MAX_SCHEDULE_ROWS + " milestones for this page.", "warning");
+          return;
+        }
         slot.rows.push(makeBlankRow());
       } else if (action === "remove-row" && rowIndex >= 0 && rowIndex < slot.rows.length) {
         slot.rows.splice(rowIndex, 1);
@@ -849,6 +1028,8 @@
       finalMeta.templateKey = "section_event_overview";
       finalMeta.variant = nextState.variant;
       finalMeta.imageUrl = nextState.variant === VARIANT_HALF_IMAGE ? $.trim(nextState.imageUrl || "") : "";
+      finalMeta.scheduleFormat = "time_text_custom_items";
+      finalMeta.maxScheduleRows = MAX_SCHEDULE_ROWS;
       finalMeta.version = 1;
 
       for (var i = 0; i < nextState.slots.length; i++) {
@@ -1118,8 +1299,8 @@
     var slots = [
       buildEventOverviewSlotState({
         slotKey: SLOT_PRIMARY,
-        label: "Primary Schedule Dept",
-        defaultTitle: "Proposed Timings",
+        label: "Day of Event Schedule",
+        defaultTitle: "Day of event",
         context: context,
         meta: meta,
         childHeadings: childHeadings,
@@ -1248,171 +1429,224 @@
   }
 
   function buildEventOverviewFormHtml(state) {
+    state = state || {};
+    if (!state.slots) state.slots = [];
+
     var variant = normaliseEventOverviewVariant(state && state.variant);
-    var requiredSlotKeys = getRequiredSlotKeys(variant);
-    var parts = [];
-
-    parts.push(
-      '<div class="wise-page-editor-card">' +
-        '<div class="wise-page-editor-card-head">' +
-          '<div>' +
-            '<div class="wise-page-editor-card-title">Layout</div>' +
-            '<div class="wise-page-editor-card-help">Choose how the Event Overview page should be scaffolded, then fill in the headings and schedule rows below.</div>' +
-          '</div>' +
-        "</div>" +
-        '<div class="wise-page-editor-grid">' +
-          renderFieldSelect({
-            wide: true,
-            label: "Page type",
-            field: "profile-key",
-            options: getPageProfileSelectOptions(),
-            value: PROFILE_EVENT_OVERVIEW,
-            note: "Use this when the selected heading has a custom name and cannot be recognised automatically."
-          }) +
-          renderFieldSelect({
-            wide: false,
-            label: "Layout variant",
-            field: "variant",
-            options: [
-              { value: VARIANT_HALF_IMAGE, label: "Half page image + one schedule dept" },
-              { value: VARIANT_NO_IMAGE_MULTI, label: "No image + two schedule depts" }
-            ],
-            value: variant
-          }) +
-          renderFieldInput({
-            wide: false,
-            label: "Section heading",
-            field: "section-title",
-            value: state.sectionTitle || "",
-            note: "This updates the selected root section heading."
-          }) +
-          renderFieldTextarea({
-            wide: true,
-            label: "Section blurb",
-            field: "section-blurb",
-            value: state.sectionBlurb || "",
-            note: "Stored on the section description so the page can carry a human-readable intro."
-          }) +
-          (variant === VARIANT_HALF_IMAGE
-            ? renderFieldInput({
-                wide: true,
-                label: "Image URL",
-                field: "image-url",
-                value: state.imageUrl || "",
-                note: "Stored in the page metadata block on the section memo for this layout."
-              })
-            : "") +
-        "</div>" +
-      "</div>"
-    );
-
-    for (var i = 0; i < requiredSlotKeys.length; i++) {
-      var slot = findSlotByKey(state.slots, requiredSlotKeys[i]);
-      if (!slot) continue;
-      parts.push(buildSlotCardHtml(slot));
-    }
-
-    if (variant === VARIANT_HALF_IMAGE) {
-      var secondary = findSlotByKey(state.slots, SLOT_SECONDARY);
-      if (secondary && (secondary.headingId || getNonEmptyRows(secondary.rows).length)) {
-        parts.push(
-          '<div class="wise-page-editor-empty">A second managed schedule dept already exists for this page, but the current layout only edits the primary dept. It will be left in place unless you switch back to the no-image layout.</div>'
-        );
-      }
-    }
-
-    return parts.join("");
-  }
-
-  function buildSlotCardHtml(slot) {
-    var rows = slot.rows && slot.rows.length ? slot.rows : [makeBlankRow()];
-    var rowHtml = [];
-
-    for (var i = 0; i < rows.length; i++) {
-      rowHtml.push(buildSlotRowHtml(slot, rows[i], i));
-    }
+    var primarySlot = findSlotByKey(state.slots, SLOT_PRIMARY) || makeEventOverviewFallbackSlot();
 
     return [
-      '<div class="wise-page-editor-card" data-slot-key="' + escapeAttribute(slot.slotKey) + '">',
-      '  <div class="wise-page-editor-card-head">',
-      '    <div>',
-      '      <div class="wise-page-editor-card-title">' + escapeHtml(slot.label) + "</div>",
-      '      <div class="wise-page-editor-card-help">The dept heading is created or updated beneath the Event Overview section. Each row below becomes a zero-value custom item under that dept.</div>',
-      "    </div>",
-      "  </div>",
-      '  <div class="wise-page-editor-grid">',
-           renderFieldInput({
-             wide: false,
-             label: "Dept heading",
-             field: "slot-title",
-             value: slot.title || ""
-           }),
-           renderFieldTextarea({
-             wide: true,
-             label: "Dept blurb",
-             field: "slot-blurb",
-             value: slot.blurb || "",
-             note: "Stored on the dept description."
-           }),
-      "  </div>",
-      '  <div class="wise-page-editor-card-help">Schedule rows</div>',
-      '  <div class="wise-page-editor-rows">',
-           rowHtml.join(""),
-      "  </div>",
-      '  <div class="wise-page-editor-actions">',
-      '    <button type="button" class="wise-page-editor-btn" data-action="add-row" data-slot-key="' + escapeAttribute(slot.slotKey) + '">Add Row</button>',
-      "  </div>",
+      '<div class="wise-event-editor-shell">',
+        buildEventOverviewToolbarHtml(variant),
+        '<div class="wise-event-page-wrap">',
+          buildEventOverviewVisualPageHtml(state, primarySlot, variant),
+        "</div>",
       "</div>"
     ].join("");
   }
 
-  function buildSlotRowHtml(slot, row, rowIndex) {
+  function buildEventOverviewToolbarHtml(variant) {
     return [
-      '<div class="wise-page-editor-row" data-row-index="' + rowIndex + '" data-row-id="' + escapeAttribute(row.rowId || "") + '">',
-      '  <div class="wise-page-editor-row-head">',
-      '    <div class="wise-page-editor-row-title">Row ' + (rowIndex + 1) + "</div>",
-      '    <button type="button" class="wise-page-editor-btn is-subtle" data-action="remove-row" data-slot-key="' + escapeAttribute(slot.slotKey) + '" data-row-index="' + rowIndex + '">Remove</button>',
-      "  </div>",
-      '  <div class="wise-page-editor-row-grid">',
-           renderFieldInput({
-             wide: false,
-             label: "Row title",
-             field: "row-title",
-             value: row.title || ""
-           }),
-           renderFieldInput({
-             wide: false,
-             label: "Row note",
-             field: "row-note",
-             value: row.note || ""
-           }),
-           renderFieldTextarea({
-             wide: true,
-             label: "Row memo",
-             field: "row-memo",
-             value: row.memo || "",
-             note: "Saved to the custom item memo so you can carry longer text per row."
-           }),
-      "  </div>",
+      '<div class="wise-event-toolbar">',
+        renderFieldSelect({
+          wide: false,
+          label: "Page type",
+          field: "profile-key",
+          options: getPageProfileSelectOptions(),
+          value: PROFILE_EVENT_OVERVIEW
+        }),
+        renderFieldSelect({
+          wide: false,
+          label: "Layout",
+          field: "variant",
+          options: getEventOverviewLayoutOptions(),
+          value: variant,
+          note: "The editor below changes shape to match the proposal page layout."
+        }),
+      "</div>"
+    ].join("");
+  }
+
+  function buildEventOverviewVisualPageHtml(state, slot, variant) {
+    var cssVariant = variant === VARIANT_THREE_COLUMNS ? "is-three-columns" : "is-half-image";
+
+    return [
+      '<div class="wise-event-page ' + cssVariant + '" data-event-variant="' + escapeAttribute(variant) + '">',
+        '<div class="wise-event-page-inner" data-slot-key="' + escapeAttribute(slot.slotKey) + '">',
+          variant === VARIANT_THREE_COLUMNS
+            ? buildThreeColumnEventPageHtml(state, slot)
+            : buildHalfImageEventPageHtml(state, slot),
+        "</div>",
+      "</div>"
+    ].join("");
+  }
+
+  function buildHalfImageEventPageHtml(state, slot) {
+    return [
+      '<div class="wise-event-image-pane" data-preview-image-pane style="' + escapeAttribute(getImagePaneStyle(state.imageUrl)) + '">',
+        '<div class="wise-event-image-field">',
+          renderFieldInput({
+            wide: true,
+            label: "Image URL",
+            field: "image-url",
+            value: state.imageUrl || "",
+            placeholder: "https://...",
+            note: "This fills the half-page image panel."
+          }),
+        "</div>",
+      "</div>",
+      '<div class="wise-event-content-pane">',
+        buildEventSectionFieldsHtml(state, false),
+        buildScheduleSlotFieldsHtml(slot),
+        buildMilestoneRowsHtml(slot, getScheduleRowsForEditor(slot.rows), "single"),
+      "</div>"
+    ].join("");
+  }
+
+  function buildThreeColumnEventPageHtml(state, slot) {
+    var rows = getScheduleRowsForEditor(slot.rows);
+
+    return [
+      '<div class="wise-event-top-pane">',
+        buildEventSectionFieldsHtml(state, true),
+        buildScheduleSlotFieldsHtml(slot),
+      "</div>",
+      '<div class="wise-event-columns">',
+        buildMilestoneColumnHtml(slot, rows, 0),
+        buildMilestoneColumnHtml(slot, rows, 1),
+        buildMilestoneColumnHtml(slot, rows, 2),
+      "</div>"
+    ].join("");
+  }
+
+  function buildEventSectionFieldsHtml(state, compact) {
+    return [
+      '<div class="wise-event-page-heading">',
+        renderFieldInput({
+          wide: true,
+          label: "Page heading",
+          field: "section-title",
+          value: state.sectionTitle || "",
+          inputClass: compact ? "wise-event-section-title" : "wise-event-title-input",
+          placeholder: "Event Overview"
+        }),
+        renderFieldTextarea({
+          wide: true,
+          label: "Page intro",
+          field: "section-blurb",
+          value: state.sectionBlurb || "",
+          inputClass: "wise-event-blurb-input",
+          placeholder: "Short introduction for the event page."
+        }),
+      "</div>"
+    ].join("");
+  }
+
+  function buildScheduleSlotFieldsHtml(slot) {
+    return [
+      '<div class="wise-event-page-heading">',
+        renderFieldInput({
+          wide: true,
+          label: "Day of event heading",
+          field: "slot-title",
+          value: slot.title || "",
+          inputClass: "wise-event-title-input",
+          placeholder: "Day of event"
+        }),
+        renderFieldTextarea({
+          wide: true,
+          label: "Schedule blurb",
+          field: "slot-blurb",
+          value: slot.blurb || "",
+          inputClass: "wise-event-blurb-input",
+          placeholder: "A short note before the schedule."
+        }),
+      "</div>"
+    ].join("");
+  }
+
+  function buildMilestoneRowsHtml(slot, rows, mode) {
+    var rowHtml = [];
+
+    for (var i = 0; i < rows.length; i++) {
+      rowHtml.push(buildMilestoneRowHtml(slot, rows[i], i));
+    }
+
+    return [
+      '<div class="wise-event-schedule">',
+        '<div class="wise-event-schedule-head">',
+          '<div>',
+            '<div class="wise-event-mini-label">Schedule milestones</div>',
+            '<div class="wise-page-editor-note">Each milestone is saved as a custom item in the format 00:00 - Milestone text.</div>',
+          "</div>",
+          '<button type="button" class="wise-page-editor-btn wise-event-add-row" data-action="add-row" data-slot-key="' + escapeAttribute(slot.slotKey) + '"' + (rows.length >= MAX_SCHEDULE_ROWS ? " disabled" : "") + ">Add milestone</button>",
+        "</div>",
+        '<div class="wise-page-editor-rows" data-row-mode="' + escapeAttribute(mode || "single") + '">',
+          rowHtml.join(""),
+        "</div>",
+      "</div>"
+    ].join("");
+  }
+
+  function buildMilestoneColumnHtml(slot, rows, columnIndex) {
+    var rowHtml = [];
+    var chunkSize = Math.max(1, Math.ceil(rows.length / 3));
+    var start = columnIndex * chunkSize;
+    var end = Math.min(rows.length, start + chunkSize);
+
+    for (var i = start; i < end; i++) {
+      rowHtml.push(buildMilestoneRowHtml(slot, rows[i], i));
+    }
+
+    return [
+      '<div class="wise-event-column">',
+        '<div class="wise-event-mini-label">Column ' + (columnIndex + 1) + "</div>",
+        columnIndex === 0
+          ? '<button type="button" class="wise-page-editor-btn wise-event-add-row" data-action="add-row" data-slot-key="' + escapeAttribute(slot.slotKey) + '"' + (rows.length >= MAX_SCHEDULE_ROWS ? " disabled" : "") + ">Add milestone</button>"
+          : "",
+        '<div class="wise-page-editor-rows" data-row-mode="column">',
+          rowHtml.join("") || '<div class="wise-page-editor-note">Milestones flow here as you add more rows.</div>',
+        "</div>",
+      "</div>"
+    ].join("");
+  }
+
+  function buildMilestoneRowHtml(slot, row, rowIndex) {
+    var preview = formatScheduleRowDisplay(row);
+
+    return [
+      '<div class="wise-event-milestone-row wise-page-editor-row" data-row-index="' + rowIndex + '" data-row-id="' + escapeAttribute(row.rowId || "") + '">',
+        '<input class="wise-page-editor-input" type="text" data-field="milestone-time" value="' + escapeAttribute(row.time || "") + '" placeholder="09:00" maxlength="5">',
+        '<input class="wise-page-editor-input" type="text" data-field="milestone-text" value="' + escapeAttribute(row.text || "") + '" placeholder="Milestone text">',
+        '<button type="button" class="wise-page-editor-btn is-subtle wise-event-remove-row" data-action="remove-row" data-slot-key="' + escapeAttribute(slot.slotKey) + '" data-row-index="' + rowIndex + '" aria-label="Remove milestone">x</button>',
+        '<div class="wise-event-row-preview' + (preview ? "" : " is-empty") + '" data-row-preview>' + escapeHtml(preview || "00:00 - Milestone text") + "</div>",
       "</div>"
     ].join("");
   }
 
   function renderFieldInput(options) {
+    var inputClass = "wise-page-editor-input" + (options.inputClass ? " " + options.inputClass : "");
+    var placeholder = options.placeholder ? ' placeholder="' + escapeAttribute(options.placeholder) + '"' : "";
+    var maxlength = options.maxlength ? ' maxlength="' + escapeAttribute(options.maxlength) + '"' : "";
+    var inputType = options.type || "text";
+
     return [
       '<div class="wise-page-editor-field' + (options.wide ? " is-wide" : "") + '">',
       '  <div class="wise-page-editor-label">' + escapeHtml(options.label || "") + "</div>",
-      '  <input class="wise-page-editor-input" type="text" data-field="' + escapeAttribute(options.field || "") + '" value="' + escapeAttribute(options.value || "") + '">',
+      '  <input class="' + escapeAttribute(inputClass) + '" type="' + escapeAttribute(inputType) + '" data-field="' + escapeAttribute(options.field || "") + '" value="' + escapeAttribute(options.value || "") + '"' + placeholder + maxlength + '>',
          options.note ? '<div class="wise-page-editor-note">' + escapeHtml(options.note) + "</div>" : "",
       "</div>"
     ].join("");
   }
 
   function renderFieldTextarea(options) {
+    var textareaClass = "wise-page-editor-textarea" + (options.inputClass ? " " + options.inputClass : "");
+    var placeholder = options.placeholder ? ' placeholder="' + escapeAttribute(options.placeholder) + '"' : "";
+
     return [
       '<div class="wise-page-editor-field' + (options.wide ? " is-wide" : "") + '">',
       '  <div class="wise-page-editor-label">' + escapeHtml(options.label || "") + "</div>",
-      '  <textarea class="wise-page-editor-textarea" data-field="' + escapeAttribute(options.field || "") + '">' + escapeHtml(options.value || "") + "</textarea>",
+      '  <textarea class="' + escapeAttribute(textareaClass) + '" data-field="' + escapeAttribute(options.field || "") + '"' + placeholder + '>' + escapeHtml(options.value || "") + "</textarea>",
          options.note ? '<div class="wise-page-editor-note">' + escapeHtml(options.note) + "</div>" : "",
       "</div>"
     ].join("");
@@ -1456,7 +1690,9 @@
     state.variant = normaliseEventOverviewVariant($form.find('[data-field="variant"]').val());
     state.sectionTitle = $.trim(String($form.find('[data-field="section-title"]').val() || ""));
     state.sectionBlurb = String($form.find('[data-field="section-blurb"]').val() || "");
-    state.imageUrl = $.trim(String($form.find('[data-field="image-url"]').val() || ""));
+    if ($form.find('[data-field="image-url"]').length) {
+      state.imageUrl = $.trim(String($form.find('[data-field="image-url"]').val() || ""));
+    }
 
     var nextSlots = [];
     for (var i = 0; i < state.slots.length; i++) {
@@ -1477,18 +1713,33 @@
         var $row = $(this);
         var rowId = $.trim(String($row.attr("data-row-id") || ""));
         var previousRow = rowId && existingRowsById[rowId] ? existingRowsById[rowId] : null;
+        var time = $.trim(String($row.find('[data-field="milestone-time"]').val() || ""));
+        var text = $.trim(String($row.find('[data-field="milestone-text"]').val() || ""));
+        var legacyTitle = $.trim(String($row.find('[data-field="row-title"]').val() || ""));
+        var parsedLegacy = parseScheduleMilestoneTitle(legacyTitle);
 
         nextRows.push({
           rowId: rowId,
-          title: $.trim(String($row.find('[data-field="row-title"]').val() || "")),
+          sortIndex: parseInt(String($row.attr("data-row-index") || "0"), 10),
+          time: time || parsedLegacy.time,
+          text: text || parsedLegacy.text || legacyTitle,
+          title: composeScheduleMilestoneTitle(time || parsedLegacy.time, text || parsedLegacy.text || legacyTitle),
           note: $.trim(String($row.find('[data-field="row-note"]').val() || "")),
           memo: String($row.find('[data-field="row-memo"]').val() || ""),
           nodeData: previousRow ? previousRow.nodeData : null
         });
       });
 
+      nextRows.sort(function (a, b) {
+        return (a.sortIndex || 0) - (b.sortIndex || 0);
+      });
+
       if (!nextRows.length) {
         nextRows.push(makeBlankRow());
+      }
+
+      for (var rowIndex = 0; rowIndex < nextRows.length; rowIndex++) {
+        delete nextRows[rowIndex].sortIndex;
       }
 
       slot.rows = nextRows;
@@ -1517,12 +1768,20 @@
 
       var liveRows = getNonEmptyRows(slot.rows);
       if (!liveRows.length) {
-        return slot.label + ": add at least one schedule row.";
+        return slot.label + ": add at least one schedule milestone.";
+      }
+
+      if (liveRows.length > MAX_SCHEDULE_ROWS) {
+        return slot.label + ": keep the schedule to " + MAX_SCHEDULE_ROWS + " milestones or fewer.";
       }
 
       for (var j = 0; j < liveRows.length; j++) {
-        if (!$.trim(String(liveRows[j].title || ""))) {
-          return slot.label + ": every populated row needs a row title.";
+        if (!$.trim(String(liveRows[j].time || "")) || !$.trim(String(liveRows[j].text || ""))) {
+          return slot.label + ": every milestone needs a time and milestone text.";
+        }
+
+        if (!/^\d{1,2}:\d{2}$/.test($.trim(String(liveRows[j].time || "")))) {
+          return slot.label + ": use a time like 09:30 for each milestone.";
         }
       }
     }
@@ -1545,32 +1804,150 @@
   }
 
   function getRequiredSlotKeys(variant) {
-    if (normaliseEventOverviewVariant(variant) === VARIANT_NO_IMAGE_MULTI) {
-      return [SLOT_PRIMARY, SLOT_SECONDARY];
-    }
-
     return [SLOT_PRIMARY];
   }
 
   function inferEventOverviewVariant(childHeadings, slots) {
-    if ((childHeadings || []).length > 1) return VARIANT_NO_IMAGE_MULTI;
+    var metaRows = [];
 
     var secondary = findSlotByKey(slots || [], SLOT_SECONDARY);
     if (secondary && (secondary.headingId || normaliseIdList(secondary.itemIds).length)) {
-      return VARIANT_NO_IMAGE_MULTI;
+      return VARIANT_THREE_COLUMNS;
     }
+
+    metaRows = getNonEmptyRows((findSlotByKey(slots || [], SLOT_PRIMARY) || {}).rows);
+    if (metaRows.length > 6) return VARIANT_THREE_COLUMNS;
 
     return VARIANT_HALF_IMAGE;
   }
 
   function normaliseEventOverviewVariant(value) {
-    return String(value || "") === VARIANT_NO_IMAGE_MULTI ? VARIANT_NO_IMAGE_MULTI : VARIANT_HALF_IMAGE;
+    var text = String(value || "");
+    if (text === VARIANT_THREE_COLUMNS || text === LEGACY_VARIANT_NO_IMAGE_MULTI) return VARIANT_THREE_COLUMNS;
+    return VARIANT_HALF_IMAGE;
+  }
+
+  function getEventOverviewLayoutOptions() {
+    return [
+      { value: VARIANT_HALF_IMAGE, label: "Single schedule + half-page image" },
+      { value: VARIANT_THREE_COLUMNS, label: "Three-column schedule" }
+    ];
+  }
+
+  function makeEventOverviewFallbackSlot() {
+    return {
+      slotKey: SLOT_PRIMARY,
+      label: "Schedule",
+      headingId: "",
+      title: "Day of event",
+      blurb: "",
+      baseMemo: "",
+      itemIds: [],
+      rows: [makeBlankRow()],
+      nodeData: null
+    };
+  }
+
+  function getScheduleRowsForEditor(rows) {
+    var source = rows && rows.length ? rows : [makeBlankRow()];
+    var out = [];
+
+    for (var i = 0; i < source.length && out.length < MAX_SCHEDULE_ROWS; i++) {
+      out.push(normaliseScheduleRowState(source[i]));
+    }
+
+    if (!out.length) out.push(makeBlankRow());
+    return out;
+  }
+
+  function normaliseScheduleRowState(row) {
+    row = row || {};
+    var parsed = parseScheduleMilestoneTitle(row.title || "");
+    var time = $.trim(String(row.time || parsed.time || ""));
+    var text = $.trim(String(row.text || parsed.text || row.title || ""));
+
+    if (parsed.time && normaliseText(row.title) === normaliseText(composeScheduleMilestoneTitle(parsed.time, parsed.text))) {
+      text = parsed.text;
+    }
+
+    return {
+      rowId: String(row.rowId || ""),
+      time: time,
+      text: text,
+      title: composeScheduleMilestoneTitle(time, text),
+      note: $.trim(String(row.note || "")),
+      memo: String(row.memo || ""),
+      nodeData: row.nodeData || null
+    };
+  }
+
+  function parseScheduleMilestoneTitle(value) {
+    var title = $.trim(String(value || ""));
+    var match = title.match(/^(\d{1,2}:\d{2})\s*(?:-|\u2013|\u2014)\s*(.+)$/);
+
+    if (!match) {
+      return {
+        time: "",
+        text: title
+      };
+    }
+
+    return {
+      time: match[1],
+      text: $.trim(match[2] || "")
+    };
+  }
+
+  function composeScheduleMilestoneTitle(time, text) {
+    var cleanTime = $.trim(String(time || ""));
+    var cleanText = $.trim(String(text || ""));
+    if (cleanTime && cleanText) return cleanTime + " - " + cleanText;
+    return cleanTime || cleanText;
+  }
+
+  function formatScheduleRowDisplay(row) {
+    row = normaliseScheduleRowState(row);
+    return composeScheduleMilestoneTitle(row.time, row.text);
+  }
+
+  function getImagePaneStyle(imageUrl) {
+    var url = $.trim(String(imageUrl || ""));
+    if (!url) return "";
+    return "background-image:url('" + escapeCssUrl(url) + "');";
+  }
+
+  function syncEventOverviewVisualPreview() {
+    var $form = $("#" + FORM_ID);
+    if (!$form.length || !currentSession || currentSession.profileKey !== PROFILE_EVENT_OVERVIEW) return;
+
+    var imageUrl = $.trim(String($form.find('[data-field="image-url"]').val() || ""));
+    var $imagePane = $form.find("[data-preview-image-pane]").first();
+    if ($imagePane.length) {
+      $imagePane.attr("style", getImagePaneStyle(imageUrl));
+    }
+
+    $form.find(".wise-event-milestone-row").each(function () {
+      var $row = $(this);
+      var row = {
+        time: $row.find('[data-field="milestone-time"]').val() || "",
+        text: $row.find('[data-field="milestone-text"]').val() || ""
+      };
+      var preview = formatScheduleRowDisplay(row);
+      $row.find("[data-row-preview]")
+        .toggleClass("is-empty", !preview)
+        .text(preview || "00:00 - Milestone text");
+    });
   }
 
   function createRowStateFromNode(node) {
+    var title = node && node.data ? String(node.data.title || "") : "";
+    var parsed = parseScheduleMilestoneTitle(title);
+
     return {
       rowId: node && node.data ? String(node.data.ID || "") : "",
-      title: node && node.data ? String(node.data.title || "") : "",
+      time: parsed.time,
+      text: parsed.text,
+      title: composeScheduleMilestoneTitle(parsed.time, parsed.text),
       note: node && node.data ? String(node.data.ADDITIONAL || "") : "",
       memo: node && node.data ? String(node.data.TECHNICAL || "") : "",
       nodeData: node && node.data ? cloneItemSnapshot(node.data) : null
@@ -1580,6 +1957,8 @@
   function makeBlankRow() {
     return {
       rowId: "",
+      time: "",
+      text: "",
       title: "",
       note: "",
       memo: "",
@@ -1592,8 +1971,10 @@
     var source = rows || [];
 
     for (var i = 0; i < source.length; i++) {
-      var row = source[i] || {};
+      var row = normaliseScheduleRowState(source[i] || {});
       var hasContent = !!(
+        $.trim(String(row.time || "")) ||
+        $.trim(String(row.text || "")) ||
         $.trim(String(row.title || "")) ||
         $.trim(String(row.note || "")) ||
         $.trim(String(row.memo || ""))
@@ -1602,7 +1983,9 @@
       if (hasContent) {
         list.push({
           rowId: String(row.rowId || ""),
-          title: $.trim(String(row.title || "")),
+          time: $.trim(String(row.time || "")),
+          text: $.trim(String(row.text || "")),
+          title: composeScheduleMilestoneTitle(row.time, row.text),
           note: $.trim(String(row.note || "")),
           memo: String(row.memo || ""),
           nodeData: row.nodeData || null
@@ -1678,7 +2061,7 @@
       local: formatHireHopLocalDateTime(new Date()),
       id: String(row.rowId || sourceData.ID || "0"),
       qty: "1",
-      name: String(row.title || ""),
+      name: composeScheduleMilestoneTitle(row.time, row.text) || String(row.title || ""),
       list_id: String(sourceData.LIST_ID || "0"),
       cust_add: String(row.note || ""),
       memo: String(row.memo || ""),
@@ -2399,6 +2782,13 @@
 
   function escapeAttribute(value) {
     return escapeHtml(value).replace(/\r?\n/g, "&#10;");
+  }
+
+  function escapeCssUrl(value) {
+    return String(value == null ? "" : value)
+      .replace(/\\/g, "\\\\")
+      .replace(/'/g, "\\'")
+      .replace(/\r?\n/g, "");
   }
 
   function escapeSelector(value) {
