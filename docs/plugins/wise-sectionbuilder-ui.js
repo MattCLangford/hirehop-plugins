@@ -5,7 +5,7 @@
   if (!$) return;
 
   var CFG = {
-    version: "2026-04-28.07-event-overview-overhaul",
+    version: "2026-04-28.08-visual-page-editor",
     buttonId: "wise-event-overview-button",
     stylesId: "wise-event-overview-styles",
     overlayId: "wise-event-overview-overlay",
@@ -40,10 +40,6 @@
   var VARIANT_THREE_COLUMNS = "three_columns";
   var LEGACY_VARIANT_COLUMNS = "no_image_multi";
   var SLOT_KEYS = ["primary", "secondary", "tertiary"];
-  var REGION_IMAGE = "image";
-  var REGION_OPENING = "opening";
-  var REGION_SCHEDULE_PREFIX = "schedule-";
-  var LAYOUT_SCHEMAS = buildLayoutSchemas();
 
   var editor = {
     ready: false,
@@ -58,7 +54,7 @@
     depotSignature: ""
   };
 
-  log("Event Overview editor loaded", CFG.version);
+  log("Event Overview visual editor loaded", CFG.version);
   boot();
 
   function boot() {
@@ -92,215 +88,86 @@
     $(document).on("ajaxComplete.wiseEventOverview", attempt);
   }
 
-  function buildLayoutSchemas() {
-    return {
-      image: {
-        id: LAYOUT_IMAGE,
-        label: "Image split",
-        defaultRegionId: REGION_IMAGE,
-        regions: [
-          { id: REGION_IMAGE, kind: REGION_IMAGE, label: "Feature image", pageLabel: "Left image", note: "Shown on the left half of the page." },
-          { id: buildScheduleRegionId(0), kind: "schedule", scheduleIndex: 0, label: "Main schedule", pageLabel: "Right schedule", note: "Shown beside the image." },
-          { id: buildScheduleRegionId(1), kind: "schedule", scheduleIndex: 1, label: "Extra saved schedule", pageLabel: "Hidden extra 1", note: "Saved in HireHop but hidden in this layout.", isHiddenSlot: true },
-          { id: buildScheduleRegionId(2), kind: "schedule", scheduleIndex: 2, label: "Extra saved schedule", pageLabel: "Hidden extra 2", note: "Saved in HireHop but hidden in this layout.", isHiddenSlot: true }
-        ]
-      },
-      columns: {
-        id: LAYOUT_COLUMNS,
-        label: "Three columns",
-        defaultRegionId: REGION_OPENING,
-        regions: [
-          { id: REGION_OPENING, kind: REGION_OPENING, label: "Opening text", pageLabel: "Top opening", note: "Shown above the three visible schedule columns." },
-          { id: buildScheduleRegionId(0), kind: "schedule", scheduleIndex: 0, label: "Column 1", pageLabel: "Column 1", note: "First visible schedule column." },
-          { id: buildScheduleRegionId(1), kind: "schedule", scheduleIndex: 1, label: "Column 2", pageLabel: "Column 2", note: "Second visible schedule column." },
-          { id: buildScheduleRegionId(2), kind: "schedule", scheduleIndex: 2, label: "Column 3", pageLabel: "Column 3", note: "Third visible schedule column." }
-        ]
-      }
-    };
-  }
-
-  function getLayoutSchema(layout) {
-    return LAYOUT_SCHEMAS[normaliseLayout(layout)] || LAYOUT_SCHEMAS[LAYOUT_IMAGE];
-  }
-
-  function getLayoutRegions(state) {
-    return getLayoutSchema(state && state.layout).regions.slice();
-  }
-
-  function getRegionDefinition(state, regionId) {
-    var regions = getLayoutRegions(state);
-
-    for (var i = 0; i < regions.length; i++) {
-      if (regions[i].id === regionId) return $.extend({}, regions[i]);
-    }
-
-    return null;
-  }
-
-  function buildScheduleRegionId(index) {
-    return REGION_SCHEDULE_PREFIX + String(index);
-  }
-
-  function getScheduleIndexFromRegionId(regionId) {
-    var match = String(regionId || "").match(/^schedule-(\d+)$/);
-    return match && match[1] ? toInt(match[1], -1) : -1;
-  }
-
-  function getDefaultSelectedRegionId(state) {
-    state = normaliseEditorState(state || blankState());
-
-    if (state.layout === LAYOUT_IMAGE) {
-      if (!$.trim(String(state.imageUrl || ""))) return REGION_IMAGE;
-      return buildScheduleRegionId(0);
-    }
-
-    if (!$.trim(String(state.openingText || ""))) return REGION_OPENING;
-    return buildScheduleRegionId(0);
-  }
-
-  function normaliseSelectedRegionId(regionId, state) {
-    var regions = getLayoutRegions(state);
-    var target = String(regionId || "");
-
-    for (var i = 0; i < regions.length; i++) {
-      if (regions[i].id === target) return target;
-    }
-
-    return getDefaultSelectedRegionId(state);
-  }
-
-  function getScheduleAtIndex(state, index) {
-    var schedules = state && state.schedules ? state.schedules : [];
-    var fallbackTitle = index === 0 ? "Day of event" : "";
-    return normaliseSchedule(schedules[index] || blankSchedule(fallbackTitle));
-  }
-
   function injectStyles() {
     if ($("#" + CFG.stylesId).length) return;
 
     var css = [
-      "#" + CFG.overlayId + "{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(9,15,28,.52);backdrop-filter:blur(3px);z-index:100000;}",
-      "#" + CFG.modalId + "{width:min(980px,calc(100vw - 28px));max-height:calc(100vh - 28px);display:flex;flex-direction:column;overflow:hidden;background:#f7f9fc;border:1px solid #d0d5dd;border-radius:16px;box-shadow:0 24px 64px rgba(15,23,42,.28);color:#1f2937;font-family:inherit;}",
+      "#" + CFG.overlayId + "{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:14px;background:rgba(9,15,28,.56);backdrop-filter:blur(3px);z-index:100000;}",
+      "#" + CFG.modalId + "{width:min(1220px,calc(100vw - 24px));max-height:calc(100vh - 24px);display:flex;flex-direction:column;overflow:hidden;background:#f6f8fb;border:1px solid #d0d5dd;border-radius:16px;box-shadow:0 24px 64px rgba(15,23,42,.28);color:#1f2937;font-family:inherit;}",
       "#" + CFG.modalId + " *{box-sizing:border-box;}",
-      "#" + CFG.modalId + " .weo-head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:14px 16px 10px;background:linear-gradient(180deg,#ffffff 0%,#f7f9fc 100%);border-bottom:1px solid #e4e8ef;}",
-      "#" + CFG.modalId + " .weo-title{font-size:17px;font-weight:800;line-height:1.15;letter-spacing:-.01em;}",
-      "#" + CFG.modalId + " .weo-subtitle{margin-top:3px;color:#667085;font-size:11px;line-height:1.4;max-width:620px;}",
+      "#" + CFG.modalId + " .weo-head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:13px 16px 10px;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);border-bottom:1px solid #e4e8ef;}",
+      "#" + CFG.modalId + " .weo-title{font-size:17px;font-weight:800;line-height:1.15;letter-spacing:-.01em;color:#101828;}",
+      "#" + CFG.modalId + " .weo-subtitle{margin-top:3px;color:#667085;font-size:11px;line-height:1.4;max-width:760px;}",
       "#" + CFG.modalId + " .weo-x{border:0;background:transparent;color:#667085;cursor:pointer;font-size:24px;line-height:1;padding:0 2px;}",
-      "#" + CFG.modalId + " .weo-body{padding:10px 12px 12px;overflow:auto;background:#eef2f6;display:flex;flex-direction:column;gap:8px;}",
+      "#" + CFG.modalId + " .weo-body{padding:10px 12px 12px;overflow:auto;background:#e9edf3;display:flex;flex-direction:column;gap:8px;}",
       "#" + CFG.modalId + " .weo-message{border:1px dashed #d0d5dd;border-radius:14px;background:#f9fafb;padding:18px;color:#344054;font-size:14px;line-height:1.55;}",
       "#" + CFG.modalId + " .weo-message strong{display:block;margin-bottom:6px;color:#101828;font-size:15px;}",
-      "#" + CFG.modalId + " .weo-shell{display:grid;gap:8px;align-items:start;}",
-      "#" + CFG.modalId + " .weo-side{display:grid;gap:8px;align-self:start;}",
-      "#" + CFG.modalId + " .weo-main{display:grid;gap:8px;min-width:0;}",
-      "#" + CFG.modalId + " .weo-grid{display:grid;gap:8px;}",
-      "#" + CFG.modalId + " .weo-card{border:1px solid #dde3ea;border-radius:12px;background:#fff;padding:10px;box-shadow:0 6px 14px rgba(15,23,42,.04);min-width:0;}",
-      "#" + CFG.modalId + " .weo-card.is-muted{background:#f8fafc;}",
-      "#" + CFG.modalId + " .weo-card-head{display:flex;gap:8px;align-items:flex-start;justify-content:space-between;margin-bottom:8px;}",
-      "#" + CFG.modalId + " .weo-card-title{font-size:13px;font-weight:800;color:#101828;line-height:1.2;}",
-      "#" + CFG.modalId + " .weo-card-note{margin-top:1px;color:#667085;font-size:10px;line-height:1.35;}",
-      "#" + CFG.modalId + " .weo-head-actions{display:flex;align-items:center;gap:8px;}",
-      "#" + CFG.modalId + " .weo-mini-meta{font-size:10px;font-weight:800;color:#667085;white-space:nowrap;}",
-      "#" + CFG.modalId + " .weo-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}",
-      "#" + CFG.modalId + " .weo-choice{display:grid;grid-template-columns:16px minmax(0,1fr) 78px;gap:8px;align-items:center;border:1px solid #d5dbe4;border-radius:11px;padding:8px 9px;background:#fff;cursor:pointer;min-height:68px;}",
-      "#" + CFG.modalId + " .weo-choice:has(input:checked){border-color:#175cd3;background:#eef4ff;box-shadow:inset 0 0 0 1px rgba(23,92,211,.08);}",
-      "#" + CFG.modalId + " .weo-choice input{margin:0;}",
-      "#" + CFG.modalId + " .weo-choice-copy{display:block;min-width:0;}",
-      "#" + CFG.modalId + " .weo-choice-copy b{display:block;margin-bottom:2px;font-size:12px;color:#101828;}",
-      "#" + CFG.modalId + " .weo-choice-copy span{display:block;color:#667085;font-size:10px;line-height:1.25;}",
-      "#" + CFG.modalId + " .weo-choice-visual{height:44px;border:1px solid #d8e0ea;border-radius:9px;padding:4px;background:linear-gradient(180deg,#ffffff 0%,#f5f7fb 100%);display:grid;gap:4px;overflow:hidden;}",
-      "#" + CFG.modalId + " .weo-choice-visual.is-image{grid-template-columns:.85fr 1.15fr;}",
-      "#" + CFG.modalId + " .weo-choice-visual.is-columns{grid-template-rows:10px 1fr;}",
-      "#" + CFG.modalId + " .weo-choice-media{border-radius:8px;background:linear-gradient(160deg,#0ea5e9 0%,#1d4ed8 100%);}",
-      "#" + CFG.modalId + " .weo-choice-copybars{display:grid;gap:5px;align-content:start;}",
-      "#" + CFG.modalId + " .weo-choice-copybars span,#" + CFG.modalId + " .weo-choice-topbar,#" + CFG.modalId + " .weo-choice-columns span{display:block;border-radius:999px;background:#d8e0ea;}",
-      "#" + CFG.modalId + " .weo-choice-copybars span:nth-child(1){height:10px;width:72%;background:#c7d7ff;}",
-      "#" + CFG.modalId + " .weo-choice-copybars span:nth-child(2){height:8px;width:94%;}",
-      "#" + CFG.modalId + " .weo-choice-copybars span:nth-child(3){height:8px;width:58%;}",
-      "#" + CFG.modalId + " .weo-choice-topbar{height:10px;width:62%;background:#c7d7ff;}",
-      "#" + CFG.modalId + " .weo-choice-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;}",
-      "#" + CFG.modalId + " .weo-choice-columns span{height:100%;min-height:18px;}",
-      "#" + CFG.modalId + " .weo-setup-grid{display:grid;gap:8px;margin-top:8px;}",
-      "#" + CFG.modalId + " .weo-setup-panel{border:1px solid #e3e8ef;border-radius:10px;background:#fbfcfd;padding:8px;}",
-      "#" + CFG.modalId + " .weo-eyebrow{display:block;margin-bottom:5px;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#98a2b3;}",
-      "#" + CFG.modalId + " .weo-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}",
-      "#" + CFG.modalId + " .weo-field{display:flex;flex-direction:column;gap:3px;min-width:0;}",
-      "#" + CFG.modalId + " .weo-field.is-wide{grid-column:1/-1;}",
-      "#" + CFG.modalId + " label.weo-label{font-size:10px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:#344054;}",
-      "#" + CFG.modalId + " .weo-input,#" + CFG.modalId + " .weo-textarea{width:100%;border:1px solid #cfd6e0;border-radius:8px;background:#fff;color:#101828;font-size:12px;padding:6px 8px;box-shadow:inset 0 1px 2px rgba(15,23,42,.03);}",
-      "#" + CFG.modalId + " .weo-input:focus,#" + CFG.modalId + " .weo-textarea:focus{outline:2px solid rgba(23,92,211,.16);border-color:#175cd3;}",
-      "#" + CFG.modalId + " .weo-textarea{min-height:56px;resize:vertical;line-height:1.35;}",
-      "#" + CFG.modalId + " .weo-help{color:#667085;font-size:10px;line-height:1.3;}",
-      "#" + CFG.modalId + " .weo-schedules-head{display:flex;gap:8px;align-items:flex-start;justify-content:space-between;margin-bottom:8px;}",
-      "#" + CFG.modalId + " .weo-schedule-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px;}",
-      "#" + CFG.modalId + " .weo-schedule-card{display:flex;flex-direction:column;gap:8px;min-width:0;}",
-      "#" + CFG.modalId + " .weo-schedule-grid-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}",
-      "#" + CFG.modalId + " .weo-times-block{display:grid;gap:6px;}",
-      "#" + CFG.modalId + " .weo-times-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}",
-      "#" + CFG.modalId + " .weo-times-title{font-size:11px;font-weight:800;color:#101828;}",
-      "#" + CFG.modalId + " .weo-inline-note{font-size:10px;color:#667085;line-height:1.25;}",
-      "#" + CFG.modalId + " .weo-row{display:grid;grid-template-columns:72px minmax(0,1fr) 28px;gap:4px;align-items:center;}",
-      "#" + CFG.modalId + " .weo-row + .weo-row{margin-top:4px;}",
-      "#" + CFG.modalId + " .weo-row > *{min-width:0;}",
-      "#" + CFG.modalId + " .weo-row .weo-btn{min-width:28px;padding:6px 0;}",
+      "#" + CFG.modalId + " .weo-visual-editor{display:grid;gap:8px;min-width:0;}",
+      "#" + CFG.modalId + " .weo-layout-strip{display:flex;gap:8px;align-items:stretch;justify-content:space-between;}",
+      "#" + CFG.modalId + " .weo-layout-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:min(560px,100%);}",
+      "#" + CFG.modalId + " .weo-layout-pill{display:grid;grid-template-columns:18px minmax(0,1fr);gap:8px;align-items:center;border:1px solid #d4dbe7;border-radius:12px;background:#fff;padding:8px 10px;cursor:pointer;box-shadow:0 4px 12px rgba(15,23,42,.04);}",
+      "#" + CFG.modalId + " .weo-layout-pill input{margin:0;}",
+      "#" + CFG.modalId + " .weo-layout-pill b{display:block;font-size:12px;line-height:1.15;color:#101828;}",
+      "#" + CFG.modalId + " .weo-layout-pill span span{display:block;margin-top:2px;font-size:10px;line-height:1.25;color:#667085;}",
+      "#" + CFG.modalId + " .weo-layout-pill.is-selected{border-color:#175cd3;background:#eef4ff;box-shadow:inset 0 0 0 1px rgba(23,92,211,.08),0 4px 12px rgba(23,92,211,.08);}",
+      "#" + CFG.modalId + " .weo-layout-note{align-self:center;max-width:420px;border:1px solid #d9e2ec;border-radius:12px;background:#fff;padding:8px 10px;font-size:11px;line-height:1.35;color:#475467;}",
+      "#" + CFG.modalId + " .weo-canvas-shell{border:1px solid #d6deea;border-radius:16px;background:#dfe5ee;padding:12px;overflow:auto;}",
+      "#" + CFG.modalId + " .weo-proof-page{--paper:#fffdf9;--ink:#0d1226;--heritage:#EC9797;position:relative;width:min(100%,1120px);min-width:760px;aspect-ratio:318/178.9;margin:0 auto;background:var(--paper);overflow:hidden;border-radius:8px;box-shadow:0 10px 30px rgba(15,23,42,.18);color:var(--ink);font-family:Lato,'Segoe UI',Arial,sans-serif;}",
+      "#" + CFG.modalId + " .weo-proof-logo{position:absolute;left:2.6%;top:4%;z-index:5;width:112px;height:26px;border:1px solid rgba(13,18,38,.18);border-radius:999px;background:rgba(13,18,38,.05);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:.08em;color:rgba(13,18,38,.68);text-transform:uppercase;}",
+      "#" + CFG.modalId + " .weo-proof-footer{position:absolute;left:2.6%;right:2.6%;bottom:4%;z-index:7;display:flex;justify-content:space-between;gap:18px;font-size:10px;color:rgba(13,18,38,.62);pointer-events:none;}",
+      "#" + CFG.modalId + " .weo-page-title-fixed{position:absolute;z-index:6;font-family:'Albra Sans',Lato,'Segoe UI',Arial,sans-serif;font-size:clamp(24px,3.1vw,42px);font-weight:400;line-height:.95;text-transform:uppercase;letter-spacing:.01em;}",
+      "#" + CFG.modalId + " .weo-page-field{width:100%;border:1px dashed rgba(23,92,211,.28);border-radius:8px;background:rgba(255,255,255,.72);color:#0d1226;font:inherit;box-shadow:0 1px 2px rgba(15,23,42,.04);transition:border-color .12s,box-shadow .12s,background .12s;}",
+      "#" + CFG.modalId + " .weo-page-field:hover{border-color:rgba(23,92,211,.55);background:rgba(255,255,255,.9);}",
+      "#" + CFG.modalId + " .weo-page-field:focus{outline:none;border-color:#175cd3;background:#fff;box-shadow:0 0 0 3px rgba(23,92,211,.14);}",
+      "#" + CFG.modalId + " .weo-page-field::placeholder{color:rgba(13,18,38,.34);}",
+      "#" + CFG.modalId + " textarea.weo-page-field{resize:none;line-height:1.25;}",
+      "#" + CFG.modalId + " .weo-proof-kicker{font-family:'Albra Sans',Lato,'Segoe UI',Arial,sans-serif;font-size:clamp(11px,1.1vw,15px);line-height:1.05;color:var(--heritage);letter-spacing:.03em;margin-bottom:6px;}",
+      "#" + CFG.modalId + " .weo-day-heading{font-weight:800;text-transform:uppercase;line-height:1.15;padding:6px 8px;font-size:clamp(11px,1.03vw,14px);}",
+      "#" + CFG.modalId + " .weo-day-blurb{min-height:42px;padding:7px 8px;font-size:clamp(10px,.94vw,13px);}",
+      "#" + CFG.modalId + " .weo-time-list{display:grid;gap:4px;margin-top:6px;}",
+      "#" + CFG.modalId + " .weo-time-row{display:grid;grid-template-columns:minmax(54px,.34fr) 12px minmax(0,1fr) 23px;gap:4px;align-items:center;padding-top:4px;border-top:1px solid rgba(236,151,151,.48);}",
+      "#" + CFG.modalId + " .weo-time-row:first-child{border-top:0;padding-top:0;}",
+      "#" + CFG.modalId + " .weo-time-row .weo-page-field{padding:5px 6px;font-size:clamp(10px,.9vw,12px);}",
+      "#" + CFG.modalId + " .weo-row-sep{font-size:11px;text-align:center;color:rgba(13,18,38,.35);}",
+      "#" + CFG.modalId + " .weo-mini-remove{width:23px;height:23px;border:1px solid #fecdca;border-radius:7px;background:#fff;color:#b42318;cursor:pointer;font-size:16px;line-height:18px;padding:0;}",
+      "#" + CFG.modalId + " .weo-mini-remove:hover{background:#fff5f5;}",
+      "#" + CFG.modalId + " .weo-page-mini-btn{border:1px solid #cfd4dc;border-radius:999px;background:#fff;color:#1f2937;cursor:pointer;font-size:10px;font-weight:800;padding:5px 8px;line-height:1.1;}",
+      "#" + CFG.modalId + " .weo-page-mini-btn:hover{background:#f9fafb;}",
+      "#" + CFG.modalId + " .weo-page-mini-btn.is-danger{border-color:#fecdca;color:#b42318;}",
+      "#" + CFG.modalId + " .weo-card-actions{display:flex;justify-content:space-between;gap:6px;align-items:center;margin-top:6px;}",
+      "#" + CFG.modalId + " .weo-row-count{font-size:9px;font-weight:800;color:rgba(13,18,38,.45);}",
+      "#" + CFG.modalId + " .weo-proof-page.is-image-layout .weo-proof-image-panel{position:absolute;right:0;top:0;bottom:0;width:50%;z-index:1;background:linear-gradient(145deg,#0f172a,#1d4ed8);overflow:hidden;}",
+      "#" + CFG.modalId + " .weo-proof-page.is-image-layout .weo-proof-image-panel img{width:100%;height:100%;object-fit:cover;display:block;}",
+      "#" + CFG.modalId + " .weo-proof-page.is-image-layout .weo-image-url-card{position:absolute;left:7%;right:7%;top:8%;z-index:4;border:1px solid rgba(255,255,255,.28);border-radius:12px;background:rgba(13,18,38,.58);backdrop-filter:blur(3px);padding:8px;color:#fff;}",
+      "#" + CFG.modalId + " .weo-proof-page.is-image-layout .weo-image-url-card label{display:block;margin-bottom:4px;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.82);}",
+      "#" + CFG.modalId + " .weo-proof-page.is-image-layout .weo-image-url-card input{width:100%;border:1px solid rgba(255,255,255,.3);border-radius:8px;background:rgba(255,255,255,.93);font-size:11px;padding:6px 7px;color:#0d1226;}",
+      "#" + CFG.modalId + " .weo-proof-page.is-image-layout .weo-page-title-fixed{right:5.2%;bottom:11%;width:40%;text-align:right;color:rgba(255,253,249,.94);text-shadow:0 2px 16px rgba(0,0,0,.24);}",
+      "#" + CFG.modalId + " .weo-proof-page.is-image-layout .weo-proof-copy-pane{position:absolute;left:5.1%;top:21%;bottom:13%;width:34.5%;z-index:4;display:flex;flex-direction:column;min-height:0;}",
+      "#" + CFG.modalId + " .weo-proof-page.is-image-layout .weo-day-blurb{margin-bottom:10px;}",
+      "#" + CFG.modalId + " .weo-proof-page.is-image-layout .weo-schedule-box{display:flex;flex-direction:column;min-height:0;}",
+      "#" + CFG.modalId + " .weo-columns-grid{position:absolute;left:2.6%;right:2.6%;top:8%;bottom:12%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2.6%;z-index:3;}",
+      "#" + CFG.modalId + " .weo-column{display:flex;flex-direction:column;min-width:0;min-height:0;}",
+      "#" + CFG.modalId + " .weo-column .weo-page-title-fixed{position:static;width:100%;margin:0 0 8px 0;color:#0d1226;}",
+      "#" + CFG.modalId + " .weo-opening-field{min-height:54px;margin:0 0 10px 0;padding:7px 8px;font-size:clamp(10px,.93vw,13px);}",
+      "#" + CFG.modalId + " .weo-col-schedule{display:flex;flex-direction:column;min-height:0;}",
+      "#" + CFG.modalId + " .weo-col-schedule.is-empty{opacity:.82;}",
+      "#" + CFG.modalId + " .weo-col-schedule .weo-day-heading{font-family:'Albra Sans',Lato,'Segoe UI',Arial,sans-serif;font-weight:400;font-size:clamp(17px,1.95vw,27px);line-height:1;text-transform:uppercase;padding:6px 8px;margin-top:6px;}",
+      "#" + CFG.modalId + " .weo-col-schedule .weo-day-blurb{min-height:38px;}",
+      "#" + CFG.modalId + " .weo-editor-help{display:flex;flex-wrap:wrap;align-items:center;gap:6px;border:1px solid #d9e2ec;border-radius:12px;background:#fff;padding:8px 10px;font-size:11px;line-height:1.35;color:#475467;}",
+      "#" + CFG.modalId + " .weo-editor-help span{display:inline-flex;align-items:center;border:1px solid #e4e8ef;border-radius:999px;background:#fbfcfe;padding:3px 7px;font-size:10px;font-weight:800;color:#667085;}",
+      "#" + CFG.modalId + " .weo-editor-help strong{font-weight:800;color:#101828;}",
+      "#" + CFG.modalId + " .weo-editor-help.is-warning{border-color:#fedf89;background:#fffaeb;color:#93370d;}",
       "#" + CFG.modalId + " .weo-btn{border:1px solid #cfd4dc;border-radius:8px;background:#fff;color:#1f2937;cursor:pointer;font-size:11px;font-weight:800;padding:6px 8px;line-height:1.15;}",
       "#" + CFG.modalId + " .weo-btn:hover{background:#f9fafb;}",
       "#" + CFG.modalId + " .weo-btn.is-primary{border-color:#175cd3;background:#175cd3;color:#fff;}",
-      "#" + CFG.modalId + " .weo-btn.is-danger{border-color:#fecdca;color:#b42318;background:#fff;}",
-      "#" + CFG.modalId + " .weo-btn.is-small{padding:6px 7px;}",
-      "#" + CFG.modalId + " .weo-btn[disabled]{opacity:.55;cursor:not-allowed;}",
-      "#" + CFG.modalId + " .weo-warning{border:1px solid #fedf89;background:#fffaeb;color:#93370d;border-radius:10px;padding:7px 9px;font-size:11px;line-height:1.35;}",
-      "#" + CFG.modalId + " .weo-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:0;}",
       "#" + CFG.modalId + " .weo-footer{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-top:8px;border-top:1px solid #e4e8ef;}",
-      "#" + CFG.modalId + " .weo-helper-strip{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px;}",
-      "#" + CFG.modalId + " .weo-helper-strip span{display:inline-flex;align-items:center;border:1px solid #d9e2ec;border-radius:999px;background:#fbfcfe;padding:4px 7px;font-size:10px;font-weight:800;color:#667085;}",
-      "#" + CFG.modalId + " .weo-composer{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(300px,340px);gap:8px;align-items:start;}",
-      "#" + CFG.modalId + " .weo-map-card,#" + CFG.modalId + " .weo-inspector-card{padding:9px;}",
-      "#" + CFG.modalId + " .weo-map-shell{display:grid;gap:8px;}",
-      "#" + CFG.modalId + " .weo-page-surface{border:1px solid #d8e0ea;border-radius:14px;background:linear-gradient(180deg,#fbfcfe 0%,#f3f6fa 100%);padding:8px;display:grid;gap:8px;}",
-      "#" + CFG.modalId + " .weo-page-surface.is-image{grid-template-columns:.82fr 1.18fr;min-height:260px;}",
-      "#" + CFG.modalId + " .weo-page-surface.is-columns{grid-template-rows:auto 1fr;}",
-      "#" + CFG.modalId + " .weo-page-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;min-height:210px;}",
-      "#" + CFG.modalId + " .weo-map-region{width:100%;border:1px solid #d6deea;border-radius:12px;background:#fff;padding:8px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;cursor:pointer;min-width:0;box-shadow:0 1px 2px rgba(15,23,42,.04);}",
-      "#" + CFG.modalId + " button.weo-map-region{font:inherit;color:inherit;appearance:none;-webkit-appearance:none;}",
-      "#" + CFG.modalId + " .weo-map-region:hover{border-color:#9ab6ea;box-shadow:0 8px 16px rgba(37,99,235,.08);}",
-      "#" + CFG.modalId + " .weo-map-region:focus-visible{outline:2px solid rgba(23,92,211,.26);outline-offset:1px;}",
-      "#" + CFG.modalId + " .weo-map-region.is-selected{border-color:#175cd3;background:#eff5ff;box-shadow:inset 0 0 0 1px rgba(23,92,211,.08),0 10px 18px rgba(23,92,211,.12);}",
-      "#" + CFG.modalId + " .weo-map-region.is-empty{background:#fcfdff;}",
-      "#" + CFG.modalId + " .weo-map-region.is-image-region{background:linear-gradient(160deg,#0ea5e9 0%,#1d4ed8 100%);border-color:#175cd3;color:#eff6ff;justify-content:space-between;}",
-      "#" + CFG.modalId + " .weo-map-region.is-image-region.is-selected{box-shadow:inset 0 0 0 1px rgba(255,255,255,.24),0 10px 18px rgba(23,92,211,.22);}",
-      "#" + CFG.modalId + " .weo-map-region.is-hidden-slot{background:#f9fafb;}",
-      "#" + CFG.modalId + " .weo-map-region.is-compact{min-height:118px;}",
-      "#" + CFG.modalId + " .weo-region-kicker{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#98a2b3;}",
-      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-kicker{color:rgba(239,246,255,.84);}",
-      "#" + CFG.modalId + " .weo-region-title{font-size:12px;font-weight:800;line-height:1.15;color:#101828;}",
-      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-title{color:#fff;}",
-      "#" + CFG.modalId + " .weo-region-copy{display:block;font-size:10px;line-height:1.35;color:#475467;min-width:0;}",
-      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-copy{color:rgba(239,246,255,.92);}",
-      "#" + CFG.modalId + " .weo-region-tag{display:inline-flex;align-items:center;border:1px solid #d8e2f0;border-radius:999px;background:#f8fafc;padding:3px 6px;font-size:9px;font-weight:800;color:#667085;}",
-      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-tag{border-color:rgba(255,255,255,.24);background:rgba(255,255,255,.12);color:#eff6ff;}",
-      "#" + CFG.modalId + " .weo-region-list{display:grid;gap:4px;width:100%;margin-top:auto;}",
-      "#" + CFG.modalId + " .weo-region-line{display:grid;grid-template-columns:56px minmax(0,1fr);gap:6px;padding-top:4px;border-top:1px solid #eef2f6;width:100%;}",
-      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-line{border-top-color:rgba(255,255,255,.22);}",
-      "#" + CFG.modalId + " .weo-region-line strong{font-size:10px;font-weight:800;color:#175cd3;}",
-      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-line strong{color:#fff;}",
-      "#" + CFG.modalId + " .weo-region-line span{font-size:10px;color:#344054;line-height:1.3;min-width:0;}",
-      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-line span{color:rgba(239,246,255,.9);}",
-      "#" + CFG.modalId + " .weo-region-empty{margin-top:auto;padding:8px;border:1px dashed #d3dbe6;border-radius:9px;background:#fbfcfe;font-size:10px;color:#98a2b3;width:100%;text-align:center;}",
-      "#" + CFG.modalId + " .weo-map-region.is-image-region .weo-region-empty{border-color:rgba(255,255,255,.26);background:rgba(255,255,255,.1);color:#e0ecff;}",
-      "#" + CFG.modalId + " .weo-hidden-strip{display:grid;gap:6px;}",
-      "#" + CFG.modalId + " .weo-hidden-strip-head{display:flex;align-items:center;justify-content:space-between;gap:8px;}",
-      "#" + CFG.modalId + " .weo-hidden-strip-title{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#667085;}",
-      "#" + CFG.modalId + " .weo-hidden-strip-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}",
-      "#" + CFG.modalId + " .weo-inspector-body{display:grid;gap:8px;}",
-      "#" + CFG.modalId + " .weo-inspector-tip{padding:7px 8px;border:1px solid #e4e8ef;border-radius:9px;background:#fbfcfd;font-size:10px;line-height:1.35;color:#667085;}",
-      "#" + CFG.modalId + " .weo-schedule-editor{display:grid;gap:8px;min-width:0;}",
       "#" + CFG.statusId + "{min-height:14px;font-size:11px;font-weight:700;padding-left:1px;}",
       "#" + CFG.statusId + ".is-error{color:#b42318;}",
       "#" + CFG.statusId + ".is-success{color:#027a48;}",
       "#" + CFG.statusId + ".is-warning{color:#b54708;}",
       "#" + CFG.statusId + ".is-info{color:#175cd3;}",
-      "@media(max-width:980px){#" + CFG.modalId + "{width:calc(100vw - 20px);max-height:calc(100vh - 20px);}#" + CFG.modalId + " .weo-composer{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-page-surface.is-image{grid-template-columns:1fr;min-height:0;}#" + CFG.modalId + " .weo-page-columns{grid-template-columns:1fr 1fr;min-height:0;}#" + CFG.modalId + " .weo-hidden-strip-grid{grid-template-columns:1fr 1fr;}#" + CFG.modalId + " .weo-schedule-grid{grid-template-columns:1fr 1fr;}#" + CFG.modalId + " .weo-schedule-grid-fields{grid-template-columns:1fr;}}",
-      "@media(max-width:760px){#" + CFG.overlayId + "{padding:8px;}#" + CFG.modalId + "{width:calc(100vw - 16px);max-height:calc(100vh - 16px);}#" + CFG.modalId + " .weo-head{padding:12px 12px 9px;}#" + CFG.modalId + " .weo-body{padding:8px;}#" + CFG.modalId + " .weo-choice-grid,#" + CFG.modalId + " .weo-fields,#" + CFG.modalId + " .weo-schedule-grid,#" + CFG.modalId + " .weo-page-columns,#" + CFG.modalId + " .weo-hidden-strip-grid{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-choice{grid-template-columns:16px minmax(0,1fr);}#" + CFG.modalId + " .weo-choice-visual{display:none;}#" + CFG.modalId + " .weo-row{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-row .weo-btn{width:100%;}#" + CFG.modalId + " .weo-schedules-head{flex-direction:column;align-items:flex-start;}#" + CFG.modalId + " .weo-hidden-strip-head,#" + CFG.modalId + " .weo-footer{flex-direction:column;align-items:stretch;}#" + CFG.modalId + " .weo-footer{flex-wrap:wrap;justify-content:stretch;}#" + CFG.modalId + " .weo-footer .weo-btn{flex:1 1 140px;}}"
+      "@media(max-width:900px){#" + CFG.modalId + "{width:calc(100vw - 16px);max-height:calc(100vh - 16px);}#" + CFG.overlayId + "{padding:8px;}#" + CFG.modalId + " .weo-layout-strip{display:grid;}#" + CFG.modalId + " .weo-layout-options{width:100%;}#" + CFG.modalId + " .weo-proof-page{min-width:720px;}#" + CFG.modalId + " .weo-canvas-shell{padding:8px;}}",
+      "@media(max-width:720px){#" + CFG.modalId + " .weo-layout-options{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-footer{flex-direction:column;align-items:stretch;}#" + CFG.modalId + " .weo-footer .weo-btn{width:100%;}}"
     ].join("");
 
     $("head").append('<style id="' + CFG.stylesId + '">' + css + "</style>");
@@ -315,7 +182,7 @@
           '<div class="weo-head">' +
             '<div>' +
               '<div id="' + CFG.titleId + '" class="weo-title">Event Overview</div>' +
-              '<div class="weo-subtitle">Edit the proposal page without touching the underlying list structure.</div>' +
+              '<div class="weo-subtitle">Edit this proposal page visually. The logo, title and footer are fixed; the fields on the page are the editable content.</div>' +
             '</div>' +
             '<button type="button" class="weo-x" aria-label="Close">&times;</button>' +
           '</div>' +
@@ -342,9 +209,17 @@
     $("#" + CFG.bodyId).on("change", 'input[name="weo-layout"]', function () {
       if (editor.saving) return;
       editor.current = readFormState(editor.current);
-      editor.selectedRegionId = normaliseSelectedRegionId(editor.selectedRegionId, editor.current);
       renderEditor(editor.current);
       setStatus("", "");
+    });
+
+    $("#" + CFG.bodyId).on("input", '[data-field="imageUrl"]', function () {
+      var url = $.trim(String($(this).val() || ""));
+      var $panel = $(this).closest(".weo-proof-image-panel");
+      var $img = $panel.find("img").first();
+      if (!$img.length) $img = $('<img alt="">').prependTo($panel);
+      if (url) $img.attr("src", url);
+      else $img.remove();
     });
 
     $("#" + CFG.bodyId).on("click", "[data-weo-action]", function (e) {
@@ -469,395 +344,206 @@
   }
 
   function showMessage(title, message) {
-    $("#" + CFG.bodyId).html('<div class="weo-message"><strong>' + esc(title) + '</strong>' + esc(message) + '</div>');
+    $("#" + CFG.bodyId).html('<div class="weo-message"><strong>' + esc(title) + "</strong>" + esc(message) + "</div>");
     setSaveEnabled(false);
   }
 
   function renderEditor(state) {
-    state = normaliseEditorState(state || blankState());
+    state = normaliseVisualEditorState(state || blankState());
     editor.current = state;
-    editor.selectedRegionId = normaliseSelectedRegionId(editor.selectedRegionId, state);
+    editor.selectedRegionId = "";
 
-    var extraImageWarning = getImageLayoutExtraScheduleWarning(state);
     var html = '' +
-      '<div class="weo-grid">' +
-        pageSetupCardHtml(state) +
-        (extraImageWarning ? '<div class="weo-warning">' + esc(extraImageWarning) + '</div>' : '') +
-        pageComposerHtml(state, editor.selectedRegionId) +
+      '<div class="weo-visual-editor">' +
+        visualLayoutSwitchHtml(state) +
+        '<div class="weo-canvas-shell">' + visualCanvasHtml(state) + '</div>' +
+        visualEditorHelpHtml(state) +
       '</div>';
 
     $("#" + CFG.bodyId).html(html);
     setSaveEnabled(true);
   }
 
-  function pageSetupCardHtml(state) {
-    return '' +
-      '<div class="weo-card">' +
-        '<div class="weo-card-head"><div><div class="weo-card-title">Page layout</div><div class="weo-card-note">Pick the locked page shape first, then click a page area below to edit only that part of the proposal.</div></div></div>' +
-        '<div class="weo-helper-strip"><span>1. Choose layout</span><span>2. Click a page area</span><span>3. Fill the constrained fields</span></div>' +
-        '<div class="weo-choice-grid">' +
-          layoutChoiceHtml(LAYOUT_IMAGE, state.layout, "Image split", "One feature image with a single schedule beside it.") +
-          layoutChoiceHtml(LAYOUT_COLUMNS, state.layout, "Three columns", "Opening copy above up to three schedule columns.") +
-        '</div>' +
-      '</div>';
-  }
+  function normaliseVisualEditorState(state) {
+    state = normaliseEditorState(state || blankState());
 
-  function pageComposerHtml(state, selectedRegionId) {
-    return '' +
-      '<div class="weo-composer">' +
-        pageMapCardHtml(state, selectedRegionId) +
-        inspectorCardHtml(state, selectedRegionId) +
-      '</div>';
-  }
-
-  function pageMapCardHtml(state, selectedRegionId) {
-    return '' +
-      '<div class="weo-card weo-map-card">' +
-        '<div class="weo-card-head">' +
-          '<div><div class="weo-card-title">Page map</div><div class="weo-card-note">This is the constrained proposal layout. Click a block to edit the content that lands there.</div></div>' +
-          '<div class="weo-mini-meta">' + esc(String(countScheduleRows(state.schedules || [])) + " time rows") + '</div>' +
-        '</div>' +
-        pageMapHtml(state, selectedRegionId) +
-      '</div>';
-  }
-
-  function inspectorCardHtml(state, selectedRegionId) {
-    var region = getRegionDefinition(state, selectedRegionId);
-
-    if (!region) {
-      return '' +
-        '<div class="weo-card weo-inspector-card">' +
-          '<div class="weo-card-head"><div><div class="weo-card-title">Edit region</div><div class="weo-card-note">Choose a page area from the map first.</div></div></div>' +
-        '</div>';
+    if (state.layout === LAYOUT_COLUMNS) {
+      while (state.schedules.length < CFG.maxSchedules) {
+        state.schedules.push(blankSchedule(state.schedules.length === 0 ? "Day of event" : ""));
+      }
     }
 
+    if (!state.schedules.length) state.schedules = [blankSchedule("Day of event")];
+    return state;
+  }
+
+  function visualLayoutSwitchHtml(state) {
+    var layout = normaliseLayout(state.layout);
+
     return '' +
-      '<div class="weo-card weo-inspector-card">' +
-        '<div class="weo-card-head"><div><div class="weo-card-title">Edit ' + esc(region.label) + '</div><div class="weo-card-note">' + esc(region.note) + '</div></div></div>' +
-        '<div class="weo-inspector-body">' +
-          '<div class="weo-inspector-tip">Only the highlighted page area is editable here. Save, then use the rendered document preview outside this popup to review the finished page.</div>' +
-          inspectorRegionHtml(state, region) +
+      '<div class="weo-layout-strip">' +
+        '<div class="weo-layout-options">' +
+          visualLayoutPillHtml(LAYOUT_IMAGE, layout, "Image split", "One image-led schedule page. Uses one day only.") +
+          visualLayoutPillHtml(LAYOUT_COLUMNS, layout, "Three columns", "No image. Shows up to three day columns.") +
         '</div>' +
+        '<div class="weo-layout-note"><strong>Direct page editing:</strong> click into the page preview fields below. The fixed title, logo and footer are shown for context but are not editable here.</div>' +
       '</div>';
   }
 
-  function countScheduleRows(schedules) {
-    var total = 0;
-    var source = schedules || [];
-
-    for (var i = 0; i < source.length; i++) {
-      total += getRowsToSave(source[i]).length;
-    }
-
-    return total;
-  }
-
-  function pageMapHtml(state, selectedRegionId) {
-    return normaliseLayout(state.layout) === LAYOUT_COLUMNS
-      ? columnsPageMapHtml(state, selectedRegionId)
-      : imagePageMapHtml(state, selectedRegionId);
-  }
-
-  function imagePageMapHtml(state, selectedRegionId) {
+  function visualLayoutPillHtml(value, current, title, note) {
     return '' +
-      '<div class="weo-map-shell">' +
-        '<div class="weo-page-surface is-image">' +
-          mapRegionButtonHtml(getRegionDefinition(state, REGION_IMAGE), state, selectedRegionId) +
-          mapRegionButtonHtml(getRegionDefinition(state, buildScheduleRegionId(0)), state, selectedRegionId) +
-        '</div>' +
-        imageHiddenSchedulesHtml(state, selectedRegionId) +
-      '</div>';
-  }
-
-  function columnsPageMapHtml(state, selectedRegionId) {
-    var columns = [];
-
-    for (var i = 0; i < CFG.maxSchedules; i++) {
-      columns.push(mapRegionButtonHtml(getRegionDefinition(state, buildScheduleRegionId(i)), state, selectedRegionId));
-    }
-
-    return '' +
-      '<div class="weo-map-shell">' +
-        '<div class="weo-page-surface is-columns">' +
-          mapRegionButtonHtml(getRegionDefinition(state, REGION_OPENING), state, selectedRegionId) +
-          '<div class="weo-page-columns">' + columns.join("") + '</div>' +
-        '</div>' +
-      '</div>';
-  }
-
-  function imageHiddenSchedulesHtml(state, selectedRegionId) {
-    var tiles = [];
-
-    for (var i = 1; i < CFG.maxSchedules; i++) {
-      tiles.push(mapRegionButtonHtml(getRegionDefinition(state, buildScheduleRegionId(i)), state, selectedRegionId, { compact: true }));
-    }
-
-    return '' +
-      '<div class="weo-hidden-strip">' +
-        '<div class="weo-hidden-strip-head">' +
-          '<div class="weo-hidden-strip-title">Hidden saved schedules</div>' +
-          '<div class="weo-mini-meta">Switch to Three columns to show these</div>' +
-        '</div>' +
-        '<div class="weo-hidden-strip-grid">' + tiles.join("") + '</div>' +
-      '</div>';
-  }
-
-  function mapRegionButtonHtml(region, state, selectedRegionId, options) {
-    options = options || {};
-    if (!region) return "";
-
-    var classes = ["weo-map-region"];
-    var title = "";
-    var copy = "";
-    var detail = "";
-    var tag = "";
-    var isEmpty = false;
-
-    if (region.kind === REGION_IMAGE) {
-      classes.push("is-image-region");
-      title = "Feature image";
-      copy = previewText(state.imageUrl, "Add an image URL to fill this side of the page.", 84);
-      tag = state.imageUrl ? "Image linked" : "Required";
-      isEmpty = !$.trim(String(state.imageUrl || ""));
-    } else if (region.kind === REGION_OPENING) {
-      title = "Opening text";
-      copy = previewText(state.openingText, "Add the short introduction that appears above the columns.", 150);
-      tag = $.trim(String(state.openingText || "")) ? "Copy added" : "Optional";
-      isEmpty = !$.trim(String(state.openingText || ""));
-    } else if (region.kind === "schedule") {
-      var schedule = getScheduleAtIndex(state, region.scheduleIndex);
-      var rows = getRowsToSave(schedule);
-      title = previewText(schedule.title, region.scheduleIndex === 0 ? "Day of event" : "Add heading", 34);
-      copy = previewText(
-        schedule.intro,
-        region.isHiddenSlot ? "Saved in HireHop but hidden in this page layout." : "Add the heading, intro, and time rows for this schedule area.",
-        96
-      );
-      tag = rows.length ? String(rows.length) + " time row" + (rows.length === 1 ? "" : "s") : "No times yet";
-      detail = rows.length ? scheduleRegionLinesHtml(rows, options.compact ? 2 : 3) : '<div class="weo-region-empty">Add a heading and at least one time row</div>';
-      isEmpty = !isMeaningfulScheduleState(schedule);
-    }
-
-    if (selectedRegionId === region.id) classes.push("is-selected");
-    if (region.isHiddenSlot) classes.push("is-hidden-slot");
-    if (options.compact) classes.push("is-compact");
-    if (isEmpty) classes.push("is-empty");
-
-    return '' +
-      '<button type="button" class="' + classes.join(" ") + '" data-weo-action="select-region" data-region-id="' + attr(region.id) + '">' +
-        '<span class="weo-region-kicker">' + esc(region.pageLabel) + '</span>' +
-        '<span class="weo-region-title">' + esc(title) + '</span>' +
-        '<span class="weo-region-copy">' + esc(copy) + '</span>' +
-        (tag ? '<span class="weo-region-tag">' + esc(tag) + '</span>' : '') +
-        detail +
-      '</button>';
-  }
-
-  function scheduleRegionLinesHtml(rows, limit) {
-    var items = [];
-    var count = Math.min(rows.length, limit || 3);
-
-    for (var i = 0; i < count; i++) {
-      items.push(
-        '<span class="weo-region-line">' +
-          '<strong>' + esc(previewText(rows[i].time, "Time", 12)) + '</strong>' +
-          '<span>' + esc(previewText(rows[i].text, "Description", 44)) + '</span>' +
-        '</span>'
-      );
-    }
-
-    return '<div class="weo-region-list">' + items.join("") + '</div>';
-  }
-
-  function layoutChoiceHtml(value, current, title, note) {
-    return '' +
-      '<label class="weo-choice">' +
+      '<label class="weo-layout-pill' + (value === current ? ' is-selected' : '') + '">' +
         '<input type="radio" name="weo-layout" value="' + attr(value) + '"' + (value === current ? ' checked' : '') + '>' +
-        '<span class="weo-choice-copy"><b>' + esc(title) + '</b><span>' + esc(note) + '</span></span>' +
-        layoutChoiceVisualHtml(value) +
+        '<span><b>' + esc(title) + '</b><span>' + esc(note) + '</span></span>' +
       '</label>';
   }
 
-  function layoutChoiceVisualHtml(value) {
-    if (value === LAYOUT_COLUMNS) {
-      return '' +
-        '<span class="weo-choice-visual is-columns">' +
-          '<span class="weo-choice-topbar"></span>' +
-          '<span class="weo-choice-columns"><span></span><span></span><span></span></span>' +
-        '</span>';
-    }
-
-    return '' +
-      '<span class="weo-choice-visual is-image">' +
-        '<span class="weo-choice-media"></span>' +
-        '<span class="weo-choice-copybars"><span></span><span></span><span></span></span>' +
-      '</span>';
+  function visualCanvasHtml(state) {
+    return normaliseLayout(state.layout) === LAYOUT_COLUMNS
+      ? columnsVisualPageHtml(state)
+      : imageVisualPageHtml(state);
   }
 
-  function imageCardHtml(state) {
+  function proofLogoHtml() {
+    return '<div class="weo-proof-logo">Wise logo</div>';
+  }
+
+  function proofFooterHtml() {
+    return '<div class="weo-proof-footer"><span>Event date · Job · Version</span><span>Page no.</span></div>';
+  }
+
+  function imageVisualPageHtml(state) {
+    var schedule = getScheduleAtIndex(state, 0);
+    var imageUrl = $.trim(String(state.imageUrl || ""));
+
     return '' +
-      '<div class="weo-setup-panel">' +
-        '<span class="weo-eyebrow">Visual panel</span>' +
-        fieldHtml({ wide: true, label: "Image link", field: "imageUrl", value: state.imageUrl, placeholder: "https://...", note: "This fills the image side of the split page layout." }) +
+      '<div class="weo-proof-page is-image-layout">' +
+        proofLogoHtml() +
+        '<div class="weo-proof-image-panel">' +
+          (imageUrl ? '<img alt="" src="' + attr(imageUrl) + '">' : '') +
+          '<div class="weo-image-url-card">' +
+            '<label>Feature image URL</label>' +
+            '<input type="text" data-field="imageUrl" value="' + attr(imageUrl) + '" placeholder="https://...">' +
+          '</div>' +
+        '</div>' +
+        '<div class="weo-page-title-fixed">Event Overview<br>&amp; Schedule</div>' +
+        '<div class="weo-proof-copy-pane weo-day-card" data-schedule-index="0" data-schedule-uid="' + attr(schedule.uid) + '" data-schedule-id="' + attr(schedule.id) + '">' +
+          '<div class="weo-proof-kicker">The brief</div>' +
+          '<textarea class="weo-page-field weo-day-blurb" data-field="scheduleIntro" placeholder="Short brief text shown beside the image.">' + esc(schedule.intro) + '</textarea>' +
+          '<div class="weo-schedule-box">' +
+            '<input class="weo-page-field weo-day-heading" type="text" data-field="scheduleTitle" value="' + attr(schedule.title) + '" placeholder="Day of event">' +
+            visualRowsHtml(schedule, 0) +
+            visualScheduleActionsHtml(schedule, 0, false) +
+          '</div>' +
+        '</div>' +
+        proofFooterHtml() +
       '</div>';
   }
 
-  function openingTextCardHtml(state) {
+  function columnsVisualPageHtml(state) {
+    var columns = [];
+
+    for (var i = 0; i < CFG.maxSchedules; i++) {
+      var schedule = getScheduleAtIndex(state, i);
+      columns.push('' +
+        '<div class="weo-column">' +
+          (i === 0 ? columnsPageIntroHtml(state) : '') +
+          visualScheduleCardHtml(schedule, i) +
+        '</div>'
+      );
+    }
+
     return '' +
-      '<div class="weo-setup-panel">' +
-        '<span class="weo-eyebrow">Top opening</span>' +
-        textareaHtml({ wide: true, label: "Opening text", field: "openingText", value: state.openingText, placeholder: "Briefly introduce the schedule.", note: "This appears above the schedule columns in the final page." }) +
+      '<div class="weo-proof-page is-columns-layout">' +
+        proofLogoHtml() +
+        '<div class="weo-columns-grid">' + columns.join("") + '</div>' +
+        proofFooterHtml() +
       '</div>';
   }
 
-  function inspectorRegionHtml(state, region) {
-    if (!region) return "";
-    if (region.kind === REGION_IMAGE) return imageCardHtml(state);
-    if (region.kind === REGION_OPENING) return openingTextCardHtml(state);
-    if (region.kind === "schedule") {
-      return scheduleCardHtml(getScheduleAtIndex(state, region.scheduleIndex), region.scheduleIndex, state.layout, {
-        plain: true,
-        slotLabel: region.pageLabel,
-        slotTitle: region.label,
-        slotNote: region.note
-      });
-    }
-
-    return "";
+  function columnsPageIntroHtml(state) {
+    return '' +
+      '<div class="weo-page-title-fixed">Event Overview<br>&amp; Schedule</div>' +
+      '<div class="weo-proof-kicker">The brief</div>' +
+      '<textarea class="weo-page-field weo-opening-field" data-field="openingText" placeholder="Opening text shown above the first column.">' + esc(state.openingText) + '</textarea>';
   }
 
-  function scheduleCardHtml(schedule, index, layout, options) {
-    options = options || {};
+  function visualScheduleCardHtml(schedule, index) {
     schedule = normaliseSchedule(schedule);
-    var isExtraInImageLayout = layout === LAYOUT_IMAGE && index > 0;
+
+    var classes = ["weo-col-schedule", "weo-day-card"];
+    if (!isMeaningfulScheduleState(schedule)) classes.push("is-empty");
+
+    return '' +
+      '<div class="' + classes.join(" ") + '" data-schedule-index="' + index + '" data-schedule-uid="' + attr(schedule.uid) + '" data-schedule-id="' + attr(schedule.id) + '">' +
+        '<input class="weo-page-field weo-day-heading" type="text" data-field="scheduleTitle" value="' + attr(schedule.title) + '" placeholder="' + attr(index === 0 ? "Day of event" : "Day " + String(index + 1)) + '">' +
+        '<textarea class="weo-page-field weo-day-blurb" data-field="scheduleIntro" placeholder="Optional short note below this day heading.">' + esc(schedule.intro) + '</textarea>' +
+        visualRowsHtml(schedule, index) +
+        visualScheduleActionsHtml(schedule, index, index > 0) +
+      '</div>';
+  }
+
+  function visualRowsHtml(schedule, scheduleIndex) {
+    schedule = normaliseSchedule(schedule);
     var rows = schedule.rows && schedule.rows.length ? schedule.rows : [blankRow()];
-    var rowHtml = [];
-    var liveRows = getRowsToSave(schedule).length;
-    var canClear = index > 0 && (schedule.id || $.trim(schedule.title) || $.trim(schedule.intro) || liveRows);
-    var slotLabel = options.slotLabel || getScheduleSlotLabel(index, layout);
-    var titleLabel = layout === LAYOUT_COLUMNS ? "Column heading" : "Schedule heading";
-    var introLabel = layout === LAYOUT_COLUMNS ? "Column intro" : "Schedule intro";
-    var slotTitle = options.slotTitle || getScheduleSlotTitle(index, layout);
-    var slotNote = options.slotNote || (isExtraInImageLayout
-      ? "Hidden until you switch this page to the three column layout."
-      : (liveRows ? String(liveRows) + " time row" + (liveRows === 1 ? "" : "s") + " ready." : "Add the first time row below."));
-    var shellClass = options.plain ? "weo-schedule-editor" : "weo-card weo-schedule-card";
+    var html = [];
 
     for (var i = 0; i < rows.length && i < CFG.maxRows; i++) {
-      rowHtml.push(rowHtmlLine(rows[i], index, i));
+      html.push(visualRowHtml(rows[i], scheduleIndex, i));
+    }
+
+    return '<div class="weo-time-list">' + html.join("") + '</div>';
+  }
+
+  function visualRowHtml(row, scheduleIndex, rowIndex) {
+    row = normaliseRow(row);
+
+    return '' +
+      '<div class="weo-time-row" data-row-index="' + rowIndex + '" data-row-uid="' + attr(row.uid) + '" data-row-id="' + attr(row.id) + '">' +
+        '<input class="weo-page-field" type="text" data-field="rowTime" value="' + attr(row.time) + '" placeholder="09:00" maxlength="32">' +
+        '<span class="weo-row-sep">–</span>' +
+        '<input class="weo-page-field" type="text" data-field="rowText" value="' + attr(row.text) + '" placeholder="What happens?">' +
+        '<button type="button" class="weo-mini-remove" data-weo-action="remove-row" data-schedule-index="' + scheduleIndex + '" data-row-index="' + rowIndex + '" aria-label="Remove time row">&times;</button>' +
+      '</div>';
+  }
+
+  function visualScheduleActionsHtml(schedule, index, canClear) {
+    var liveRows = getRowsToSave(schedule).length;
+
+    return '' +
+      '<div class="weo-card-actions">' +
+        '<button type="button" class="weo-page-mini-btn" data-weo-action="add-row" data-schedule-index="' + index + '"' + ((schedule.rows || []).length >= CFG.maxRows ? ' disabled' : '') + '>+ Add time</button>' +
+        '<span class="weo-row-count">' + esc(String(liveRows) + " / " + String(CFG.maxRows)) + '</span>' +
+        (canClear ? '<button type="button" class="weo-page-mini-btn is-danger" data-weo-action="clear-schedule" data-schedule-index="' + index + '">Clear</button>' : '') +
+      '</div>';
+  }
+
+  function visualEditorHelpHtml(state) {
+    var active = getActiveSchedules(state);
+    var warning = state.layout === LAYOUT_IMAGE && active.length > 1;
+
+    if (warning) {
+      return '<div class="weo-editor-help is-warning"><strong>Image split saves one schedule only.</strong> Extra active days are not hidden by the document renderer; they would create extra overview pages. This editor will keep the first day only when saved.</div>';
     }
 
     return '' +
-      '<div class="' + shellClass + (isExtraInImageLayout && !options.plain ? ' is-muted' : '') + '" data-schedule-index="' + index + '" data-schedule-uid="' + attr(schedule.uid) + '" data-schedule-id="' + attr(schedule.id) + '">' +
-        '<div class="weo-card-head">' +
-          '<div class="weo-card-heading">' +
-            '<span class="weo-eyebrow">' + esc(slotLabel) + '</span>' +
-            '<div class="weo-card-title">' + esc(slotTitle) + '</div>' +
-            '<div class="weo-card-note">' + esc(slotNote) + '</div>' +
-          '</div>' +
-          (canClear ? '<button type="button" class="weo-btn is-danger is-small" data-weo-action="remove-schedule" data-schedule-index="' + index + '">Clear</button>' : '') +
-        '</div>' +
-        '<div class="weo-schedule-grid-fields">' +
-          fieldHtml({ wide: false, label: titleLabel, field: "scheduleTitle", value: schedule.title, placeholder: index === 0 ? "Day of event" : "Setup day" }) +
-          textareaHtml({ wide: false, label: introLabel, field: "scheduleIntro", value: schedule.intro, placeholder: layout === LAYOUT_COLUMNS ? "Optional text above this column." : "Optional short note before the times." }) +
-        '</div>' +
-        '<div class="weo-times-block">' +
-          '<div class="weo-times-head">' +
-            '<div><div class="weo-times-title">Time rows</div><div class="weo-inline-note">Use clear labels such as 09:00, TBC, Morning, or After dinner.</div></div>' +
-            '<div class="weo-mini-meta">' + esc(String(liveRows) + " / " + String(CFG.maxRows)) + '</div>' +
-          '</div>' +
-          '<div>' + rowHtml.join("") + '</div>' +
-          '<div class="weo-actions">' +
-            '<button type="button" class="weo-btn" data-weo-action="add-row" data-schedule-index="' + index + '"' + (rows.length >= CFG.maxRows ? ' disabled' : '') + '>Add time</button>' +
-            '<span class="weo-inline-note">' + esc(layout === LAYOUT_COLUMNS ? "These rows appear inside this page column." : "These rows appear beside the image.") + '</span>' +
-          '</div>' +
-        '</div>' +
+      '<div class="weo-editor-help">' +
+        '<span>Fixed title</span>' +
+        '<span>Locked page layout</span>' +
+        '<span>Clean text fields</span>' +
+        '<strong>Tip:</strong> times render as “09:00 - description” in the final proposal.' +
       '</div>';
-  }
-
-  function getScheduleSlotLabel(index, layout) {
-    if (layout === LAYOUT_COLUMNS) return "Page column " + (index + 1);
-    return index === 0 ? "Visible schedule" : "Extra saved schedule";
-  }
-
-  function getScheduleSlotTitle(index, layout) {
-    if (layout === LAYOUT_COLUMNS) return "Column " + (index + 1);
-    return index === 0 ? "Main schedule" : "Schedule " + (index + 1);
-  }
-
-  function rowHtmlLine(row, scheduleIndex, rowIndex) {
-    row = normaliseRow(row);
-    return '' +
-      '<div class="weo-row" data-row-index="' + rowIndex + '" data-row-uid="' + attr(row.uid) + '" data-row-id="' + attr(row.id) + '">' +
-        '<input class="weo-input" type="text" data-field="rowTime" value="' + attr(row.time) + '" placeholder="09:00" maxlength="32">' +
-        '<input class="weo-input" type="text" data-field="rowText" value="' + attr(row.text) + '" placeholder="What happens?">' +
-        '<button type="button" class="weo-btn is-danger is-small" data-weo-action="remove-row" data-schedule-index="' + scheduleIndex + '" data-row-index="' + rowIndex + '" aria-label="Remove time">&times;</button>' +
-      '</div>';
-  }
-
-  function fieldHtml(o) {
-    return '' +
-      '<div class="weo-field' + (o.wide ? ' is-wide' : '') + '">' +
-        '<label class="weo-label">' + esc(o.label) + '</label>' +
-        '<input class="weo-input" type="text" data-field="' + attr(o.field) + '" value="' + attr(o.value) + '" placeholder="' + attr(o.placeholder || '') + '">' +
-        (o.note ? '<div class="weo-help">' + esc(o.note) + '</div>' : '') +
-      '</div>';
-  }
-
-  function textareaHtml(o) {
-    return '' +
-      '<div class="weo-field' + (o.wide ? ' is-wide' : '') + '">' +
-        '<label class="weo-label">' + esc(o.label) + '</label>' +
-        '<textarea class="weo-textarea" data-field="' + attr(o.field) + '" placeholder="' + attr(o.placeholder || '') + '">' + esc(o.value) + '</textarea>' +
-        (o.note ? '<div class="weo-help">' + esc(o.note) + '</div>' : '') +
-      '</div>';
-  }
-
-  function previewText(value, fallback, maxLen) {
-    var text = $.trim(String(value || ""));
-    if (!text) return fallback || "";
-    return truncateText(text, maxLen || 120);
-  }
-
-  function truncateText(value, maxLen) {
-    var text = String(value || "");
-    if (!maxLen || text.length <= maxLen) return text;
-    return $.trim(text.slice(0, Math.max(0, maxLen - 1))) + "…";
   }
 
   function runEditorAction($btn) {
     var action = String($btn.attr("data-weo-action") || "");
-    var regionId = String($btn.attr("data-region-id") || "");
     var scheduleIndex = toInt($btn.attr("data-schedule-index"), -1);
     var rowIndex = toInt($btn.attr("data-row-index"), -1);
     var state = readFormState(editor.current);
-    var layout = normaliseLayout(state.layout);
 
-    if (action === "select-region") {
-      editor.selectedRegionId = normaliseSelectedRegionId(regionId, state);
-      editor.current = normaliseEditorState(state);
-      renderEditor(editor.current);
-      setStatus("", "");
-      return;
-    }
-
-    if (action === "add-schedule") {
-      if (state.schedules.length >= CFG.maxSchedules) {
-        setStatus("You can add up to three schedules.", "warning");
-        return;
-      }
-      state.schedules.push(blankSchedule(""));
-    }
-
-    if (action === "remove-schedule" && scheduleIndex > 0) {
-      if (layout === LAYOUT_COLUMNS) {
-        while (state.schedules.length <= scheduleIndex) {
-          state.schedules.push(blankSchedule(""));
-        }
-        state.schedules[scheduleIndex] = blankSchedule("");
-      } else if (scheduleIndex < state.schedules.length) {
-        state.schedules.splice(scheduleIndex, 1);
-        if (!state.schedules.length) state.schedules.push(blankSchedule("Day of event"));
+    if (scheduleIndex >= 0) {
+      while (state.schedules.length <= scheduleIndex && state.schedules.length < CFG.maxSchedules) {
+        state.schedules.push(blankSchedule(state.schedules.length === 0 ? "Day of event" : ""));
       }
     }
 
@@ -878,33 +564,34 @@
       state.schedules[scheduleIndex].rows = targetRows;
     }
 
-    editor.selectedRegionId = normaliseSelectedRegionId(editor.selectedRegionId, state);
-    editor.current = normaliseEditorState(state);
+    if (action === "clear-schedule" && scheduleIndex > 0 && state.schedules[scheduleIndex]) {
+      state.schedules[scheduleIndex] = blankSchedule("");
+    }
+
+    editor.current = normaliseVisualEditorState(state);
+    editor.selectedRegionId = "";
     renderEditor(editor.current);
     setStatus("", "");
   }
 
   function readFormState(previous) {
-    var prior = normaliseEditorState(previous || editor.current || blankState());
+    var prior = normaliseVisualEditorState(previous || editor.current || blankState());
     var state = clone(prior);
     var $body = $("#" + CFG.bodyId);
+    var checkedLayout = $body.find('input[name="weo-layout"]:checked').val();
 
-    state.layout = normaliseLayout($body.find('input[name="weo-layout"]:checked').val() || state.layout);
+    state.layout = normaliseLayout(checkedLayout || state.layout);
 
-    if ($body.find('[data-field="imageUrl"]').length) {
-      state.imageUrl = $.trim(String($body.find('[data-field="imageUrl"]').val() || ""));
-    }
+    var $image = $body.find('[data-field="imageUrl"]').first();
+    state.imageUrl = $image.length ? $.trim(String($image.val() || "")) : $.trim(String(prior.imageUrl || ""));
 
-    if ($body.find('[data-field="openingText"]').length) {
-      state.openingText = String($body.find('[data-field="openingText"]').val() || "");
-    }
+    var $opening = $body.find('[data-field="openingText"]').first();
+    state.openingText = $opening.length ? String($opening.val() || "") : String(prior.openingText || "");
 
-    var priorSchedules = Array.isArray(prior.schedules) ? prior.schedules.slice(0, CFG.maxSchedules).map(normaliseSchedule) : [];
-    var nextSchedules = priorSchedules.slice(0);
-
+    var nextSchedules = Array.isArray(prior.schedules) ? prior.schedules.slice(0, CFG.maxSchedules).map(normaliseSchedule) : [];
     if (!nextSchedules.length) nextSchedules.push(blankSchedule("Day of event"));
 
-    $body.find("[data-schedule-uid]").each(function () {
+    $body.find(".weo-day-card[data-schedule-uid]").each(function () {
       var $card = $(this);
       var scheduleIndex = toInt($card.attr("data-schedule-index"), -1);
       if (scheduleIndex < 0 || scheduleIndex >= CFG.maxSchedules) return;
@@ -914,9 +601,7 @@
       }
 
       var oldSchedule = normaliseSchedule(nextSchedules[scheduleIndex] || {});
-      var uid = String($card.attr("data-schedule-uid") || oldSchedule.uid || newUid("schedule"));
       var oldRows = indexByUid(oldSchedule.rows || []);
-      var title = cleanHeadingTitle($card.find('[data-field="scheduleTitle"]').val());
       var rows = [];
 
       $card.find("[data-row-uid]").each(function () {
@@ -941,10 +626,10 @@
       if (!rows.length) rows.push(blankRow());
 
       nextSchedules[scheduleIndex] = normaliseSchedule({
-        uid: uid,
+        uid: String($card.attr("data-schedule-uid") || oldSchedule.uid || newUid("schedule")),
         id: String($card.attr("data-schedule-id") || oldSchedule.id || ""),
-        title: title,
-        intro: String($card.find('[data-field="scheduleIntro"]').val() || ""),
+        title: cleanHeadingTitle($card.find('[data-field="scheduleTitle"]').first().val()),
+        intro: String($card.find('[data-field="scheduleIntro"]').first().val() || ""),
         baseMemo: oldSchedule.baseMemo || "",
         meta: oldSchedule.meta || null,
         nodeData: oldSchedule.nodeData || null,
@@ -952,15 +637,16 @@
       });
     });
 
-    if (nextSchedules.length) state.schedules = nextSchedules.slice(0, CFG.maxSchedules);
-    if (state.layout === LAYOUT_COLUMNS) {
-      while (state.schedules.length < CFG.maxSchedules) {
-        state.schedules.push(blankSchedule(""));
+    if (state.layout === LAYOUT_IMAGE) {
+      state.schedules = [normaliseSchedule(nextSchedules[0] || blankSchedule("Day of event"))];
+    } else {
+      while (nextSchedules.length < CFG.maxSchedules) {
+        nextSchedules.push(blankSchedule(nextSchedules.length === 0 ? "Day of event" : ""));
       }
+      state.schedules = nextSchedules.slice(0, CFG.maxSchedules).map(normaliseSchedule);
     }
-    if (!state.schedules.length) state.schedules = [blankSchedule("Day of event")];
 
-    return normaliseEditorState(state);
+    return normaliseVisualEditorState(state);
   }
 
   function hasUnsavedEditorChanges() {
@@ -1018,16 +704,6 @@
     return schedules;
   }
 
-  function isMeaningfulScheduleState(schedule) {
-    schedule = normaliseSchedule(schedule);
-    return !!(
-      schedule.id ||
-      $.trim(String(schedule.title || "")) ||
-      $.trim(String(schedule.intro || "")) ||
-      getRowsToSave(schedule).length
-    );
-  }
-
   function validateState(state) {
     state = normaliseEditorState(state);
     var active = getActiveSchedules(state);
@@ -1037,11 +713,6 @@
     }
 
     if (!active.length) return "Add at least one schedule.";
-
-    if (state.layout === LAYOUT_IMAGE && active.length > 1) {
-      return "This layout uses one schedule. Remove the extra schedule or choose “Up to three schedules”.";
-    }
-
     if (active.length > CFG.maxSchedules) return "Use no more than three schedules.";
 
     for (var i = 0; i < active.length; i++) {
@@ -1127,7 +798,7 @@
           renderType: "dept",
           title: schedule.title,
           desc: schedule.intro,
-          memo: schedule.baseMemo || "",
+          memo: "",
           flag: getSnapshotFlag(schedule.nodeData),
           customFields: getSnapshotCustomFields(schedule.nodeData)
         });
@@ -1140,11 +811,13 @@
 
       var itemIds = schedule.rows.map(function (row) { return row.id; }).filter(Boolean);
       schedule.meta = buildScheduleMeta(saved, schedule, i, itemIds, originalSchedule && originalSchedule.meta && originalSchedule.meta.updatedAt);
-      var memo = composeStoredPageMetaText(schedule.baseMemo || "", schedule.meta);
+
+      var storageBaseMemo = getScheduleBaseMemoForSave(saved, schedule, i);
+      var memo = composeStoredPageMetaText(storageBaseMemo, schedule.meta);
 
       if (scheduleNeedsSave(schedule, originalSchedule, memo)) {
         schedule.meta.updatedAt = formatLocalDateTime(new Date());
-        memo = composeStoredPageMetaText(schedule.baseMemo || "", schedule.meta);
+        memo = composeStoredPageMetaText(storageBaseMemo, schedule.meta);
         setStatus("Saving “" + schedule.title + "”...", "info");
         var updated = await saveHeadingItemDirect({
           jobId: jobId,
@@ -1160,6 +833,8 @@
         schedule.id = String(updated.id || schedule.id || "");
       }
 
+      schedule.baseMemo = storageBaseMemo;
+      schedule.nodeData = extendSnapshot(schedule.nodeData, { ID: schedule.id, TECHNICAL: memo, DESCRIPTION: schedule.intro });
       nextIds.push(schedule.id);
     }
 
@@ -1188,6 +863,24 @@
     }
 
     return normaliseEditorState(saved);
+  }
+
+  function getScheduleBaseMemoForSave(state, schedule, index) {
+    var base = stripImageUrlsFromMemo(schedule.baseMemo || "");
+    var imageUrl = $.trim(String(state.imageUrl || ""));
+
+    if (state.layout === LAYOUT_IMAGE && index === 0 && imageUrl) {
+      return $.trim(imageUrl + (base ? "\n\n" + base : ""));
+    }
+
+    return base;
+  }
+
+  function stripImageUrlsFromMemo(text) {
+    return $.trim(String(text || "")
+      .replace(/https?:\/\/[^\s"'<>]+/ig, "")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\n{3,}/g, "\n\n"));
   }
 
   async function saveScheduleRows(jobId, schedule, originalSchedule) {
@@ -1336,15 +1029,18 @@
     if (!schedules.length) schedules.push(blankSchedule("Day of event"));
 
     var firstScheduleMeta = normaliseMeta(schedules[0] && schedules[0].meta) || {};
-    var layout = normaliseLayout(rootMeta.layout || rootMeta.variant || firstScheduleMeta.layout || firstScheduleMeta.variant || (childHeadings.length > 1 ? LAYOUT_COLUMNS : LAYOUT_IMAGE));
-    var imageUrl = $.trim(String(rootMeta.imageUrl || firstScheduleMeta.imageUrl || ""));
+    var firstMemoUrl = schedules[0] ? extractFirstUrl(schedules[0].baseMemo || getSnapshotField(schedules[0].nodeData, "TECHNICAL")) : "";
+    var imageUrl = $.trim(String(rootMeta.imageUrl || firstScheduleMeta.imageUrl || firstMemoUrl || ""));
+    var explicitLayout = rootMeta.layout || rootMeta.variant || firstScheduleMeta.layout || firstScheduleMeta.variant || "";
+    var layout = explicitLayout ? normaliseLayout(explicitLayout) : (imageUrl ? LAYOUT_IMAGE : LAYOUT_COLUMNS);
+    if (!explicitLayout && childHeadings.length > 1) layout = LAYOUT_COLUMNS;
 
     return normaliseEditorState({
       rootId: getNodeDataId(rootNode),
       rootBaseMemo: rootMetaInfo.baseText || "",
       rootMeta: rootMeta,
       layout: layout,
-      imageUrl: layout === LAYOUT_IMAGE ? imageUrl : "",
+      imageUrl: imageUrl,
       openingText: getNodeDescription(rootNode),
       schedules: schedules,
       extraHeadingCount: Math.max(0, childHeadings.length - CFG.maxSchedules)
@@ -1390,7 +1086,7 @@
     if (selectedRoot) return { node: selectedRoot };
 
     if (!matches.length) {
-      return { title: "Event Overview not found", error: "Select the Event Overview section (or its Proposed Timings child), or add a hidden section called “" + CFG.requiredRawSectionName + "” to the supplying list." };
+      return { title: "Event Overview not found", error: "Select the Event Overview section or add a hidden section called “" + CFG.requiredRawSectionName + "” to the supplying list." };
     }
 
     if (matches.length === 1) return { node: matches[0] };
@@ -1436,7 +1132,7 @@
   function findEventOverviewAncestor(tree, node) {
     var current = node;
     while (current && current.id && current.id !== "#") {
-      if (isEventOverviewSection(current)) return current;
+      if (isSelectableEventOverviewRoot(current)) return current;
       var parentId = tree.get_parent(current);
       if (!parentId || parentId === "#") break;
       current = tree.get_node(parentId);
@@ -1538,9 +1234,7 @@
 
     if (nodes.length > 1 && editor.lastClickedNodeId) {
       var lastClickedNode = tree.get_node(editor.lastClickedNodeId);
-      if (lastClickedNode && lastClickedNode.id) {
-        return [lastClickedNode];
-      }
+      if (lastClickedNode && lastClickedNode.id) return [lastClickedNode];
     }
 
     return nodes;
@@ -1550,10 +1244,7 @@
     if (!tree || !$elements || !$elements.length) return;
 
     $elements.each(function () {
-      var $li = $(this).is("li.jstree-node")
-        ? $(this)
-        : $(this).closest("li.jstree-node");
-
+      var $li = $(this).is("li.jstree-node") ? $(this) : $(this).closest("li.jstree-node");
       if (!$li.length) return;
       addTreeNode(tree.get_node($.trim(String($li.attr("id") || ""))), out, seen);
     });
@@ -1701,6 +1392,12 @@
     };
   }
 
+  function getScheduleAtIndex(state, index) {
+    var schedules = state && state.schedules ? state.schedules : [];
+    var fallbackTitle = index === 0 ? "Day of event" : "";
+    return normaliseSchedule(schedules[index] || blankSchedule(fallbackTitle));
+  }
+
   function getActiveSchedules(state) {
     var out = [];
     var schedules = state && state.schedules ? state.schedules : [];
@@ -1720,6 +1417,11 @@
     return !!(schedule.id || $.trim(schedule.title) || $.trim(schedule.intro) || getRowsToSave(schedule).length);
   }
 
+  function isMeaningfulScheduleState(schedule) {
+    schedule = normaliseSchedule(schedule);
+    return !!(schedule.id || $.trim(String(schedule.title || "")) || $.trim(String(schedule.intro || "")) || getRowsToSave(schedule).length);
+  }
+
   function getRowsToSave(schedule) {
     var rows = [];
     var source = schedule && schedule.rows ? schedule.rows : [];
@@ -1732,13 +1434,6 @@
     }
 
     return rows.slice(0, CFG.maxRows);
-  }
-
-  function getImageLayoutExtraScheduleWarning(state) {
-    if (state.layout !== LAYOUT_IMAGE) return "";
-    var active = getActiveSchedules(state);
-    if (active.length <= 1) return "";
-    return "This layout only uses the first schedule. Remove the extra schedule or choose “Up to three schedules” before saving.";
   }
 
   function cleanHeadingTitle(value) {
@@ -2254,6 +1949,14 @@
   function formatLocalDateTime(date) {
     function pad(n) { return String(n).padStart(2, "0"); }
     return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) + " " + pad(date.getHours()) + ":" + pad(date.getMinutes()) + ":" + pad(date.getSeconds());
+  }
+
+  function extractFirstUrl(text) {
+    var s = String(text || "").trim();
+    if (!s) return "";
+    var m = s.match(/https?:\/\/[^\s"'<>]+/i);
+    if (!m) return "";
+    return m[0].replace(/[)\],.]+$/g, "");
   }
 
   function normaliseDisplayText(value) {
