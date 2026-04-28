@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] page editor loaded - v2026-04-28.02"); } catch (e) {}
+  try { console.warn("[WiseHireHop] page editor loaded - v2026-04-28.03"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -472,6 +472,8 @@
       '}',
       '#' + MODAL_ID + ' .wise-event-top-pane {',
       '  padding:30px 34px 18px 34px;',
+      '  display:grid;',
+      '  gap:16px;',
       '  border-bottom:1px solid #e5e7eb;',
       '  background:#fbfcfe;',
       '}',
@@ -508,9 +510,6 @@
       '#' + MODAL_ID + ' .wise-event-blurb-input {',
       '  min-height:92px;',
       '  line-height:1.45;',
-      '}',
-      '#' + MODAL_ID + ' .wise-event-section-title {',
-      '  max-width:360px;',
       '}',
       '#' + MODAL_ID + ' .wise-event-schedule {',
       '  display:flex;',
@@ -1056,6 +1055,7 @@
       finalMeta.parentTemplateKey = "section_event_overview";
       finalMeta.variant = nextState.variant;
       finalMeta.imageUrl = nextState.variant === VARIANT_HALF_IMAGE ? $.trim(nextState.imageUrl || "") : "";
+      finalMeta.blurbSource = nextState.variant === VARIANT_THREE_COLUMNS ? "section_description" : "dept_description";
       finalMeta.scheduleFormat = "time_text_custom_items";
       finalMeta.maxScheduleRows = MAX_SCHEDULE_ROWS;
       finalMeta.headingId = String(slot.headingId || "");
@@ -1090,6 +1090,27 @@
         FLAG: getSnapshotFlag(slot.nodeData),
         CUSTOM_FIELDS: getSnapshotCustomFields(slot.nodeData)
       });
+
+      if (nextState.variant === VARIANT_THREE_COLUMNS) {
+        setBuilderStatus("Saving section blurb...", "info");
+
+        await saveHeadingItemDirect({
+          jobId: jobId,
+          id: getNodeDataId(context.rootNode),
+          parentId: getParentHeadingDataId(context.tree, context.rootNode),
+          rawName: getNodeRawTitle(context.rootNode),
+          renderType: "section",
+          title: getNodeTitle(context.rootNode),
+          desc: nextState.sectionBlurb || "",
+          memo: getNodeTechnical(context.rootNode),
+          flag: getNodeFlag(context.rootNode),
+          customFields: getNodeCustomFields(context.rootNode)
+        });
+
+        if (context.rootNode && context.rootNode.data) {
+          context.rootNode.data.DESCRIPTION = nextState.sectionBlurb || "";
+        }
+      }
 
       currentSession.state = nextState;
       savedSuccessfully = true;
@@ -1316,6 +1337,7 @@
       profileKey: PROFILE_EVENT_OVERVIEW,
       state: {
         rootId: getNodeDataId(context.rootNode),
+        sectionBlurb: getNodeDescription(context.rootNode),
         imageUrl: imageUrl,
         variant: variant,
         slots: slots
@@ -1504,12 +1526,29 @@
 
     return [
       '<div class="wise-event-top-pane">',
+        buildSectionBlurbFieldsHtml(state),
         buildScheduleSlotFieldsHtml(slot),
       "</div>",
       '<div class="wise-event-columns">',
         buildMilestoneColumnHtml(slot, rows, 0),
         buildMilestoneColumnHtml(slot, rows, 1),
         buildMilestoneColumnHtml(slot, rows, 2),
+      "</div>"
+    ].join("");
+  }
+
+  function buildSectionBlurbFieldsHtml(state) {
+    return [
+      '<div class="wise-event-page-heading">',
+        renderFieldTextarea({
+          wide: true,
+          label: "Section blurb",
+          field: "section-blurb",
+          value: state.sectionBlurb || "",
+          inputClass: "wise-event-blurb-input",
+          placeholder: "Intro text for the three-column overview page.",
+          note: "Only used by the three-column layout. The hidden Section heading name is preserved."
+        }),
       "</div>"
     ].join("");
   }
@@ -1527,11 +1566,12 @@
         }),
         renderFieldTextarea({
           wide: true,
-          label: "Schedule blurb",
+          label: "Dept page blurb",
           field: "slot-blurb",
           value: slot.blurb || "",
           inputClass: "wise-event-blurb-input",
-          placeholder: "A short note before the schedule."
+          placeholder: "A short note before the schedule.",
+          note: "Half-image uses this as the visible blurb. Three-column uses a separate Section blurb for the intro."
         }),
       "</div>"
     ].join("");
@@ -1660,6 +1700,10 @@
     if (!$form.length) return state;
 
     state.variant = normaliseEventOverviewVariant($form.find('[data-field="variant"]').val());
+    if ($form.find('[data-field="section-blurb"]').length) {
+      state.sectionBlurb = String($form.find('[data-field="section-blurb"]').val() || "");
+    }
+
     if ($form.find('[data-field="image-url"]').length) {
       state.imageUrl = $.trim(String($form.find('[data-field="image-url"]').val() || ""));
     }
@@ -2006,7 +2050,9 @@
       kind: "0",
       local: formatHireHopLocalDateTime(new Date()),
       id: String(options.id || "0"),
-      name: composeStoredHeading(options.renderType || "section", options.title || ""),
+      name: shouldUseRawHeadingName(options.rawName)
+        ? String(options.rawName)
+        : composeStoredHeading(options.renderType || "section", options.title || ""),
       desc: String(options.desc || ""),
       memo: String(options.memo || ""),
       set_child_dates: "0",
@@ -2147,6 +2193,15 @@
   function composeStoredHeading(renderType, title) {
     var prefix = renderType === "dept" ? "Dept: " : "Section: ";
     return prefix + String(title || "");
+  }
+
+  function shouldUseRawHeadingName(value) {
+    var text = $.trim(String(value == null ? "" : value));
+    if (!text) return false;
+
+    return /^(\/\/\s*)?(\$\s*)?(section|dept)\s*:/i.test(text) ||
+      /^\/\/\s*/.test(text) ||
+      /^\$\s*/.test(text);
   }
 
   function extractStoredPageMeta(text) {
@@ -2433,6 +2488,40 @@
     }
 
     return normaliseWhitespace(parseHeadingBaseMeta(raw).name);
+  }
+
+  function getNodeRawTitle(node) {
+    if (!node) return "";
+
+    var candidates = [];
+
+    if (node.data) {
+      candidates.push(node.data.title);
+      candidates.push(node.data.TITLE);
+      candidates.push(node.data.name);
+      candidates.push(node.data.NAME);
+    }
+
+    if (node.original) {
+      candidates.push(node.original.title);
+      candidates.push(node.original.text);
+      candidates.push(node.original.name);
+    }
+
+    candidates.push(node.text);
+
+    for (var i = 0; i < candidates.length; i++) {
+      var value = $.trim(String(candidates[i] == null ? "" : candidates[i]));
+      if (!value) continue;
+      if (shouldUseRawHeadingName(value)) return value;
+    }
+
+    for (var j = 0; j < candidates.length; j++) {
+      var fallback = $.trim(String(candidates[j] == null ? "" : candidates[j]));
+      if (fallback) return fallback;
+    }
+
+    return "";
   }
 
   function getNodeDescription(node) {
