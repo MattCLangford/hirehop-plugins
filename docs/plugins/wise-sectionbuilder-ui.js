@@ -233,14 +233,11 @@
 
     $("body").append(html);
 
-    $("#" + CFG.overlayId).on("click", function (e) {
-      if (e.target === this) closeEditor();
-    });
-    $("#" + CFG.modalId + " .weo-x,#" + CFG.closeId).on("click", closeEditor);
+    $("#" + CFG.modalId + " .weo-x,#" + CFG.closeId).on("click", requestCloseEditor);
     $("#" + CFG.saveId).on("click", saveEditor);
 
     $(document).on("keydown.wiseEventOverview", function (e) {
-      if (e.key === "Escape" && $("#" + CFG.overlayId).is(":visible")) closeEditor();
+      if (e.key === "Escape" && $("#" + CFG.overlayId).is(":visible")) requestCloseEditor();
     });
 
     $("#" + CFG.bodyId).on("change", 'input[name="weo-layout"]', function () {
@@ -347,6 +344,17 @@
       showMessage("Could not open Event Overview", getErrorMessage(err, "The editor hit an unexpected error while reading the selected section."));
       showOverlay();
     }
+  }
+
+  function requestCloseEditor() {
+    if (editor.saving) return;
+
+    if (hasUnsavedEditorChanges()) {
+      var discard = window.confirm("Discard your unsaved Event Overview changes?");
+      if (!discard) return;
+    }
+
+    closeEditor();
   }
 
   function closeEditor() {
@@ -786,6 +794,71 @@
     if (!state.schedules.length) state.schedules = [blankSchedule("Day of event")];
 
     return normaliseEditorState(state);
+  }
+
+  function hasUnsavedEditorChanges() {
+    if (!editor.original) return false;
+    if (!$("#" + CFG.overlayId).is(":visible")) return false;
+    if (!hasEditableEditorForm()) return false;
+
+    var currentState = readFormState(editor.current || editor.original || blankState());
+    return buildEditorStateSignature(currentState) !== buildEditorStateSignature(editor.original || blankState());
+  }
+
+  function hasEditableEditorForm() {
+    var $body = $("#" + CFG.bodyId);
+    return !!$body.find('[data-field="imageUrl"], [data-field="openingText"], [data-schedule-uid]').length;
+  }
+
+  function buildEditorStateSignature(state) {
+    state = normaliseEditorState(state || blankState());
+    var schedules = getComparableSchedules(state);
+    var signature = {
+      layout: normaliseLayout(state.layout),
+      imageUrl: $.trim(String(state.imageUrl || "")),
+      openingText: $.trim(String(state.openingText || "")),
+      schedules: []
+    };
+
+    for (var i = 0; i < schedules.length; i++) {
+      var schedule = normaliseSchedule(schedules[i]);
+      var rows = getRowsToSave(schedule).map(function (row) {
+        row = normaliseRow(row);
+        return {
+          time: $.trim(String(row.time || "")),
+          text: $.trim(String(row.text || ""))
+        };
+      });
+
+      signature.schedules.push({
+        id: String(schedule.id || ""),
+        title: $.trim(String(schedule.title || "")),
+        intro: $.trim(String(schedule.intro || "")),
+        rows: rows
+      });
+    }
+
+    return JSON.stringify(signature);
+  }
+
+  function getComparableSchedules(state) {
+    var schedules = Array.isArray(state && state.schedules) ? state.schedules.slice(0, CFG.maxSchedules).map(normaliseSchedule) : [];
+
+    while (schedules.length > 1 && !isMeaningfulScheduleState(schedules[schedules.length - 1])) {
+      schedules.pop();
+    }
+
+    return schedules;
+  }
+
+  function isMeaningfulScheduleState(schedule) {
+    schedule = normaliseSchedule(schedule);
+    return !!(
+      schedule.id ||
+      $.trim(String(schedule.title || "")) ||
+      $.trim(String(schedule.intro || "")) ||
+      getRowsToSave(schedule).length
+    );
   }
 
   function validateState(state) {
