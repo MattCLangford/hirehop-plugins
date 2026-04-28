@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] page editor loaded - v2026-04-28.03"); } catch (e) {}
+  try { console.warn("[WiseHireHop] page editor loaded - v2026-04-28.04"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -42,6 +42,7 @@
   var LEGACY_VARIANT_NO_IMAGE_MULTI = "no_image_multi";
   var SLOT_PRIMARY = "primary";
   var SLOT_SECONDARY = "secondary";
+  var SLOT_TERTIARY = "tertiary";
   var MAX_SCHEDULE_ROWS = 10;
 
   var activeDepotContext = {
@@ -489,6 +490,19 @@
       '}',
       '#' + MODAL_ID + ' .wise-event-column:first-child {',
       '  border-left:0;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-column .wise-event-title-input {',
+      '  font-size:20px;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-column .wise-event-blurb-input {',
+      '  min-height:74px;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-column .wise-event-schedule-head {',
+      '  align-items:flex-start;',
+      '  flex-direction:column;',
+      '}',
+      '#' + MODAL_ID + ' .wise-event-column .wise-event-milestone-row {',
+      '  grid-template-columns:72px minmax(0, 1fr) auto;',
       '}',
       '#' + MODAL_ID + ' .wise-event-page-heading {',
       '  display:grid;',
@@ -1021,75 +1035,18 @@
     try {
       var nextState = $.extend(true, {}, state);
       var context = session.context;
-      var slot = findSlotByKey(nextState.slots, SLOT_PRIMARY);
-      if (!slot) {
-        throw new Error("Could not find the Dept page state to save.");
+      var slotsToSave = getEventOverviewSlotsToSave(nextState);
+      if (!slotsToSave.length) {
+        throw new Error("Add at least one Dept column to save.");
       }
 
-      setBuilderStatus("Saving dept page...", "info");
-
-      if (!slot.headingId) {
-        var initialHeadingSave = await saveHeadingItemDirect({
-          jobId: jobId,
-          id: "",
-          parentId: getNodeDataId(context.rootNode),
-          renderType: "dept",
-          title: slot.title,
-          desc: slot.blurb,
-          memo: slot.baseMemo || "",
-          flag: getSnapshotFlag(slot.nodeData),
-          customFields: getSnapshotCustomFields(slot.nodeData)
-        });
-
-        slot.headingId = String(initialHeadingSave.id || "");
+      if (nextState.variant === VARIANT_THREE_COLUMNS) {
+        nextState.imageUrl = "";
       }
 
-      setBuilderStatus("Syncing schedule rows...", "info");
-      var syncResult = await syncCustomRowsForSlot(jobId, slot);
-      slot.rows = syncResult.rows;
-      slot.itemIds = syncResult.itemIds;
-
-      var finalMeta = normalisePageMeta(slot.pageMetaInfo && slot.pageMetaInfo.meta);
-      finalMeta.profileKey = PROFILE_EVENT_OVERVIEW;
-      finalMeta.templateKey = "dept_proposed_timings";
-      finalMeta.parentTemplateKey = "section_event_overview";
-      finalMeta.variant = nextState.variant;
-      finalMeta.imageUrl = nextState.variant === VARIANT_HALF_IMAGE ? $.trim(nextState.imageUrl || "") : "";
-      finalMeta.blurbSource = nextState.variant === VARIANT_THREE_COLUMNS ? "section_description" : "dept_description";
-      finalMeta.scheduleFormat = "time_text_custom_items";
-      finalMeta.maxScheduleRows = MAX_SCHEDULE_ROWS;
-      finalMeta.headingId = String(slot.headingId || "");
-      finalMeta.itemIds = normaliseIdList(slot.itemIds);
-      finalMeta.updatedAt = formatHireHopLocalDateTime(new Date());
-      finalMeta.version = 1;
-
-      setBuilderStatus("Saving dept page settings...", "info");
-
-      var finalHeadingSave = await saveHeadingItemDirect({
-        jobId: jobId,
-        id: slot.headingId || "",
-        parentId: getNodeDataId(context.rootNode),
-        renderType: "dept",
-        title: slot.title,
-        desc: slot.blurb,
-        memo: composeStoredPageMetaText(slot.baseMemo || "", finalMeta),
-        flag: getSnapshotFlag(slot.nodeData),
-        customFields: getSnapshotCustomFields(slot.nodeData)
-      });
-
-      slot.headingId = String(finalHeadingSave.id || slot.headingId || "");
-      slot.pageMetaInfo = {
-        baseText: slot.baseMemo || "",
-        meta: finalMeta
-      };
-      slot.nodeData = $.extend(true, {}, slot.nodeData || {}, {
-        ID: slot.headingId,
-        title: slot.title,
-        DESCRIPTION: slot.blurb,
-        TECHNICAL: composeStoredPageMetaText(slot.baseMemo || "", finalMeta),
-        FLAG: getSnapshotFlag(slot.nodeData),
-        CUSTOM_FIELDS: getSnapshotCustomFields(slot.nodeData)
-      });
+      for (var saveIndex = 0; saveIndex < slotsToSave.length; saveIndex++) {
+        await saveEventOverviewSlot(jobId, context, slotsToSave[saveIndex], nextState, getEventOverviewSlotColumnIndex(slotsToSave[saveIndex]));
+      }
 
       if (nextState.variant === VARIANT_THREE_COLUMNS) {
         setBuilderStatus("Saving section blurb...", "info");
@@ -1128,6 +1085,76 @@
         setBuilderStatus("Page changes applied.", "success");
       }
     }
+  }
+
+  async function saveEventOverviewSlot(jobId, context, slot, state, columnIndex) {
+    setBuilderStatus("Saving " + slot.label.toLowerCase() + "...", "info");
+
+    if (!slot.headingId) {
+      var initialHeadingSave = await saveHeadingItemDirect({
+        jobId: jobId,
+        id: "",
+        parentId: getNodeDataId(context.rootNode),
+        renderType: "dept",
+        title: slot.title,
+        desc: slot.blurb,
+        memo: slot.baseMemo || "",
+        flag: getSnapshotFlag(slot.nodeData),
+        customFields: getSnapshotCustomFields(slot.nodeData)
+      });
+
+      slot.headingId = String(initialHeadingSave.id || "");
+    }
+
+    setBuilderStatus("Syncing " + slot.label.toLowerCase() + " milestones...", "info");
+    var syncResult = await syncCustomRowsForSlot(jobId, slot);
+    slot.rows = syncResult.rows;
+    slot.itemIds = syncResult.itemIds;
+
+    var finalMeta = normalisePageMeta(slot.pageMetaInfo && slot.pageMetaInfo.meta);
+    finalMeta.profileKey = PROFILE_EVENT_OVERVIEW;
+    finalMeta.templateKey = "dept_proposed_timings";
+    finalMeta.parentTemplateKey = "section_event_overview";
+    finalMeta.slotKey = slot.slotKey;
+    finalMeta.columnIndex = columnIndex;
+    finalMeta.variant = state.variant;
+    finalMeta.imageUrl = state.variant === VARIANT_HALF_IMAGE ? $.trim(state.imageUrl || "") : "";
+    finalMeta.blurbSource = state.variant === VARIANT_THREE_COLUMNS ? "section_description" : "dept_description";
+    finalMeta.scheduleFormat = "time_text_custom_items";
+    finalMeta.maxScheduleRows = MAX_SCHEDULE_ROWS;
+    finalMeta.headingId = String(slot.headingId || "");
+    finalMeta.itemIds = normaliseIdList(slot.itemIds);
+    finalMeta.updatedAt = formatHireHopLocalDateTime(new Date());
+    finalMeta.version = 1;
+
+    setBuilderStatus("Saving " + slot.label.toLowerCase() + " settings...", "info");
+
+    var memo = composeStoredPageMetaText(slot.baseMemo || "", finalMeta);
+    var finalHeadingSave = await saveHeadingItemDirect({
+      jobId: jobId,
+      id: slot.headingId || "",
+      parentId: getNodeDataId(context.rootNode),
+      renderType: "dept",
+      title: slot.title,
+      desc: slot.blurb,
+      memo: memo,
+      flag: getSnapshotFlag(slot.nodeData),
+      customFields: getSnapshotCustomFields(slot.nodeData)
+    });
+
+    slot.headingId = String(finalHeadingSave.id || slot.headingId || "");
+    slot.pageMetaInfo = {
+      baseText: slot.baseMemo || "",
+      meta: finalMeta
+    };
+    slot.nodeData = $.extend(true, {}, slot.nodeData || {}, {
+      ID: slot.headingId,
+      title: slot.title,
+      DESCRIPTION: slot.blurb,
+      TECHNICAL: memo,
+      FLAG: getSnapshotFlag(slot.nodeData),
+      CUSTOM_FIELDS: getSnapshotCustomFields(slot.nodeData)
+    });
   }
 
   async function syncCustomRowsForSlot(jobId, slot) {
@@ -1318,8 +1345,17 @@
       }),
       buildEventOverviewSlotState({
         slotKey: SLOT_SECONDARY,
-        label: "Additional Schedule Dept",
-        defaultTitle: "Schedule",
+        label: "Column 2 Schedule",
+        defaultTitle: "",
+        context: context,
+        meta: rootMeta,
+        childHeadings: childHeadings,
+        claimedHeadingIds: claimedHeadingIds
+      }),
+      buildEventOverviewSlotState({
+        slotKey: SLOT_TERTIARY,
+        label: "Column 3 Schedule",
+        defaultTitle: "",
         context: context,
         meta: rootMeta,
         childHeadings: childHeadings,
@@ -1329,8 +1365,14 @@
 
     var primarySlot = findSlotByKey(slots, SLOT_PRIMARY);
     var deptMeta = normalisePageMeta(primarySlot && primarySlot.pageMetaInfo && primarySlot.pageMetaInfo.meta);
-    var variant = normaliseEventOverviewVariant(deptMeta.variant || rootMeta.variant || inferEventOverviewVariant(childHeadings, slots));
-    var imageUrl = $.trim(String(deptMeta.imageUrl || rootMeta.imageUrl || ""));
+    var inferredVariant = inferEventOverviewVariant(childHeadings, slots);
+    var variant = normaliseEventOverviewVariant(
+      deptMeta.variant ||
+      (inferredVariant === VARIANT_THREE_COLUMNS ? inferredVariant : rootMeta.variant || inferredVariant)
+    );
+    var imageUrl = variant === VARIANT_THREE_COLUMNS
+      ? ""
+      : $.trim(String(deptMeta.imageUrl || rootMeta.imageUrl || ""));
 
     return {
       context: context,
@@ -1452,13 +1494,12 @@
     if (!state.slots) state.slots = [];
 
     var variant = normaliseEventOverviewVariant(state && state.variant);
-    var primarySlot = findSlotByKey(state.slots, SLOT_PRIMARY) || makeEventOverviewFallbackSlot();
 
     return [
       '<div class="wise-event-editor-shell">',
         buildEventOverviewToolbarHtml(variant),
         '<div class="wise-event-page-wrap">',
-          buildEventOverviewVisualPageHtml(state, primarySlot, variant),
+          buildEventOverviewVisualPageHtml(state, variant),
         "</div>",
       "</div>"
     ].join("");
@@ -1486,15 +1527,16 @@
     ].join("");
   }
 
-  function buildEventOverviewVisualPageHtml(state, slot, variant) {
+  function buildEventOverviewVisualPageHtml(state, variant) {
     var cssVariant = variant === VARIANT_THREE_COLUMNS ? "is-three-columns" : "is-half-image";
+    var primarySlot = findSlotByKey(state.slots, SLOT_PRIMARY) || makeEventOverviewFallbackSlot(SLOT_PRIMARY);
 
     return [
       '<div class="wise-event-page ' + cssVariant + '" data-event-variant="' + escapeAttribute(variant) + '">',
-        '<div class="wise-event-page-inner" data-slot-key="' + escapeAttribute(slot.slotKey) + '">',
+        '<div class="wise-event-page-inner">',
           variant === VARIANT_THREE_COLUMNS
-            ? buildThreeColumnEventPageHtml(state, slot)
-            : buildHalfImageEventPageHtml(state, slot),
+            ? buildThreeColumnEventPageHtml(state)
+            : buildHalfImageEventPageHtml(state, primarySlot),
         "</div>",
       "</div>"
     ].join("");
@@ -1514,25 +1556,27 @@
           }),
         "</div>",
       "</div>",
-      '<div class="wise-event-content-pane">',
-        buildScheduleSlotFieldsHtml(slot),
+      '<div class="wise-event-content-pane" data-slot-key="' + escapeAttribute(slot.slotKey) + '">',
+        buildScheduleSlotFieldsHtml(slot, {
+          titleLabel: "Day of event heading",
+          blurbNote: "Half-image uses this as the visible blurb."
+        }),
         buildMilestoneRowsHtml(slot, getScheduleRowsForEditor(slot.rows), "single"),
       "</div>"
     ].join("");
   }
 
-  function buildThreeColumnEventPageHtml(state, slot) {
-    var rows = getScheduleRowsForEditor(slot.rows);
+  function buildThreeColumnEventPageHtml(state) {
+    var slots = getThreeColumnSlots(state.slots);
 
     return [
       '<div class="wise-event-top-pane">',
         buildSectionBlurbFieldsHtml(state),
-        buildScheduleSlotFieldsHtml(slot),
       "</div>",
       '<div class="wise-event-columns">',
-        buildMilestoneColumnHtml(slot, rows, 0),
-        buildMilestoneColumnHtml(slot, rows, 1),
-        buildMilestoneColumnHtml(slot, rows, 2),
+        buildThreeColumnSlotHtml(slots[0], 0),
+        buildThreeColumnSlotHtml(slots[1], 1),
+        buildThreeColumnSlotHtml(slots[2], 2),
       "</div>"
     ].join("");
   }
@@ -1553,16 +1597,18 @@
     ].join("");
   }
 
-  function buildScheduleSlotFieldsHtml(slot) {
+  function buildScheduleSlotFieldsHtml(slot, options) {
+    options = options || {};
+
     return [
       '<div class="wise-event-page-heading">',
         renderFieldInput({
           wide: true,
-          label: "Day of event heading",
+          label: options.titleLabel || "Dept page heading",
           field: "slot-title",
           value: slot.title || "",
           inputClass: "wise-event-title-input",
-          placeholder: "Day of event"
+          placeholder: options.titlePlaceholder || "Day of event"
         }),
         renderFieldTextarea({
           wide: true,
@@ -1571,7 +1617,7 @@
           value: slot.blurb || "",
           inputClass: "wise-event-blurb-input",
           placeholder: "A short note before the schedule.",
-          note: "Half-image uses this as the visible blurb. Three-column uses a separate Section blurb for the intro."
+          note: options.blurbNote || "This blurb belongs to this Dept page/column."
         }),
       "</div>"
     ].join("");
@@ -1600,25 +1646,16 @@
     ].join("");
   }
 
-  function buildMilestoneColumnHtml(slot, rows, columnIndex) {
-    var rowHtml = [];
-    var chunkSize = Math.max(1, Math.ceil(rows.length / 3));
-    var start = columnIndex * chunkSize;
-    var end = Math.min(rows.length, start + chunkSize);
-
-    for (var i = start; i < end; i++) {
-      rowHtml.push(buildMilestoneRowHtml(slot, rows[i], i));
-    }
-
+  function buildThreeColumnSlotHtml(slot, columnIndex) {
     return [
-      '<div class="wise-event-column">',
+      '<div class="wise-event-column" data-slot-key="' + escapeAttribute(slot.slotKey) + '">',
         '<div class="wise-event-mini-label">Column ' + (columnIndex + 1) + "</div>",
-        columnIndex === 0
-          ? '<button type="button" class="wise-page-editor-btn wise-event-add-row" data-action="add-row" data-slot-key="' + escapeAttribute(slot.slotKey) + '"' + (rows.length >= MAX_SCHEDULE_ROWS ? " disabled" : "") + ">Add milestone</button>"
-          : "",
-        '<div class="wise-page-editor-rows" data-row-mode="column">',
-          rowHtml.join("") || '<div class="wise-page-editor-note">Milestones flow here as you add more rows.</div>',
-        "</div>",
+        buildScheduleSlotFieldsHtml(slot, {
+          titleLabel: "Column " + (columnIndex + 1) + " Dept heading",
+          titlePlaceholder: columnIndex === 0 ? "Day of event" : "Schedule",
+          blurbNote: "This blurb is saved on the Dept heading for column " + (columnIndex + 1) + "."
+        }),
+        buildMilestoneRowsHtml(slot, getScheduleRowsForEditor(slot.rows), "column"),
       "</div>"
     ].join("");
   }
@@ -1770,10 +1807,14 @@
       return "Enter the image URL for the half-image layout.";
     }
 
-    var requiredSlotKeys = getRequiredSlotKeys(state.variant);
+    var slotsToValidate = getEventOverviewSlotsToSave(state);
 
-    for (var i = 0; i < requiredSlotKeys.length; i++) {
-      var slot = findSlotByKey(state.slots, requiredSlotKeys[i]);
+    if (!slotsToValidate.length) {
+      return "Add at least one Dept column with schedule milestones.";
+    }
+
+    for (var i = 0; i < slotsToValidate.length; i++) {
+      var slot = slotsToValidate[i];
       if (!slot) continue;
       if (!$.trim(String(slot.title || ""))) {
         return slot.label + ": enter a dept heading.";
@@ -1816,8 +1857,43 @@
     ];
   }
 
-  function getRequiredSlotKeys(variant) {
-    return [SLOT_PRIMARY];
+  function getEventOverviewSlotsToSave(state) {
+    state = state || {};
+
+    if (normaliseEventOverviewVariant(state.variant) === VARIANT_THREE_COLUMNS) {
+      var columnSlots = getThreeColumnSlots(state.slots);
+      var activeSlots = [];
+
+      for (var i = 0; i < columnSlots.length; i++) {
+        if (isEventOverviewSlotActive(columnSlots[i], i === 0)) {
+          activeSlots.push(columnSlots[i]);
+        }
+      }
+
+      return activeSlots;
+    }
+
+    return [findSlotByKey(state.slots, SLOT_PRIMARY) || makeEventOverviewFallbackSlot(SLOT_PRIMARY, "Day of Event Schedule", "Day of event")];
+  }
+
+  function getEventOverviewSlotColumnIndex(slot) {
+    var slotKey = slot && slot.slotKey ? String(slot.slotKey) : "";
+    if (slotKey === SLOT_SECONDARY) return 1;
+    if (slotKey === SLOT_TERTIARY) return 2;
+    return 0;
+  }
+
+  function isEventOverviewSlotActive(slot, isRequired) {
+    if (isRequired) return true;
+    if (!slot) return false;
+
+    return !!(
+      slot.headingId ||
+      normaliseIdList(slot.itemIds).length ||
+      $.trim(String(slot.title || "")) ||
+      $.trim(String(slot.blurb || "")) ||
+      getNonEmptyRows(slot.rows).length
+    );
   }
 
   function inferEventOverviewVariant(childHeadings, slots) {
@@ -1827,6 +1903,13 @@
     if (secondary && (secondary.headingId || normaliseIdList(secondary.itemIds).length)) {
       return VARIANT_THREE_COLUMNS;
     }
+
+    var tertiary = findSlotByKey(slots || [], SLOT_TERTIARY);
+    if (tertiary && (tertiary.headingId || normaliseIdList(tertiary.itemIds).length)) {
+      return VARIANT_THREE_COLUMNS;
+    }
+
+    if ((childHeadings || []).length > 1) return VARIANT_THREE_COLUMNS;
 
     metaRows = getNonEmptyRows((findSlotByKey(slots || [], SLOT_PRIMARY) || {}).rows);
     if (metaRows.length > 6) return VARIANT_THREE_COLUMNS;
@@ -1843,16 +1926,24 @@
   function getEventOverviewLayoutOptions() {
     return [
       { value: VARIANT_HALF_IMAGE, label: "Single schedule + half-page image" },
-      { value: VARIANT_THREE_COLUMNS, label: "Three-column schedule" }
+      { value: VARIANT_THREE_COLUMNS, label: "Up to three Dept columns" }
     ];
   }
 
-  function makeEventOverviewFallbackSlot() {
+  function getThreeColumnSlots(slots) {
+    return [
+      findSlotByKey(slots, SLOT_PRIMARY) || makeEventOverviewFallbackSlot(SLOT_PRIMARY, "Column 1 Schedule", "Day of event"),
+      findSlotByKey(slots, SLOT_SECONDARY) || makeEventOverviewFallbackSlot(SLOT_SECONDARY, "Column 2 Schedule", ""),
+      findSlotByKey(slots, SLOT_TERTIARY) || makeEventOverviewFallbackSlot(SLOT_TERTIARY, "Column 3 Schedule", "")
+    ];
+  }
+
+  function makeEventOverviewFallbackSlot(slotKey, label, title) {
     return {
-      slotKey: SLOT_PRIMARY,
-      label: "Schedule",
+      slotKey: slotKey || SLOT_PRIMARY,
+      label: label || "Schedule",
       headingId: "",
-      title: "Day of event",
+      title: title == null ? "Day of event" : title,
       blurb: "",
       baseMemo: "",
       pageMetaInfo: {
