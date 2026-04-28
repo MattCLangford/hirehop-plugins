@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] page editor loaded - v2026-04-28.01"); } catch (e) {}
+  try { console.warn("[WiseHireHop] page editor loaded - v2026-04-28.02"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -1022,25 +1022,17 @@
     try {
       var nextState = $.extend(true, {}, state);
       var context = session.context;
-      var requiredSlotKeys = getRequiredSlotKeys(nextState.variant);
-      var finalMeta = normalisePageMeta(context.rootMetaInfo && context.rootMetaInfo.meta);
-      finalMeta.profileKey = PROFILE_EVENT_OVERVIEW;
-      finalMeta.templateKey = "section_event_overview";
-      finalMeta.variant = nextState.variant;
-      finalMeta.imageUrl = nextState.variant === VARIANT_HALF_IMAGE ? $.trim(nextState.imageUrl || "") : "";
-      finalMeta.scheduleFormat = "time_text_custom_items";
-      finalMeta.maxScheduleRows = MAX_SCHEDULE_ROWS;
-      finalMeta.version = 1;
+      var slot = findSlotByKey(nextState.slots, SLOT_PRIMARY);
+      if (!slot) {
+        throw new Error("Could not find the Dept page state to save.");
+      }
 
-      for (var i = 0; i < nextState.slots.length; i++) {
-        var slot = nextState.slots[i];
-        if (requiredSlotKeys.indexOf(slot.slotKey) === -1) continue;
+      setBuilderStatus("Saving dept page...", "info");
 
-        setBuilderStatus("Saving " + slot.label.toLowerCase() + "...", "info");
-
-        var headingSave = await saveHeadingItemDirect({
+      if (!slot.headingId) {
+        var initialHeadingSave = await saveHeadingItemDirect({
           jobId: jobId,
-          id: slot.headingId || "",
+          id: "",
           parentId: getNodeDataId(context.rootNode),
           renderType: "dept",
           title: slot.title,
@@ -1050,59 +1042,56 @@
           customFields: getSnapshotCustomFields(slot.nodeData)
         });
 
-        slot.headingId = String(headingSave.id || slot.headingId || "");
-        slot.nodeData = $.extend(true, {}, slot.nodeData || {}, {
-          ID: slot.headingId,
-          title: slot.title,
-          DESCRIPTION: slot.blurb,
-          TECHNICAL: slot.baseMemo || "",
-          FLAG: getSnapshotFlag(slot.nodeData),
-          CUSTOM_FIELDS: getSnapshotCustomFields(slot.nodeData)
-        });
-
-        setBuilderStatus("Syncing schedule rows...", "info");
-        var syncResult = await syncCustomRowsForSlot(jobId, slot);
-        slot.rows = syncResult.rows;
-        slot.itemIds = syncResult.itemIds;
+        slot.headingId = String(initialHeadingSave.id || "");
       }
 
-      finalMeta.slots = {};
-      for (var j = 0; j < nextState.slots.length; j++) {
-        var metaSlot = nextState.slots[j];
-        if (!metaSlot.headingId && !(metaSlot.itemIds && metaSlot.itemIds.length)) continue;
+      setBuilderStatus("Syncing schedule rows...", "info");
+      var syncResult = await syncCustomRowsForSlot(jobId, slot);
+      slot.rows = syncResult.rows;
+      slot.itemIds = syncResult.itemIds;
 
-        finalMeta.slots[metaSlot.slotKey] = {
-          headingId: String(metaSlot.headingId || ""),
-          itemIds: normaliseIdList(metaSlot.itemIds)
-        };
-      }
-
+      var finalMeta = normalisePageMeta(slot.pageMetaInfo && slot.pageMetaInfo.meta);
+      finalMeta.profileKey = PROFILE_EVENT_OVERVIEW;
+      finalMeta.templateKey = "dept_proposed_timings";
+      finalMeta.parentTemplateKey = "section_event_overview";
+      finalMeta.variant = nextState.variant;
+      finalMeta.imageUrl = nextState.variant === VARIANT_HALF_IMAGE ? $.trim(nextState.imageUrl || "") : "";
+      finalMeta.scheduleFormat = "time_text_custom_items";
+      finalMeta.maxScheduleRows = MAX_SCHEDULE_ROWS;
+      finalMeta.headingId = String(slot.headingId || "");
+      finalMeta.itemIds = normaliseIdList(slot.itemIds);
       finalMeta.updatedAt = formatHireHopLocalDateTime(new Date());
+      finalMeta.version = 1;
 
-      setBuilderStatus("Saving section heading...", "info");
+      setBuilderStatus("Saving dept page settings...", "info");
 
-      var sectionSave = await saveHeadingItemDirect({
+      var finalHeadingSave = await saveHeadingItemDirect({
         jobId: jobId,
-        id: getNodeDataId(context.rootNode),
-        parentId: getParentHeadingDataId(context.tree, context.rootNode),
-        renderType: "section",
-        title: nextState.sectionTitle,
-        desc: nextState.sectionBlurb,
-        memo: composeStoredPageMetaText(nextState.baseMemo, finalMeta),
-        flag: getNodeFlag(context.rootNode),
-        customFields: getNodeCustomFields(context.rootNode)
+        id: slot.headingId || "",
+        parentId: getNodeDataId(context.rootNode),
+        renderType: "dept",
+        title: slot.title,
+        desc: slot.blurb,
+        memo: composeStoredPageMetaText(slot.baseMemo || "", finalMeta),
+        flag: getSnapshotFlag(slot.nodeData),
+        customFields: getSnapshotCustomFields(slot.nodeData)
       });
 
-      if (sectionSave && sectionSave.id) {
-        nextState.rootId = String(sectionSave.id);
-      }
-
-      currentSession.state = nextState;
-      currentSession.context.rootMetaInfo = {
-        baseText: nextState.baseMemo,
+      slot.headingId = String(finalHeadingSave.id || slot.headingId || "");
+      slot.pageMetaInfo = {
+        baseText: slot.baseMemo || "",
         meta: finalMeta
       };
-      currentSession.context.rootTemplate = findTemplateByKey(finalMeta.templateKey) || currentSession.context.rootTemplate;
+      slot.nodeData = $.extend(true, {}, slot.nodeData || {}, {
+        ID: slot.headingId,
+        title: slot.title,
+        DESCRIPTION: slot.blurb,
+        TECHNICAL: composeStoredPageMetaText(slot.baseMemo || "", finalMeta),
+        FLAG: getSnapshotFlag(slot.nodeData),
+        CUSTOM_FIELDS: getSnapshotCustomFields(slot.nodeData)
+      });
+
+      currentSession.state = nextState;
       savedSuccessfully = true;
 
       triggerSupplyingRefresh();
@@ -1292,7 +1281,7 @@
 
   function buildEventOverviewSession(context) {
     var rootMetaInfo = context.rootMetaInfo || extractStoredPageMeta(getNodeTechnical(context.rootNode));
-    var meta = normalisePageMeta(rootMetaInfo.meta);
+    var rootMeta = normalisePageMeta(rootMetaInfo.meta);
     var childHeadings = getDirectChildHeadingNodes(context.tree, context.rootNode);
     var claimedHeadingIds = {};
 
@@ -1302,7 +1291,7 @@
         label: "Day of Event Schedule",
         defaultTitle: "Day of event",
         context: context,
-        meta: meta,
+        meta: rootMeta,
         childHeadings: childHeadings,
         claimedHeadingIds: claimedHeadingIds
       }),
@@ -1311,23 +1300,22 @@
         label: "Additional Schedule Dept",
         defaultTitle: "Schedule",
         context: context,
-        meta: meta,
+        meta: rootMeta,
         childHeadings: childHeadings,
         claimedHeadingIds: claimedHeadingIds
       })
     ];
 
-    var variant = normaliseEventOverviewVariant(meta.variant || inferEventOverviewVariant(childHeadings, slots));
-    var imageUrl = $.trim(String(meta.imageUrl || ""));
+    var primarySlot = findSlotByKey(slots, SLOT_PRIMARY);
+    var deptMeta = normalisePageMeta(primarySlot && primarySlot.pageMetaInfo && primarySlot.pageMetaInfo.meta);
+    var variant = normaliseEventOverviewVariant(deptMeta.variant || rootMeta.variant || inferEventOverviewVariant(childHeadings, slots));
+    var imageUrl = $.trim(String(deptMeta.imageUrl || rootMeta.imageUrl || ""));
 
     return {
       context: context,
       profileKey: PROFILE_EVENT_OVERVIEW,
       state: {
         rootId: getNodeDataId(context.rootNode),
-        baseMemo: rootMetaInfo.baseText || "",
-        sectionTitle: getNodeTitle(context.rootNode),
-        sectionBlurb: getNodeDescription(context.rootNode),
         imageUrl: imageUrl,
         variant: variant,
         slots: slots
@@ -1366,6 +1354,14 @@
       claimedHeadingIds[String(headingNode.data.ID || "")] = true;
     }
 
+    var headingMetaInfo = headingNode
+      ? extractStoredPageMeta(getNodeTechnical(headingNode))
+      : { baseText: "", meta: null };
+    var headingMeta = normalisePageMeta(headingMetaInfo.meta);
+    if (!slotMeta.itemIds && headingMeta.itemIds) {
+      slotMeta.itemIds = headingMeta.itemIds;
+    }
+
     var childRows = buildSlotRowsFromHeading(context.tree, headingNode, slotMeta);
 
     return {
@@ -1374,7 +1370,8 @@
       headingId: headingNode ? getNodeDataId(headingNode) : "",
       title: headingNode ? getNodeTitle(headingNode) : defaultTitle,
       blurb: headingNode ? getNodeDescription(headingNode) : "",
-      baseMemo: headingNode ? extractStoredPageMeta(getNodeTechnical(headingNode)).baseText : "",
+      baseMemo: headingMetaInfo.baseText || "",
+      pageMetaInfo: headingMetaInfo,
       itemIds: childRows.itemIds,
       rows: childRows.rows.length ? childRows.rows : [makeBlankRow()],
       nodeData: headingNode ? cloneItemSnapshot(headingNode.data) : null
@@ -1496,7 +1493,6 @@
         "</div>",
       "</div>",
       '<div class="wise-event-content-pane">',
-        buildEventSectionFieldsHtml(state, false),
         buildScheduleSlotFieldsHtml(slot),
         buildMilestoneRowsHtml(slot, getScheduleRowsForEditor(slot.rows), "single"),
       "</div>"
@@ -1508,36 +1504,12 @@
 
     return [
       '<div class="wise-event-top-pane">',
-        buildEventSectionFieldsHtml(state, true),
         buildScheduleSlotFieldsHtml(slot),
       "</div>",
       '<div class="wise-event-columns">',
         buildMilestoneColumnHtml(slot, rows, 0),
         buildMilestoneColumnHtml(slot, rows, 1),
         buildMilestoneColumnHtml(slot, rows, 2),
-      "</div>"
-    ].join("");
-  }
-
-  function buildEventSectionFieldsHtml(state, compact) {
-    return [
-      '<div class="wise-event-page-heading">',
-        renderFieldInput({
-          wide: true,
-          label: "Page heading",
-          field: "section-title",
-          value: state.sectionTitle || "",
-          inputClass: compact ? "wise-event-section-title" : "wise-event-title-input",
-          placeholder: "Event Overview"
-        }),
-        renderFieldTextarea({
-          wide: true,
-          label: "Page intro",
-          field: "section-blurb",
-          value: state.sectionBlurb || "",
-          inputClass: "wise-event-blurb-input",
-          placeholder: "Short introduction for the event page."
-        }),
       "</div>"
     ].join("");
   }
@@ -1688,8 +1660,6 @@
     if (!$form.length) return state;
 
     state.variant = normaliseEventOverviewVariant($form.find('[data-field="variant"]').val());
-    state.sectionTitle = $.trim(String($form.find('[data-field="section-title"]').val() || ""));
-    state.sectionBlurb = String($form.find('[data-field="section-blurb"]').val() || "");
     if ($form.find('[data-field="image-url"]').length) {
       state.imageUrl = $.trim(String($form.find('[data-field="image-url"]').val() || ""));
     }
@@ -1752,7 +1722,6 @@
 
   function validateEventOverviewState(state) {
     if (!state) return "No page state is available to save.";
-    if (!$.trim(String(state.sectionTitle || ""))) return "Enter the section heading.";
     if (state.variant === VARIANT_HALF_IMAGE && !$.trim(String(state.imageUrl || ""))) {
       return "Enter the image URL for the half-image layout.";
     }
@@ -1842,6 +1811,10 @@
       title: "Day of event",
       blurb: "",
       baseMemo: "",
+      pageMetaInfo: {
+        baseText: "",
+        meta: null
+      },
       itemIds: [],
       rows: [makeBlankRow()],
       nodeData: null
