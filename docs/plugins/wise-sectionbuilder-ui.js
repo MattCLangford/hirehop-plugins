@@ -90,54 +90,119 @@
   function injectStyles() {
     if ($("#" + CFG.stylesId).length) return;
 
-    var css = "" +
-      "#" + CFG.overlayId + "{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(16,24,40,.48);z-index:100000;}" +
-      "#" + CFG.modalId + "{width:min(960px,calc(100vw - 48px));max-height:calc(100vh - 48px);overflow:auto;background:#fff;border:1px solid #d0d5dd;border-radius:16px;box-shadow:0 24px 70px rgba(15,23,42,.28);color:#1f2937;font-family:inherit;}" +
-      "#" + CFG.modalId + " *{box-sizing:border-box;}" +
-      "#" + CFG.modalId + " .weo-head{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;padding:22px 24px 16px;border-bottom:1px solid #eaecf0;}" +
-      "#" + CFG.modalId + " .weo-title{font-size:20px;font-weight:750;line-height:1.2;}" +
-      "#" + CFG.modalId + " .weo-subtitle{margin-top:5px;color:#667085;font-size:13px;line-height:1.45;}" +
-      "#" + CFG.modalId + " .weo-x{border:0;background:transparent;color:#667085;cursor:pointer;font-size:24px;line-height:1;padding:0 2px;}" +
-      "#" + CFG.modalId + " .weo-body{padding:20px 24px 24px;}" +
-      "#" + CFG.modalId + " .weo-message{border:1px dashed #d0d5dd;border-radius:14px;background:#f9fafb;padding:18px;color:#344054;font-size:14px;line-height:1.55;}" +
-      "#" + CFG.modalId + " .weo-message strong{display:block;margin-bottom:6px;color:#101828;font-size:15px;}" +
-      "#" + CFG.modalId + " .weo-grid{display:grid;gap:16px;}" +
-      "#" + CFG.modalId + " .weo-card{border:1px solid #e4e7ec;border-radius:14px;background:#fff;padding:16px;}" +
-      "#" + CFG.modalId + " .weo-card.is-muted{background:#fbfcfe;}" +
-      "#" + CFG.modalId + " .weo-card-head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;margin-bottom:12px;}" +
-      "#" + CFG.modalId + " .weo-card-title{font-size:15px;font-weight:750;color:#101828;}" +
-      "#" + CFG.modalId + " .weo-card-note{margin-top:4px;color:#667085;font-size:12px;line-height:1.45;}" +
-      "#" + CFG.modalId + " .weo-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}" +
-      "#" + CFG.modalId + " .weo-choice{display:flex;gap:10px;align-items:flex-start;border:1px solid #d0d5dd;border-radius:13px;padding:13px;background:#fff;cursor:pointer;}" +
-      "#" + CFG.modalId + " .weo-choice:has(input:checked){border-color:#175cd3;background:#f5f8ff;}" +
-      "#" + CFG.modalId + " .weo-choice input{margin-top:2px;}" +
-      "#" + CFG.modalId + " .weo-choice b{display:block;margin-bottom:3px;font-size:13px;color:#101828;}" +
-      "#" + CFG.modalId + " .weo-choice span{display:block;color:#667085;font-size:12px;line-height:1.35;}" +
-      "#" + CFG.modalId + " .weo-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}" +
-      "#" + CFG.modalId + " .weo-field{display:flex;flex-direction:column;gap:6px;}" +
-      "#" + CFG.modalId + " .weo-field.is-wide{grid-column:1/-1;}" +
-      "#" + CFG.modalId + " label.weo-label{font-size:12px;font-weight:700;color:#344054;}" +
-      "#" + CFG.modalId + " .weo-input,#" + CFG.modalId + " .weo-textarea{width:100%;border:1px solid #cfd4dc;border-radius:10px;background:#fff;color:#101828;font-size:13px;padding:9px 11px;}" +
-      "#" + CFG.modalId + " .weo-input:focus,#" + CFG.modalId + " .weo-textarea:focus{outline:2px solid rgba(23,92,211,.18);border-color:#175cd3;}" +
-      "#" + CFG.modalId + " .weo-textarea{min-height:78px;resize:vertical;line-height:1.45;}" +
-      "#" + CFG.modalId + " .weo-help{color:#667085;font-size:12px;line-height:1.4;}" +
-      "#" + CFG.modalId + " .weo-row{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:8px;align-items:start;margin-top:8px;}" +
-      "#" + CFG.modalId + " .weo-row:first-child{margin-top:0;}" +
-      "#" + CFG.modalId + " .weo-btn{border:1px solid #cfd4dc;border-radius:10px;background:#fff;color:#1f2937;cursor:pointer;font-size:13px;font-weight:700;padding:8px 12px;line-height:1.2;}" +
-      "#" + CFG.modalId + " .weo-btn:hover{background:#f9fafb;}" +
-      "#" + CFG.modalId + " .weo-btn.is-primary{border-color:#175cd3;background:#175cd3;color:#fff;}" +
-      "#" + CFG.modalId + " .weo-btn.is-danger{border-color:#fecdca;color:#b42318;background:#fff;}" +
-      "#" + CFG.modalId + " .weo-btn.is-small{padding:8px 10px;}" +
-      "#" + CFG.modalId + " .weo-btn[disabled]{opacity:.55;cursor:not-allowed;}" +
-      "#" + CFG.modalId + " .weo-warning{border:1px solid #fedf89;background:#fffaeb;color:#93370d;border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.45;}" +
-      "#" + CFG.modalId + " .weo-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;}" +
-      "#" + CFG.modalId + " .weo-footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:18px;padding-top:16px;border-top:1px solid #eaecf0;}" +
-      "#" + CFG.statusId + "{min-height:18px;margin-top:14px;font-size:12px;font-weight:700;}" +
-      "#" + CFG.statusId + ".is-error{color:#b42318;}" +
-      "#" + CFG.statusId + ".is-success{color:#027a48;}" +
-      "#" + CFG.statusId + ".is-warning{color:#b54708;}" +
-      "#" + CFG.statusId + ".is-info{color:#175cd3;}" +
-      "@media(max-width:760px){#" + CFG.modalId + "{width:calc(100vw - 24px);max-height:calc(100vh - 24px);}#" + CFG.overlayId + "{padding:12px;}#" + CFG.modalId + " .weo-layout,#" + CFG.modalId + " .weo-fields,#" + CFG.modalId + " .weo-row{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-row .weo-btn{width:100%;}}";
+    var css = [
+      "#" + CFG.overlayId + "{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(9,15,28,.52);backdrop-filter:blur(3px);z-index:100000;}",
+      "#" + CFG.modalId + "{width:min(1180px,calc(100vw - 40px));max-height:calc(100vh - 40px);display:flex;flex-direction:column;overflow:hidden;background:#f5f7fb;border:1px solid #d0d5dd;border-radius:20px;box-shadow:0 28px 80px rgba(15,23,42,.3);color:#1f2937;font-family:inherit;}",
+      "#" + CFG.modalId + " *{box-sizing:border-box;}",
+      "#" + CFG.modalId + " .weo-head{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;padding:18px 20px 14px;background:linear-gradient(180deg,#ffffff 0%,#f7f9fc 100%);border-bottom:1px solid #e4e8ef;}",
+      "#" + CFG.modalId + " .weo-title{font-size:19px;font-weight:800;line-height:1.15;letter-spacing:-.01em;}",
+      "#" + CFG.modalId + " .weo-subtitle{margin-top:4px;color:#667085;font-size:12px;line-height:1.45;max-width:640px;}",
+      "#" + CFG.modalId + " .weo-x{border:0;background:transparent;color:#667085;cursor:pointer;font-size:24px;line-height:1;padding:0 2px;}",
+      "#" + CFG.modalId + " .weo-body{padding:16px 18px 18px;overflow:auto;background:#eef2f6;display:flex;flex-direction:column;gap:12px;}",
+      "#" + CFG.modalId + " .weo-message{border:1px dashed #d0d5dd;border-radius:14px;background:#f9fafb;padding:18px;color:#344054;font-size:14px;line-height:1.55;}",
+      "#" + CFG.modalId + " .weo-message strong{display:block;margin-bottom:6px;color:#101828;font-size:15px;}",
+      "#" + CFG.modalId + " .weo-shell{display:grid;grid-template-columns:minmax(295px,330px) minmax(0,1fr);gap:14px;align-items:start;}",
+      "#" + CFG.modalId + " .weo-side{position:sticky;top:0;display:grid;gap:12px;align-self:start;}",
+      "#" + CFG.modalId + " .weo-main{display:grid;gap:12px;min-width:0;}",
+      "#" + CFG.modalId + " .weo-grid{display:grid;gap:12px;}",
+      "#" + CFG.modalId + " .weo-card{border:1px solid #dde3ea;border-radius:16px;background:#fff;padding:14px;box-shadow:0 8px 18px rgba(15,23,42,.04);min-width:0;}",
+      "#" + CFG.modalId + " .weo-card.is-muted{background:#f8fafc;}",
+      "#" + CFG.modalId + " .weo-card-head{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;margin-bottom:10px;}",
+      "#" + CFG.modalId + " .weo-card-title{font-size:14px;font-weight:800;color:#101828;line-height:1.2;}",
+      "#" + CFG.modalId + " .weo-card-note{margin-top:2px;color:#667085;font-size:11px;line-height:1.45;}",
+      "#" + CFG.modalId + " .weo-head-actions{display:flex;align-items:center;gap:10px;}",
+      "#" + CFG.modalId + " .weo-mini-meta{font-size:11px;font-weight:800;color:#667085;white-space:nowrap;}",
+      "#" + CFG.modalId + " .weo-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}",
+      "#" + CFG.modalId + " .weo-choice{display:grid;grid-template-columns:18px minmax(0,1fr) 98px;gap:10px;align-items:center;border:1px solid #d5dbe4;border-radius:14px;padding:10px 12px;background:#fff;cursor:pointer;min-height:92px;}",
+      "#" + CFG.modalId + " .weo-choice:has(input:checked){border-color:#175cd3;background:#eef4ff;box-shadow:inset 0 0 0 1px rgba(23,92,211,.08);}",
+      "#" + CFG.modalId + " .weo-choice input{margin:0;}",
+      "#" + CFG.modalId + " .weo-choice-copy{display:block;min-width:0;}",
+      "#" + CFG.modalId + " .weo-choice-copy b{display:block;margin-bottom:4px;font-size:13px;color:#101828;}",
+      "#" + CFG.modalId + " .weo-choice-copy span{display:block;color:#667085;font-size:11px;line-height:1.35;}",
+      "#" + CFG.modalId + " .weo-choice-visual{height:60px;border:1px solid #d8e0ea;border-radius:12px;padding:6px;background:linear-gradient(180deg,#ffffff 0%,#f5f7fb 100%);display:grid;gap:6px;overflow:hidden;}",
+      "#" + CFG.modalId + " .weo-choice-visual.is-image{grid-template-columns:.85fr 1.15fr;}",
+      "#" + CFG.modalId + " .weo-choice-visual.is-columns{grid-template-rows:10px 1fr;}",
+      "#" + CFG.modalId + " .weo-choice-media{border-radius:8px;background:linear-gradient(160deg,#0ea5e9 0%,#1d4ed8 100%);}",
+      "#" + CFG.modalId + " .weo-choice-copybars{display:grid;gap:5px;align-content:start;}",
+      "#" + CFG.modalId + " .weo-choice-copybars span,#" + CFG.modalId + " .weo-choice-topbar,#" + CFG.modalId + " .weo-choice-columns span{display:block;border-radius:999px;background:#d8e0ea;}",
+      "#" + CFG.modalId + " .weo-choice-copybars span:nth-child(1){height:10px;width:72%;background:#c7d7ff;}",
+      "#" + CFG.modalId + " .weo-choice-copybars span:nth-child(2){height:8px;width:94%;}",
+      "#" + CFG.modalId + " .weo-choice-copybars span:nth-child(3){height:8px;width:58%;}",
+      "#" + CFG.modalId + " .weo-choice-topbar{height:10px;width:62%;background:#c7d7ff;}",
+      "#" + CFG.modalId + " .weo-choice-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;}",
+      "#" + CFG.modalId + " .weo-choice-columns span{height:100%;min-height:28px;}",
+      "#" + CFG.modalId + " .weo-setup-grid{display:grid;gap:10px;margin-top:12px;}",
+      "#" + CFG.modalId + " .weo-setup-panel{border:1px solid #e3e8ef;border-radius:14px;background:#fbfcfd;padding:12px;}",
+      "#" + CFG.modalId + " .weo-eyebrow{display:block;margin-bottom:8px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#98a2b3;}",
+      "#" + CFG.modalId + " .weo-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}",
+      "#" + CFG.modalId + " .weo-field{display:flex;flex-direction:column;gap:4px;min-width:0;}",
+      "#" + CFG.modalId + " .weo-field.is-wide{grid-column:1/-1;}",
+      "#" + CFG.modalId + " label.weo-label{font-size:11px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:#344054;}",
+      "#" + CFG.modalId + " .weo-input,#" + CFG.modalId + " .weo-textarea{width:100%;border:1px solid #cfd6e0;border-radius:10px;background:#fff;color:#101828;font-size:13px;padding:8px 10px;box-shadow:inset 0 1px 2px rgba(15,23,42,.03);}",
+      "#" + CFG.modalId + " .weo-input:focus,#" + CFG.modalId + " .weo-textarea:focus{outline:2px solid rgba(23,92,211,.16);border-color:#175cd3;}",
+      "#" + CFG.modalId + " .weo-textarea{min-height:72px;resize:vertical;line-height:1.4;}",
+      "#" + CFG.modalId + " .weo-help{color:#667085;font-size:11px;line-height:1.4;}",
+      "#" + CFG.modalId + " .weo-schedules-head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;margin-bottom:10px;}",
+      "#" + CFG.modalId + " .weo-schedule-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;}",
+      "#" + CFG.modalId + " .weo-schedule-card{display:flex;flex-direction:column;gap:10px;min-width:0;}",
+      "#" + CFG.modalId + " .weo-schedule-grid-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}",
+      "#" + CFG.modalId + " .weo-times-block{display:grid;gap:8px;}",
+      "#" + CFG.modalId + " .weo-times-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}",
+      "#" + CFG.modalId + " .weo-times-title{font-size:12px;font-weight:800;color:#101828;}",
+      "#" + CFG.modalId + " .weo-inline-note{font-size:11px;color:#667085;line-height:1.35;}",
+      "#" + CFG.modalId + " .weo-row{display:grid;grid-template-columns:88px minmax(0,1fr) 34px;gap:6px;align-items:center;}",
+      "#" + CFG.modalId + " .weo-row + .weo-row{margin-top:6px;}",
+      "#" + CFG.modalId + " .weo-row > *{min-width:0;}",
+      "#" + CFG.modalId + " .weo-row .weo-btn{min-width:34px;padding:8px 0;}",
+      "#" + CFG.modalId + " .weo-btn{border:1px solid #cfd4dc;border-radius:10px;background:#fff;color:#1f2937;cursor:pointer;font-size:12px;font-weight:800;padding:8px 11px;line-height:1.2;}",
+      "#" + CFG.modalId + " .weo-btn:hover{background:#f9fafb;}",
+      "#" + CFG.modalId + " .weo-btn.is-primary{border-color:#175cd3;background:#175cd3;color:#fff;}",
+      "#" + CFG.modalId + " .weo-btn.is-danger{border-color:#fecdca;color:#b42318;background:#fff;}",
+      "#" + CFG.modalId + " .weo-btn.is-small{padding:8px 9px;}",
+      "#" + CFG.modalId + " .weo-btn[disabled]{opacity:.55;cursor:not-allowed;}",
+      "#" + CFG.modalId + " .weo-warning{border:1px solid #fedf89;background:#fffaeb;color:#93370d;border-radius:12px;padding:9px 11px;font-size:12px;line-height:1.45;}",
+      "#" + CFG.modalId + " .weo-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:2px;}",
+      "#" + CFG.modalId + " .weo-footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding-top:12px;border-top:1px solid #e4e8ef;}",
+      "#" + CFG.modalId + " .weo-preview-card{background:linear-gradient(180deg,#12213c 0%,#182946 100%);border-color:#102448;color:#e5edf8;}",
+      "#" + CFG.modalId + " .weo-preview-card .weo-card-title{color:#fff;}",
+      "#" + CFG.modalId + " .weo-preview-card .weo-card-note{color:rgba(226,232,240,.8);}",
+      "#" + CFG.modalId + " .weo-chip-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}",
+      "#" + CFG.modalId + " .weo-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(148,163,184,.28);border-radius:999px;background:rgba(255,255,255,.06);padding:5px 8px;}",
+      "#" + CFG.modalId + " .weo-chip strong{font-size:11px;font-weight:800;color:#fff;}",
+      "#" + CFG.modalId + " .weo-chip span{font-size:11px;color:rgba(226,232,240,.82);}",
+      "#" + CFG.modalId + " .weo-preview-page{border-radius:16px;background:linear-gradient(180deg,#ffffff 0%,#f4f7fb 100%);padding:10px;border:1px solid rgba(148,163,184,.22);display:grid;gap:10px;color:#101828;min-height:286px;}",
+      "#" + CFG.modalId + " .weo-preview-page.is-image{grid-template-columns:.88fr 1.12fr;}",
+      "#" + CFG.modalId + " .weo-preview-media{border-radius:12px;background:linear-gradient(160deg,#0ea5e9 0%,#1d4ed8 100%);padding:12px;display:flex;flex-direction:column;justify-content:space-between;min-height:250px;color:#eff6ff;}",
+      "#" + CFG.modalId + " .weo-preview-media-tag{align-self:flex-start;border-radius:999px;background:rgba(255,255,255,.16);padding:5px 8px;font-size:11px;font-weight:800;}",
+      "#" + CFG.modalId + " .weo-preview-media-url{font-size:12px;line-height:1.4;word-break:break-word;}",
+      "#" + CFG.modalId + " .weo-preview-copy{display:flex;flex-direction:column;gap:10px;background:#fff;border-radius:12px;padding:12px;box-shadow:inset 0 0 0 1px #e6ebf2;min-height:250px;}",
+      "#" + CFG.modalId + " .weo-preview-kicker{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#175cd3;}",
+      "#" + CFG.modalId + " .weo-preview-heading{font-size:18px;font-weight:800;line-height:1.08;letter-spacing:-.02em;}",
+      "#" + CFG.modalId + " .weo-preview-blurb{font-size:12px;color:#475467;line-height:1.45;min-height:36px;}",
+      "#" + CFG.modalId + " .weo-preview-list{display:grid;gap:8px;margin-top:auto;}",
+      "#" + CFG.modalId + " .weo-preview-time{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;padding-top:8px;border-top:1px solid #edf1f5;}",
+      "#" + CFG.modalId + " .weo-preview-time strong{font-size:11px;font-weight:800;color:#175cd3;}",
+      "#" + CFG.modalId + " .weo-preview-time span{font-size:11px;color:#344054;line-height:1.35;}",
+      "#" + CFG.modalId + " .weo-preview-page.is-columns{grid-template-rows:auto 1fr;}",
+      "#" + CFG.modalId + " .weo-preview-opening{padding:10px 12px;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #e6ebf2;font-size:12px;color:#475467;line-height:1.45;min-height:52px;}",
+      "#" + CFG.modalId + " .weo-preview-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}",
+      "#" + CFG.modalId + " .weo-preview-column{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 1px #e6ebf2;min-height:192px;}",
+      "#" + CFG.modalId + " .weo-preview-column.is-empty{background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);opacity:.76;}",
+      "#" + CFG.modalId + " .weo-preview-column-label{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#98a2b3;}",
+      "#" + CFG.modalId + " .weo-preview-column-title{font-size:13px;font-weight:800;color:#101828;line-height:1.2;}",
+      "#" + CFG.modalId + " .weo-preview-column-intro{font-size:11px;color:#667085;line-height:1.35;min-height:28px;}",
+      "#" + CFG.modalId + " .weo-preview-column-list{display:grid;gap:6px;margin-top:auto;}",
+      "#" + CFG.modalId + " .weo-preview-empty{margin-top:auto;padding:10px;border:1px dashed #d0d5dd;border-radius:10px;font-size:11px;color:#98a2b3;text-align:center;background:#fbfcfd;}",
+      "#" + CFG.modalId + " .weo-preview-more{font-size:11px;font-weight:800;color:#667085;}",
+      "#" + CFG.modalId + " .weo-preview-help{margin-top:10px;font-size:11px;line-height:1.45;color:rgba(226,232,240,.82);}",
+      "#" + CFG.statusId + "{min-height:16px;font-size:12px;font-weight:700;padding-left:2px;}",
+      "#" + CFG.statusId + ".is-error{color:#b42318;}",
+      "#" + CFG.statusId + ".is-success{color:#027a48;}",
+      "#" + CFG.statusId + ".is-warning{color:#b54708;}",
+      "#" + CFG.statusId + ".is-info{color:#175cd3;}",
+      "@media(max-width:980px){#" + CFG.modalId + "{width:calc(100vw - 28px);max-height:calc(100vh - 28px);}#" + CFG.modalId + " .weo-shell{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-side{position:static;}#" + CFG.modalId + " .weo-preview-page.is-image{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-preview-columns{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-schedule-grid{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-schedule-grid-fields{grid-template-columns:1fr;}}",
+      "@media(max-width:760px){#" + CFG.overlayId + "{padding:12px;}#" + CFG.modalId + "{width:calc(100vw - 24px);max-height:calc(100vh - 24px);}#" + CFG.modalId + " .weo-head{padding:16px 16px 12px;}#" + CFG.modalId + " .weo-body{padding:12px;}#" + CFG.modalId + " .weo-choice-grid,#" + CFG.modalId + " .weo-fields{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-choice{grid-template-columns:18px minmax(0,1fr);}#" + CFG.modalId + " .weo-choice-visual{grid-column:2;}#" + CFG.modalId + " .weo-row{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-row .weo-btn{width:100%;}#" + CFG.modalId + " .weo-schedules-head{flex-direction:column;align-items:flex-start;}#" + CFG.modalId + " .weo-footer{flex-wrap:wrap;justify-content:stretch;}#" + CFG.modalId + " .weo-footer .weo-btn{flex:1 1 180px;}}"
+    ].join("");
 
     $("head").append('<style id="' + CFG.stylesId + '">' + css + "</style>");
   }
@@ -305,67 +370,135 @@
 
     var extraImageWarning = getImageLayoutExtraScheduleWarning(state);
     var html = '' +
-      '<div class="weo-grid">' +
-        '<div class="weo-card is-muted">' +
-          '<div class="weo-card-head"><div><div class="weo-card-title">Page layout</div><div class="weo-card-note">Choose how the Event Overview should appear in the proposal.</div></div></div>' +
-          '<div class="weo-layout">' +
-            layoutChoiceHtml(LAYOUT_IMAGE, state.layout, "One schedule with image", "Best for a simple event overview with one strong visual.") +
-            layoutChoiceHtml(LAYOUT_COLUMNS, state.layout, "Up to three schedules", "Best for setup, show day, derig, or multi-day events.") +
-          '</div>' +
+      '<div class="weo-shell">' +
+        '<div class="weo-side">' +
+          livePreviewPanelHtml(state) +
         '</div>' +
-        (state.layout === LAYOUT_IMAGE ? imageCardHtml(state) : openingTextCardHtml(state)) +
-        (extraImageWarning ? '<div class="weo-warning">' + esc(extraImageWarning) + '</div>' : '') +
-        schedulesHtml(state) +
+        '<div class="weo-main">' +
+          pageSetupCardHtml(state) +
+          (extraImageWarning ? '<div class="weo-warning">' + esc(extraImageWarning) + '</div>' : '') +
+          schedulesHtml(state) +
+        '</div>' +
       '</div>';
 
     $("#" + CFG.bodyId).html(html);
     setSaveEnabled(true);
   }
 
+  function pageSetupCardHtml(state) {
+    return '' +
+      '<div class="weo-card">' +
+        '<div class="weo-card-head"><div><div class="weo-card-title">Build controls</div><div class="weo-card-note">Choose the page shape first, then fill the content that should appear in the sketch.</div></div></div>' +
+        '<div class="weo-choice-grid">' +
+          layoutChoiceHtml(LAYOUT_IMAGE, state.layout, "Image split", "One feature image with a single schedule beside it.") +
+          layoutChoiceHtml(LAYOUT_COLUMNS, state.layout, "Three columns", "Opening copy above up to three schedule columns.") +
+        '</div>' +
+        '<div class="weo-setup-grid">' +
+          (state.layout === LAYOUT_IMAGE ? imageCardHtml(state) : openingTextCardHtml(state)) +
+        '</div>' +
+      '</div>';
+  }
+
+  function livePreviewPanelHtml(state) {
+    var activeCount = Math.min(state.layout === LAYOUT_COLUMNS ? CFG.maxSchedules : 1, getActiveSchedules(state).length);
+    var totalRows = countScheduleRows(state.schedules || []);
+
+    return '' +
+      '<div class="weo-card weo-preview-card">' +
+        '<div class="weo-card-head"><div><div class="weo-card-title">Live page map</div><div class="weo-card-note">A compact sketch of how this Event Overview will read on the proposal page.</div></div></div>' +
+        '<div class="weo-chip-row">' +
+          summaryChipHtml("Mode", getLayoutModeLabel(state.layout)) +
+          summaryChipHtml("Active", String(activeCount) + " / " + String(state.layout === LAYOUT_COLUMNS ? CFG.maxSchedules : 1)) +
+          summaryChipHtml("Times", String(totalRows)) +
+        '</div>' +
+        livePreviewHtml(state) +
+        '<div class="weo-preview-help">The hidden section name stays untouched. This editor only shapes the visible page content beneath it.</div>' +
+      '</div>';
+  }
+
+  function summaryChipHtml(label, value) {
+    return '<span class="weo-chip"><strong>' + esc(label) + '</strong><span>' + esc(value) + '</span></span>';
+  }
+
+  function getLayoutModeLabel(layout) {
+    return normaliseLayout(layout) === LAYOUT_COLUMNS ? "Three columns" : "Image split";
+  }
+
+  function countScheduleRows(schedules) {
+    var total = 0;
+    var source = schedules || [];
+
+    for (var i = 0; i < source.length; i++) {
+      total += getRowsToSave(source[i]).length;
+    }
+
+    return total;
+  }
+
   function layoutChoiceHtml(value, current, title, note) {
     return '' +
       '<label class="weo-choice">' +
         '<input type="radio" name="weo-layout" value="' + attr(value) + '"' + (value === current ? ' checked' : '') + '>' +
-        '<span><b>' + esc(title) + '</b><span>' + esc(note) + '</span></span>' +
+        '<span class="weo-choice-copy"><b>' + esc(title) + '</b><span>' + esc(note) + '</span></span>' +
+        layoutChoiceVisualHtml(value) +
       '</label>';
+  }
+
+  function layoutChoiceVisualHtml(value) {
+    if (value === LAYOUT_COLUMNS) {
+      return '' +
+        '<span class="weo-choice-visual is-columns">' +
+          '<span class="weo-choice-topbar"></span>' +
+          '<span class="weo-choice-columns"><span></span><span></span><span></span></span>' +
+        '</span>';
+    }
+
+    return '' +
+      '<span class="weo-choice-visual is-image">' +
+        '<span class="weo-choice-media"></span>' +
+        '<span class="weo-choice-copybars"><span></span><span></span><span></span></span>' +
+      '</span>';
   }
 
   function imageCardHtml(state) {
     return '' +
-      '<div class="weo-card">' +
-        '<div class="weo-card-head"><div><div class="weo-card-title">Image</div><div class="weo-card-note">This fills the image side of the Event Overview page.</div></div></div>' +
-        '<div class="weo-fields">' +
-          fieldHtml({ wide: true, label: "Image link", field: "imageUrl", value: state.imageUrl, placeholder: "https://..." }) +
-        '</div>' +
+      '<div class="weo-setup-panel">' +
+        '<span class="weo-eyebrow">Visual panel</span>' +
+        fieldHtml({ wide: true, label: "Image link", field: "imageUrl", value: state.imageUrl, placeholder: "https://...", note: "This fills the image side of the split page layout." }) +
       '</div>';
   }
 
   function openingTextCardHtml(state) {
     return '' +
-      '<div class="weo-card">' +
-        '<div class="weo-card-head"><div><div class="weo-card-title">Opening text</div><div class="weo-card-note">A short introduction shown above the schedules.</div></div></div>' +
-        '<div class="weo-fields">' +
-          textareaHtml({ wide: true, label: "Opening text", field: "openingText", value: state.openingText, placeholder: "Briefly introduce the schedule." }) +
-        '</div>' +
+      '<div class="weo-setup-panel">' +
+        '<span class="weo-eyebrow">Top opening</span>' +
+        textareaHtml({ wide: true, label: "Opening text", field: "openingText", value: state.openingText, placeholder: "Briefly introduce the schedule.", note: "This appears above the schedule columns in the final page." }) +
       '</div>';
   }
 
   function schedulesHtml(state) {
     var schedules = state.schedules && state.schedules.length ? state.schedules.slice(0, CFG.maxSchedules) : [blankSchedule("Day of event")];
     var cards = [];
+    var activeCount = getActiveSchedules(state).length;
+    var totalRows = countScheduleRows(schedules);
+
+    if (state.layout === LAYOUT_COLUMNS) {
+      while (schedules.length < CFG.maxSchedules) {
+        schedules.push(blankSchedule(""));
+      }
+    }
 
     for (var i = 0; i < schedules.length; i++) {
       cards.push(scheduleCardHtml(schedules[i], i, state.layout));
     }
 
-    var canAdd = schedules.length < CFG.maxSchedules;
     return '' +
       '<div class="weo-card">' +
-        '<div class="weo-card-head">' +
-          '<div><div class="weo-card-title">Schedules</div><div class="weo-card-note">Each time is saved as a schedule line in HireHop.</div></div>' +
-          (state.layout === LAYOUT_COLUMNS ? '<button type="button" class="weo-btn" data-weo-action="add-schedule"' + (canAdd ? '' : ' disabled') + '>Add schedule</button>' : '') +
+        '<div class="weo-schedules-head">' +
+          '<div><div class="weo-card-title">' + esc(state.layout === LAYOUT_COLUMNS ? "Schedule columns" : "Schedule content") + '</div><div class="weo-card-note">' + esc(state.layout === LAYOUT_COLUMNS ? "Each card feeds one visible page column. Blank cards are ignored until you add real content." : "The first card is the visible schedule. Extra saved cards stay muted until you switch to the three column layout.") + '</div></div>' +
+          '<div class="weo-head-actions"><div class="weo-mini-meta">' + esc(String(activeCount) + " active, " + String(totalRows) + " time rows") + '</div></div>' +
         '</div>' +
-        '<div class="weo-grid">' + cards.join("") + '</div>' +
+        '<div class="weo-schedule-grid">' + cards.join("") + '</div>' +
       '</div>';
   }
 
@@ -374,34 +507,55 @@
     var isExtraInImageLayout = layout === LAYOUT_IMAGE && index > 0;
     var rows = schedule.rows && schedule.rows.length ? schedule.rows : [blankRow()];
     var rowHtml = [];
+    var liveRows = getRowsToSave(schedule).length;
+    var canClear = index > 0 && (schedule.id || $.trim(schedule.title) || $.trim(schedule.intro) || liveRows);
+    var slotLabel = getScheduleSlotLabel(index, layout);
+    var titleLabel = layout === LAYOUT_COLUMNS ? "Column heading" : "Schedule heading";
+    var introLabel = layout === LAYOUT_COLUMNS ? "Column intro" : "Schedule intro";
+    var slotNote = isExtraInImageLayout
+      ? "Hidden until you switch this page to the three column layout."
+      : (liveRows ? String(liveRows) + " time row" + (liveRows === 1 ? "" : "s") + " ready." : "Add the first time row below.");
 
     for (var i = 0; i < rows.length && i < CFG.maxRows; i++) {
       rowHtml.push(rowHtmlLine(rows[i], index, i));
     }
 
     return '' +
-      '<div class="weo-card' + (isExtraInImageLayout ? ' is-muted' : '') + '" data-schedule-index="' + index + '" data-schedule-uid="' + attr(schedule.uid) + '" data-schedule-id="' + attr(schedule.id) + '">' +
+      '<div class="weo-card weo-schedule-card' + (isExtraInImageLayout ? ' is-muted' : '') + '" data-schedule-index="' + index + '" data-schedule-uid="' + attr(schedule.uid) + '" data-schedule-id="' + attr(schedule.id) + '">' +
         '<div class="weo-card-head">' +
-          '<div>' +
-            '<div class="weo-card-title">' + esc(index === 0 ? "Schedule" : "Schedule " + (index + 1)) + '</div>' +
-            '<div class="weo-card-note">' + esc(isExtraInImageLayout ? "This layout only uses the first schedule. Remove this schedule or choose the three-schedule layout." : "") + '</div>' +
+          '<div class="weo-card-heading">' +
+            '<span class="weo-eyebrow">' + esc(slotLabel) + '</span>' +
+            '<div class="weo-card-title">' + esc(getScheduleSlotTitle(index, layout)) + '</div>' +
+            '<div class="weo-card-note">' + esc(slotNote) + '</div>' +
           '</div>' +
-          (index > 0 ? '<button type="button" class="weo-btn is-danger is-small" data-weo-action="remove-schedule" data-schedule-index="' + index + '">Remove schedule</button>' : '') +
+          (canClear ? '<button type="button" class="weo-btn is-danger is-small" data-weo-action="remove-schedule" data-schedule-index="' + index + '">Clear</button>' : '') +
         '</div>' +
-        '<div class="weo-fields">' +
-          fieldHtml({ wide: false, label: "Schedule title", field: "scheduleTitle", value: schedule.title, placeholder: index === 0 ? "Day of event" : "Setup day" }) +
-          textareaHtml({ wide: false, label: "Short intro", field: "scheduleIntro", value: schedule.intro, placeholder: "Optional short note before the times." }) +
+        '<div class="weo-schedule-grid-fields">' +
+          fieldHtml({ wide: false, label: titleLabel, field: "scheduleTitle", value: schedule.title, placeholder: index === 0 ? "Day of event" : "Setup day" }) +
+          textareaHtml({ wide: false, label: introLabel, field: "scheduleIntro", value: schedule.intro, placeholder: layout === LAYOUT_COLUMNS ? "Optional text above this column." : "Optional short note before the times." }) +
         '</div>' +
-        '<div style="margin-top:14px;">' +
-          '<label class="weo-label">Times</label>' +
-          '<div class="weo-help">Use clear labels such as 09:00, TBC, Morning, or After dinner.</div>' +
-          '<div style="margin-top:10px;">' + rowHtml.join("") + '</div>' +
+        '<div class="weo-times-block">' +
+          '<div class="weo-times-head">' +
+            '<div><div class="weo-times-title">Time rows</div><div class="weo-inline-note">Use clear labels such as 09:00, TBC, Morning, or After dinner.</div></div>' +
+            '<div class="weo-mini-meta">' + esc(String(liveRows) + " / " + String(CFG.maxRows)) + '</div>' +
+          '</div>' +
+          '<div>' + rowHtml.join("") + '</div>' +
           '<div class="weo-actions">' +
             '<button type="button" class="weo-btn" data-weo-action="add-row" data-schedule-index="' + index + '"' + (rows.length >= CFG.maxRows ? ' disabled' : '') + '>Add time</button>' +
-            '<span class="weo-help">' + esc(rows.length + " of " + CFG.maxRows) + '</span>' +
+            '<span class="weo-inline-note">' + esc(layout === LAYOUT_COLUMNS ? "These rows appear inside this page column." : "These rows appear beside the image.") + '</span>' +
           '</div>' +
         '</div>' +
       '</div>';
+  }
+
+  function getScheduleSlotLabel(index, layout) {
+    if (layout === LAYOUT_COLUMNS) return "Page column " + (index + 1);
+    return index === 0 ? "Visible schedule" : "Extra saved schedule";
+  }
+
+  function getScheduleSlotTitle(index, layout) {
+    if (layout === LAYOUT_COLUMNS) return "Column " + (index + 1);
+    return index === 0 ? "Main schedule" : "Schedule " + (index + 1);
   }
 
   function rowHtmlLine(row, scheduleIndex, rowIndex) {
@@ -410,7 +564,7 @@
       '<div class="weo-row" data-row-index="' + rowIndex + '" data-row-uid="' + attr(row.uid) + '" data-row-id="' + attr(row.id) + '">' +
         '<input class="weo-input" type="text" data-field="rowTime" value="' + attr(row.time) + '" placeholder="09:00" maxlength="32">' +
         '<input class="weo-input" type="text" data-field="rowText" value="' + attr(row.text) + '" placeholder="What happens?">' +
-        '<button type="button" class="weo-btn is-danger is-small" data-weo-action="remove-row" data-schedule-index="' + scheduleIndex + '" data-row-index="' + rowIndex + '" aria-label="Remove time">Remove</button>' +
+        '<button type="button" class="weo-btn is-danger is-small" data-weo-action="remove-row" data-schedule-index="' + scheduleIndex + '" data-row-index="' + rowIndex + '" aria-label="Remove time">&times;</button>' +
       '</div>';
   }
 
@@ -419,6 +573,7 @@
       '<div class="weo-field' + (o.wide ? ' is-wide' : '') + '">' +
         '<label class="weo-label">' + esc(o.label) + '</label>' +
         '<input class="weo-input" type="text" data-field="' + attr(o.field) + '" value="' + attr(o.value) + '" placeholder="' + attr(o.placeholder || '') + '">' +
+        (o.note ? '<div class="weo-help">' + esc(o.note) + '</div>' : '') +
       '</div>';
   }
 
@@ -427,7 +582,101 @@
       '<div class="weo-field' + (o.wide ? ' is-wide' : '') + '">' +
         '<label class="weo-label">' + esc(o.label) + '</label>' +
         '<textarea class="weo-textarea" data-field="' + attr(o.field) + '" placeholder="' + attr(o.placeholder || '') + '">' + esc(o.value) + '</textarea>' +
+        (o.note ? '<div class="weo-help">' + esc(o.note) + '</div>' : '') +
       '</div>';
+  }
+
+  function livePreviewHtml(state) {
+    return state.layout === LAYOUT_COLUMNS
+      ? columnsPreviewHtml(state)
+      : imagePreviewHtml(state);
+  }
+
+  function imagePreviewHtml(state) {
+    var schedule = normaliseSchedule((state.schedules && state.schedules[0]) || blankSchedule("Day of event"));
+
+    return '' +
+      '<div class="weo-preview-page is-image">' +
+        '<div class="weo-preview-media">' +
+          '<div class="weo-preview-media-tag">' + esc(state.imageUrl ? "Image linked" : "Image needed") + '</div>' +
+          '<div class="weo-preview-media-url">' + esc(previewText(state.imageUrl, "Add an image URL to fill this side of the page.", 54)) + '</div>' +
+        '</div>' +
+        '<div class="weo-preview-copy">' +
+          '<div class="weo-preview-kicker">Event overview</div>' +
+          '<div class="weo-preview-heading">' + esc(previewText(schedule.title, "Day of event", 38)) + '</div>' +
+          '<div class="weo-preview-blurb">' + esc(previewText(schedule.intro, "The schedule intro appears here beside the image.", 120)) + '</div>' +
+          '<div class="weo-preview-list">' + previewRowsHtml(schedule, 4, "Add time rows to populate the visible schedule.") + '</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function columnsPreviewHtml(state) {
+    var schedules = state.schedules && state.schedules.length ? state.schedules.slice(0, CFG.maxSchedules) : [];
+    var columns = [];
+
+    while (schedules.length < CFG.maxSchedules) {
+      schedules.push(blankSchedule(""));
+    }
+
+    for (var i = 0; i < CFG.maxSchedules; i++) {
+      columns.push(previewColumnHtml(schedules[i], i));
+    }
+
+    return '' +
+      '<div class="weo-preview-page is-columns">' +
+        '<div class="weo-preview-opening">' + esc(previewText(state.openingText, "Opening text appears above the schedule columns.", 160)) + '</div>' +
+        '<div class="weo-preview-columns">' + columns.join("") + '</div>' +
+      '</div>';
+  }
+
+  function previewColumnHtml(schedule, index) {
+    schedule = normaliseSchedule(schedule || blankSchedule(""));
+    var hasContent = !!($.trim(schedule.title) || $.trim(schedule.intro) || getRowsToSave(schedule).length);
+
+    return '' +
+      '<div class="weo-preview-column' + (hasContent ? '' : ' is-empty') + '">' +
+        '<div class="weo-preview-column-label">Column ' + (index + 1) + '</div>' +
+        '<div class="weo-preview-column-title">' + esc(previewText(schedule.title, index === 0 ? "Day of event" : "Add heading", 26)) + '</div>' +
+        '<div class="weo-preview-column-intro">' + esc(previewText(schedule.intro, hasContent ? "Optional intro text for this column." : "This column stays empty until you add content.", 84)) + '</div>' +
+        '<div class="weo-preview-column-list">' + previewRowsHtml(schedule, 3, "Empty column") + '</div>' +
+      '</div>';
+  }
+
+  function previewRowsHtml(schedule, limit, emptyText) {
+    var liveRows = getRowsToSave(schedule);
+    var rows = liveRows.slice(0, limit || 3);
+    var html = [];
+
+    if (!rows.length) {
+      return '<div class="weo-preview-empty">' + esc(emptyText || "Add time rows") + '</div>';
+    }
+
+    for (var i = 0; i < rows.length; i++) {
+      html.push(
+        '<div class="weo-preview-time">' +
+          '<strong>' + esc(previewText(rows[i].time, "Time", 14)) + '</strong>' +
+          '<span>' + esc(previewText(rows[i].text, "Description", 46)) + '</span>' +
+        '</div>'
+      );
+    }
+
+    if (liveRows.length > rows.length) {
+      html.push('<div class="weo-preview-more">+' + esc(String(liveRows.length - rows.length)) + ' more</div>');
+    }
+
+    return html.join("");
+  }
+
+  function previewText(value, fallback, maxLen) {
+    var text = $.trim(String(value || ""));
+    if (!text) return fallback || "";
+    return truncateText(text, maxLen || 120);
+  }
+
+  function truncateText(value, maxLen) {
+    var text = String(value || "");
+    if (!maxLen || text.length <= maxLen) return text;
+    return $.trim(text.slice(0, Math.max(0, maxLen - 1))) + "…";
   }
 
   function runEditorAction($btn) {
@@ -435,6 +684,7 @@
     var scheduleIndex = toInt($btn.attr("data-schedule-index"), -1);
     var rowIndex = toInt($btn.attr("data-row-index"), -1);
     var state = readFormState(editor.current);
+    var layout = normaliseLayout(state.layout);
 
     if (action === "add-schedule") {
       if (state.schedules.length >= CFG.maxSchedules) {
@@ -444,9 +694,16 @@
       state.schedules.push(blankSchedule(""));
     }
 
-    if (action === "remove-schedule" && scheduleIndex > 0 && scheduleIndex < state.schedules.length) {
-      state.schedules.splice(scheduleIndex, 1);
-      if (!state.schedules.length) state.schedules.push(blankSchedule("Day of event"));
+    if (action === "remove-schedule" && scheduleIndex > 0) {
+      if (layout === LAYOUT_COLUMNS) {
+        while (state.schedules.length <= scheduleIndex) {
+          state.schedules.push(blankSchedule(""));
+        }
+        state.schedules[scheduleIndex] = blankSchedule("");
+      } else if (scheduleIndex < state.schedules.length) {
+        state.schedules.splice(scheduleIndex, 1);
+        if (!state.schedules.length) state.schedules.push(blankSchedule("Day of event"));
+      }
     }
 
     if (action === "add-row" && scheduleIndex >= 0 && state.schedules[scheduleIndex]) {
