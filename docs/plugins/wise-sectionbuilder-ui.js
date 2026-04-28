@@ -833,7 +833,7 @@
 
   function readEventOverviewState(tree, rootNode) {
     var rootMetaInfo = extractStoredPageMeta(getNodeTechnical(rootNode));
-    var rootMeta = normaliseMeta(rootMetaInfo.meta);
+    var rootMeta = normaliseMeta(rootMetaInfo.meta) || {};
     var childHeadings = getDirectChildHeadingNodes(tree, rootNode);
     var schedules = [];
 
@@ -843,7 +843,7 @@
 
     if (!schedules.length) schedules.push(blankSchedule("Day of event"));
 
-    var firstScheduleMeta = normaliseMeta(schedules[0] && schedules[0].meta);
+    var firstScheduleMeta = normaliseMeta(schedules[0] && schedules[0].meta) || {};
     var layout = normaliseLayout(rootMeta.layout || rootMeta.variant || firstScheduleMeta.layout || firstScheduleMeta.variant || (childHeadings.length > 1 ? LAYOUT_COLUMNS : LAYOUT_IMAGE));
     var imageUrl = $.trim(String(rootMeta.imageUrl || firstScheduleMeta.imageUrl || ""));
 
