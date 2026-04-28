@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  try { console.warn("[WiseHireHop] page editor loaded - v2026-04-28.04"); } catch (e) {}
+  try { console.warn("[WiseHireHop] page editor loaded - v2026-04-28.05"); } catch (e) {}
 
   var $ = window.jQuery;
   if (!$) return;
@@ -21,6 +21,9 @@
   var DEPOT_BOOTSTRAP_RETRY_MS = 500;
   var ITEMS_TAB_BOOTSTRAP_MAX_TRIES = 40;
   var ITEMS_TAB_BOOTSTRAP_RETRY_MS = 500;
+  var HIREHOP_WRITE_THROTTLE_MS = 1150;
+  var HIREHOP_RATE_LIMIT_RETRY_MS = 65000;
+  var HIREHOP_SAVE_MAX_ATTEMPTS = 2;
 
   var BUTTON_ID = "wise-section-builder-button";
   var STYLES_ID = "wise-section-builder-styles";
@@ -54,6 +57,7 @@
   var saveInFlight = false;
   var currentSession = null;
   var lastClickedSupplyingNodeId = "";
+  var lastHireHopWriteAt = 0;
 
   var PAGE_TEMPLATES = [
     { key: "section_hero", renderType: "section", name: "Hero", parentRenderType: null, parentName: null, sectionRank: 1, deptRank: null },
@@ -2214,65 +2218,124 @@
       no_availability: "0"
     };
 
-    var response = await fetch("/php_functions/items_delete.php", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
-      },
-      body: buildFormBody(payload)
-    });
+    var attempts = 0;
 
-    var text = await response.text();
-    var json = tryParseJson(text);
+    while (attempts < HIREHOP_SAVE_MAX_ATTEMPTS) {
+      attempts++;
+      await throttleHireHopWriteRequest();
 
-    if (!response.ok) {
-      throw new Error("items_delete failed with status " + response.status);
-    }
+      var response = await fetch("/php_functions/items_delete.php", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+        },
+        body: buildFormBody(payload)
+      });
 
-    if (json && typeof json.error !== "undefined") {
-      throw new Error(readServerMessage(json.error, "Failed to delete managed page items."));
+      var text = await response.text();
+      var json = tryParseJson(text);
+
+      if (!response.ok) {
+        throw new Error("items_delete failed with status " + response.status);
+      }
+
+      if (isHireHopRateLimitResponse(json) && attempts < HIREHOP_SAVE_MAX_ATTEMPTS) {
+        await waitForHireHopRateLimitReset();
+        continue;
+      }
+
+      if (json && typeof json.error !== "undefined") {
+        throw new Error(readServerMessage(json.error, "Failed to delete managed page items."));
+      }
+
+      return;
     }
   }
 
   async function postItemsSave(payload, fallbackId) {
-    var response = await fetch("/php_functions/items_save.php", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
-      },
-      body: buildFormBody(payload)
-    });
+    var attempts = 0;
 
-    var text = await response.text();
-    var json = tryParseJson(text);
+    while (attempts < HIREHOP_SAVE_MAX_ATTEMPTS) {
+      attempts++;
+      await throttleHireHopWriteRequest();
 
-    if (!response.ok) {
-      throw new Error("items_save failed with status " + response.status);
+      var response = await fetch("/php_functions/items_save.php", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+        },
+        body: buildFormBody(payload)
+      });
+
+      var text = await response.text();
+      var json = tryParseJson(text);
+
+      if (!response.ok) {
+        throw new Error("items_save failed with status " + response.status);
+      }
+
+      if (isHireHopRateLimitResponse(json) && attempts < HIREHOP_SAVE_MAX_ATTEMPTS) {
+        await waitForHireHopRateLimitReset();
+        continue;
+      }
+
+      if (json && typeof json.error !== "undefined") {
+        throw new Error(readServerMessage(json.error, "items_save returned an error."));
+      }
+
+      if (json && typeof json.warning !== "undefined") {
+        throw new Error(readServerMessage(json.warning, "items_save returned a warning."));
+      }
+
+      var savedId = getCreatedHeadingIdFromResponse(json) || String(fallbackId || "");
+      if (!savedId) {
+        throw new Error("items_save response did not include an item ID.");
+      }
+
+      return {
+        id: String(savedId),
+        json: json
+      };
     }
 
-    if (json && typeof json.error !== "undefined") {
-      throw new Error(readServerMessage(json.error, "items_save returned an error."));
-    }
-
-    if (json && typeof json.warning !== "undefined") {
-      throw new Error(readServerMessage(json.warning, "items_save returned a warning."));
-    }
-
-    var savedId = getCreatedHeadingIdFromResponse(json) || String(fallbackId || "");
-    if (!savedId) {
-      throw new Error("items_save response did not include an item ID.");
-    }
-
-    return {
-      id: String(savedId),
-      json: json
-    };
+    throw new Error("HireHop rate limit hit while saving. Please wait a minute and try Apply Page again.");
   }
 
   function buildFormBody(payload) {
     return $.param(payload || {});
+  }
+
+  async function throttleHireHopWriteRequest() {
+    var now = Date.now();
+    var waitMs = Math.max(0, HIREHOP_WRITE_THROTTLE_MS - (now - lastHireHopWriteAt));
+
+    if (waitMs > 0) {
+      await delay(waitMs);
+    }
+
+    lastHireHopWriteAt = Date.now();
+  }
+
+  async function waitForHireHopRateLimitReset() {
+    setBuilderStatus("HireHop rate limit reached (327). Waiting 65 seconds, then retrying...", "warning");
+    await delay(HIREHOP_RATE_LIMIT_RETRY_MS);
+  }
+
+  function delay(ms) {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, ms);
+    });
+  }
+
+  function isHireHopRateLimitResponse(json) {
+    if (!json) return false;
+    return isHireHopRateLimitCode(json.error) || isHireHopRateLimitCode(json.warning);
+  }
+
+  function isHireHopRateLimitCode(value) {
+    return $.trim(String(value == null ? "" : value)) === "327";
   }
 
   function normaliseCustomFields(value) {
@@ -2738,6 +2801,10 @@
 
   function readServerMessage(value, fallback) {
     if (value == null || value === "") return fallback;
+    if (isHireHopRateLimitCode(value)) {
+      return "HireHop rate limit reached (327: too many transactions). Please wait a minute and try Apply Page again.";
+    }
+
     return String(value);
   }
 
