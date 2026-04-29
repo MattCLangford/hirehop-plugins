@@ -5,7 +5,7 @@
   if (!$) return;
 
   var CFG = {
-    version: "2026-04-29.13-costing-folder-preview-picker",
+    version: "2026-04-29.14-costing-support-folder-context",
     buttonId: "wise-proposal-page-editor-button",
     stylesId: "wise-proposal-page-editor-styles",
     overlayId: "wise-proposal-page-editor-overlay",
@@ -2399,11 +2399,18 @@
 
       var selected = getSelectedTreeNode(tree);
       var headingNode = selected && selected.data && Number(selected.data.kind) === 0 ? selected : getParentHeadingNode(tree, selected);
+      var supportFolderNotice = "";
 
       if (!headingNode) {
         showMessage("Select a proposal page", "Select a Section or Dept heading in the supplying list, then open the editor again.");
         showOverlay();
         return;
+      }
+
+      var supportParent = getCostingSupportParentForSelection(tree, headingNode);
+      if (supportParent && supportParent.parent) {
+        headingNode = supportParent.parent;
+        supportFolderNotice = supportParent.notice;
       }
 
       var overviewRoot = getEventOverviewRootForSelection(tree, headingNode);
@@ -2427,6 +2434,7 @@
       editor.selectedRegionId = "";
       setModalTitle("Proposal Page Editor", "Edit the selected proposal page visually. Costing table rows are left untouched unless this is a people or timeline style page.");
       renderEditor(editor.current);
+      if (supportFolderNotice) setStatus(supportFolderNotice, "info");
       showOverlay();
     } catch (err) {
       editor.rootNode = null;
@@ -2452,6 +2460,27 @@
     if (parentHeading && isSelectableEventOverviewRoot(parentHeading)) return parentHeading;
 
     return findEventOverviewAncestor(tree, headingNode);
+  }
+
+  function getCostingSupportParentForSelection(tree, headingNode) {
+    if (!tree || !headingNode || !headingNode.data || Number(headingNode.data.kind) !== 0) return null;
+
+    var title = normalizeGenericMatchText(getNodeTitle(headingNode));
+    var isSummary = title === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE);
+    var isUse = title === normalizeGenericMatchText(COSTING_TECHNICAL_USE_TITLE);
+    if (!isSummary && !isUse) return null;
+
+    var parent = getParentHeadingNode(tree, headingNode);
+    if (!parent) return null;
+
+    var parentParsed = parseHeadingBaseMeta(getNodeRawTitle(parent));
+    if (parentParsed && parentParsed.renderType === "section") return null;
+
+    return {
+      parent: parent,
+      kind: isSummary ? "summary" : "use",
+      notice: (isSummary ? "Technical Summary" : "Technical Use") + " is a support folder, not a proposal page. Opened the parent Dept page so you can add rows in context."
+    };
   }
 
   function renderEditor(state) {
@@ -2520,7 +2549,9 @@
       costingTechnicalSummaryId: costingTechnicalSummaryId,
       costingTechnicalUseId: costingTechnicalUseId,
       costingSummaryRows: costingSummaryRows,
-      costingUseRows: costingUseRows
+      costingUseRows: costingUseRows,
+      originalCostingSummaryIds: costingSummaryRows.map(function (row) { return row.id; }).filter(Boolean),
+      originalCostingUseIds: costingUseRows.map(function (row) { return row.id; }).filter(Boolean)
     });
   }
 
@@ -2663,6 +2694,18 @@
     return layoutId === GENERIC_LAYOUTS.DEPT_TABLE;
   }
 
+  function isGenericCostingSupportState(state) {
+    if (!state || !isCostingRowsLayout(state.layoutId)) return false;
+    var title = normalizeGenericMatchText(state.title);
+    return title === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE) ||
+      title === normalizeGenericMatchText(COSTING_TECHNICAL_USE_TITLE);
+  }
+
+  function isGenericCostingSummaryState(state) {
+    if (!state || !isCostingRowsLayout(state.layoutId)) return false;
+    return normalizeGenericMatchText(state.title) === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE);
+  }
+
   function shouldReadGenericRowsLayout(layoutId) {
     return isGenericManagedRowsLayout(layoutId) || isCostingRowsLayout(layoutId);
   }
@@ -2682,7 +2725,7 @@
       additional: getGenericDataField(data, ["ADDITIONAL", "DESCRIPTION", "additional"]),
       technical: getGenericDataField(data, ["TECHNICAL", "technical"]),
       imageUrl: getGenericDataField(data, ["IMAGE_URL", "image_url", "IMG_URL", "img_url"]),
-      revenue: getGenericDataField(data, ["PRICE", "price", "VALUE", "value", "UNIT_PRICE", "unit_price"]),
+      revenue: getGenericDataField(data, ["VALUE", "value", "TOTAL", "total", "PRICE", "price", "UNIT_PRICE", "unit_price"]),
       qty: getGenericDataField(data, ["QTY", "qty"]),
       nodeData: cloneItemSnapshot(data)
     });
@@ -2735,7 +2778,9 @@
       costingTechnicalSummaryId: String(state.costingTechnicalSummaryId || ""),
       costingTechnicalUseId: String(state.costingTechnicalUseId || ""),
       costingSummaryRows: Array.isArray(state.costingSummaryRows) ? state.costingSummaryRows.map(normaliseGenericRow) : [],
-      costingUseRows: Array.isArray(state.costingUseRows) ? state.costingUseRows.map(normaliseGenericRow) : []
+      costingUseRows: Array.isArray(state.costingUseRows) ? state.costingUseRows.map(normaliseGenericRow) : [],
+      originalCostingSummaryIds: normaliseIdList(state.originalCostingSummaryIds || []),
+      originalCostingUseIds: normaliseIdList(state.originalCostingUseIds || [])
     };
   }
 
@@ -2879,21 +2924,26 @@
   }
 
   function genericCostingActionsHtml(state) {
-    var rows = (state.rows || []).map(normaliseGenericRow);
+    var isTechnicalSummary = isGenericCostingSummaryState(state);
+    var isSupportFolder = isGenericCostingSupportState(state);
+    var rows = (isTechnicalSummary ? (state.rows || []) : (state.costingSummaryRows || [])).map(normaliseGenericRow);
     var rowHtml = rows.map(function (row, index) { return genericCostingRowHtml(row, index); }).join("");
     if (!rowHtml) rowHtml = '<div class="wpe-costing-note">No client-facing revenue lines yet. Add one below.</div>';
 
-    var isTechnicalSummary = normalizeGenericMatchText(state.title) === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE);
-    var revenueButton = isTechnicalSummary
-      ? '<button type="button" class="wpe-mini-btn" data-weo-action="add-costing-revenue-row" data-row-kind="costingRevenue"' + (rows.length >= GENERIC_MAX_COST_LINES ? ' disabled' : '') + '>+ Client revenue line</button>'
-      : '<button type="button" class="wpe-mini-btn" data-weo-action="open-technical-summary-editor">Open/create Technical Summary</button>';
-    if (!isTechnicalSummary) rowHtml = '<div class="wpe-costing-note">Select or create Technical Summary to add the client-facing revenue lines that render in the proposal.</div>';
+    var createSummaryButton = (!isTechnicalSummary && !state.costingTechnicalSummaryId)
+      ? '<button type="button" class="wpe-mini-btn" data-weo-action="open-technical-summary-editor">Open/create Technical Summary</button>'
+      : '';
+    var revenueButton = '<button type="button" class="wpe-mini-btn" data-weo-action="add-costing-revenue-row" data-row-kind="costingRevenue"' + (rows.length >= GENERIC_MAX_COST_LINES ? ' disabled' : '') + '>+ Client revenue line</button>';
+    var supportNote = isSupportFolder
+      ? 'This support folder is not a rendered proposal page. Save rows here only if you opened it directly; normally edit them from the parent Dept page.'
+      : 'Rows below are saved inside Technical Summary, while this visual editor stays on the parent Dept page.';
 
     return '' +
       '<div class="wpe-costing-panel">' +
         '<div class="wpe-costing-head">' +
-          '<div><div class="wpe-costing-title">Costing builder</div><div class="wpe-costing-note">Client-facing custom revenue lines render in the visible Technical Summary. Internal inventory/package items should live in the hidden // Technical Use folder.</div></div>' +
+          '<div><div class="wpe-costing-title">Costing builder</div><div class="wpe-costing-note">' + esc(supportNote) + ' Internal inventory/package items should live in the hidden // Technical Use folder.</div></div>' +
           '<div class="wpe-costing-actions">' +
+            createSummaryButton +
             revenueButton +
             '<button type="button" class="wpe-mini-btn" data-weo-action="open-technical-use-picker">+ Listed internal item</button>' +
           '</div>' +
@@ -3030,7 +3080,7 @@
 
   function costingPreviewRowHtml(row, hidden) {
     row = normaliseGenericRow(row);
-    var price = row.revenue || getGenericDataField(row.nodeData || {}, ["PRICE", "price", "VALUE", "value", "UNIT_PRICE", "unit_price"]);
+    var price = row.revenue || getGenericDataField(row.nodeData || {}, ["VALUE", "value", "TOTAL", "total", "PRICE", "price", "UNIT_PRICE", "unit_price"]);
     return '<div class="wpe-cost-preview-row' + (hidden ? ' is-hidden' : '') + '">' +
       '<span>' + esc(row.name || 'Untitled item') + '</span>' +
       '<span class="wpe-cost-preview-price">' + esc(price ? formatCostPreviewMoney(price) : '') + '</span>' +
@@ -3235,7 +3285,9 @@
       state.cascadeAdditionalOptions = false;
     }
 
-    var oldRows = indexGenericRowsByUid(prior.rows || []);
+    var costingSupport = isGenericCostingSupportState(prior);
+    var oldRowsSource = isCostingRowsLayout(prior.layoutId) && !costingSupport ? (prior.costingSummaryRows || []) : (prior.rows || []);
+    var oldRows = indexGenericRowsByUid(oldRowsSource);
     var rows = [];
     $body.find("[data-generic-row-uid]").each(function () {
       var $card = $(this);
@@ -3260,7 +3312,12 @@
 
     if (shouldReadGenericRowsLayout(state.layoutId)) {
       if (isCostingRowsLayout(state.layoutId)) {
-        state.rows = rows;
+        if (isGenericCostingSupportState(state)) {
+          state.rows = rows;
+        } else {
+          state.costingSummaryRows = rows;
+          state.rows = [];
+        }
       } else {
         state.rows = rows.length ? rows : [blankGenericRow(state.layoutId === GENERIC_LAYOUTS.CRITICAL_PATH ? "milestone" : "person")];
       }
@@ -3295,15 +3352,14 @@
     }
 
     if (action === "add-costing-revenue-row") {
-      if (normalizeGenericMatchText(state.title) !== normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE)) {
-        setStatus("Open Technical Summary first, then add client revenue lines there.", "warning");
-        return;
-      }
-      if (state.rows.length >= GENERIC_MAX_COST_LINES) {
+      var costingRows = isGenericCostingSupportState(state) ? state.rows : state.costingSummaryRows;
+      if (costingRows.length >= GENERIC_MAX_COST_LINES) {
         setStatus("This costing table can show up to " + GENERIC_MAX_COST_LINES + " client revenue lines.", "warning");
         return;
       }
-      state.rows.push(blankGenericRow("costingRevenue"));
+      costingRows.push(blankGenericRow("costingRevenue"));
+      if (isGenericCostingSupportState(state)) state.rows = costingRows;
+      else state.costingSummaryRows = costingRows;
     }
 
     if (action === "add-generic-row") {
@@ -3315,9 +3371,13 @@
       state.rows.push(blankGenericRow(rowKind));
     }
 
-    if (action === "remove-generic-row" && rowIndex >= 0 && rowIndex < state.rows.length) {
-      state.rows.splice(rowIndex, 1);
-      if (!state.rows.length && !isCostingRowsLayout(state.layoutId)) state.rows.push(blankGenericRow(state.layoutId === GENERIC_LAYOUTS.CRITICAL_PATH ? "milestone" : "person"));
+    if (action === "remove-generic-row") {
+      if (isCostingRowsLayout(state.layoutId) && !isGenericCostingSupportState(state)) {
+        if (rowIndex >= 0 && rowIndex < state.costingSummaryRows.length) state.costingSummaryRows.splice(rowIndex, 1);
+      } else if (rowIndex >= 0 && rowIndex < state.rows.length) {
+        state.rows.splice(rowIndex, 1);
+        if (!state.rows.length && !isCostingRowsLayout(state.layoutId)) state.rows.push(blankGenericRow(state.layoutId === GENERIC_LAYOUTS.CRITICAL_PATH ? "milestone" : "person"));
+      }
     }
 
     editor.current = normaliseGenericState(state);
@@ -3334,16 +3394,8 @@
 
   function genericStateSignature(state) {
     state = normaliseGenericState(state || {});
-    return JSON.stringify({
-      layoutId: state.layoutId,
-      title: $.trim(String(state.title || "")),
-      titleSuffix: String(state.titleSuffix || ""),
-      hidden: !!state.hidden,
-      additionalOptions: !!state.additionalOptions,
-      cascadeAdditionalOptions: !!state.cascadeAdditionalOptions,
-      blurb: $.trim(String(state.blurb || "")),
-      technical: $.trim(String(state.technical || "")),
-      rows: (state.rows || []).map(function (row) {
+    function serialiseRows(rows) {
+      return (rows || []).map(function (row) {
         row = normaliseGenericRow(row);
         return {
           id: row.id,
@@ -3354,7 +3406,21 @@
           imageUrl: $.trim(row.imageUrl),
           revenue: $.trim(row.revenue)
         };
-      })
+      });
+    }
+
+    return JSON.stringify({
+      layoutId: state.layoutId,
+      title: $.trim(String(state.title || "")),
+      titleSuffix: String(state.titleSuffix || ""),
+      hidden: !!state.hidden,
+      additionalOptions: !!state.additionalOptions,
+      cascadeAdditionalOptions: !!state.cascadeAdditionalOptions,
+      blurb: $.trim(String(state.blurb || "")),
+      technical: $.trim(String(state.technical || "")),
+      rows: serialiseRows(state.rows),
+      costingSummaryRows: serialiseRows(state.costingSummaryRows),
+      costingUseRows: serialiseRows(state.costingUseRows)
     });
   }
 
@@ -3386,7 +3452,7 @@
     }
 
     if (state.layoutId === GENERIC_LAYOUTS.DEPT_TABLE) {
-      var costingRows = state.rows.filter(isMeaningfulGenericRow);
+      var costingRows = (isGenericCostingSupportState(state) ? state.rows : state.costingSummaryRows).filter(isMeaningfulGenericRow);
       for (var c = 0; c < costingRows.length; c++) {
         if (!$.trim(costingRows[c].name)) return "Each client revenue line needs a name.";
         if (!$.trim(costingRows[c].revenue)) return "Each client revenue line needs a revenue value.";
@@ -3475,10 +3541,21 @@
       saved.rows = await saveGenericManagedRows(jobId, saved);
     }
 
-    if (isCostingRowsLayout(saved.layoutId) && normalizeGenericMatchText(saved.title) === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE)) {
-      saved.rows = await saveCostingRevenueRows(jobId, saved);
-    } else if (isCostingRowsLayout(saved.layoutId)) {
-      saved.rows = [];
+    if (isCostingRowsLayout(saved.layoutId)) {
+      if (isGenericCostingSummaryState(saved)) {
+        saved.rows = await saveCostingRevenueRows(jobId, saved);
+      } else if (isGenericCostingSupportState(saved)) {
+        saved.rows = [];
+      } else {
+        var summaryRowsToSave = (saved.costingSummaryRows || []).map(normaliseGenericRow).filter(isMeaningfulGenericRow);
+        if (summaryRowsToSave.length || saved.costingTechnicalSummaryId || (saved.originalCostingSummaryIds || []).length) {
+          var summaryFolderId = await ensureCostingSupportFolder(jobId, tree, rootNode, saved, COSTING_TECHNICAL_SUMMARY_TITLE, false);
+          saved.costingTechnicalSummaryId = summaryFolderId;
+          saved.costingSummaryRows = await saveCostingRevenueRowsToFolder(jobId, saved, summaryFolderId, summaryRowsToSave, saved.originalCostingSummaryIds);
+          saved.originalCostingSummaryIds = saved.costingSummaryRows.map(function (row) { return row.id; }).filter(Boolean);
+        }
+        saved.rows = [];
+      }
     }
 
     if (saved.renderType === "section" && saved.cascadeAdditionalOptions) {
@@ -3499,8 +3576,12 @@
   }
 
   async function saveCostingRevenueRows(jobId, state) {
-    var rowsToSave = (state.rows || []).map(normaliseGenericRow).filter(isMeaningfulGenericRow);
-    var originalIds = normaliseIdList(state.originalManagedIds || []);
+    return saveCostingRevenueRowsToFolder(jobId, state, state.rootId, state.rows || [], state.originalManagedIds || []);
+  }
+
+  async function saveCostingRevenueRowsToFolder(jobId, state, folderId, rows, originalIds) {
+    var rowsToSave = (rows || []).map(normaliseGenericRow).filter(isMeaningfulGenericRow);
+    originalIds = normaliseIdList(originalIds || []);
     var keepIds = [];
     var savedRows = [];
 
@@ -3510,7 +3591,7 @@
         setStatus("Saving client revenue line " + String(i + 1) + "...", "info");
         var result = await saveCostingRevenueItemDirect({
           jobId: jobId,
-          parentId: state.rootId,
+          parentId: folderId,
           row: row,
           sourceData: row.nodeData || {}
         });
@@ -3519,7 +3600,7 @@
           ID: row.id,
           title: row.name,
           TITLE: row.name,
-          PRICE: row.revenue || "",
+          PRICE: "0",
           UNIT_PRICE: "0",
           VALUE: normaliseMoneyForPayload(row.revenue || ""),
           ADDITIONAL: row.additional || "",
@@ -3547,7 +3628,7 @@
     var data = row.nodeData || {};
     if (!row.id) return true;
     return String(row.name || "") !== getGenericDataField(data, ["title", "TITLE", "name", "NAME"]) ||
-      normaliseMoneyForPayload(row.revenue || "") !== normaliseMoneyForPayload(getGenericDataField(data, ["PRICE", "price", "VALUE", "value"])) ||
+      normaliseMoneyForPayload(row.revenue || "") !== normaliseMoneyForPayload(getGenericDataField(data, ["VALUE", "value", "TOTAL", "total", "PRICE", "price"])) ||
       String(row.additional || "") !== getGenericDataField(data, ["ADDITIONAL", "DESCRIPTION", "additional"]) ||
       String(row.technical || "") !== getGenericDataField(data, ["TECHNICAL", "technical"]);
   }
@@ -3585,7 +3666,7 @@
       category_id: String(source.CATEGORY_ID == null ? 0 : source.CATEGORY_ID),
       no_shortfall: String(source.NO_SHORTFALL == 1 ? 1 : 0),
       unit_price: "0",
-      price: revenue,
+      price: "0",
       job: String(options.jobId || ""),
       no_availability: "0",
       ignore: "0"
@@ -3658,6 +3739,78 @@
     return prefix + titleForStorage(parsed.name || "");
   }
 
+  async function ensureCostingSupportFolder(jobId, tree, rootNode, state, title, hidden) {
+    state = normaliseGenericState(state || {});
+    var isSummary = normalizeGenericMatchText(title) === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE);
+    var isUse = normalizeGenericMatchText(title) === normalizeGenericMatchText(COSTING_TECHNICAL_USE_TITLE);
+    var preferSibling = isGenericCostingSupportState(state);
+    var existingId = isSummary ? state.costingTechnicalSummaryId : (isUse ? state.costingTechnicalUseId : "");
+    var folderId = String(existingId || findSiblingOrChildHeadingDataId(tree, rootNode, title, preferSibling) || "");
+
+    if (folderId) {
+      await normaliseCostingSupportFolderHeading(jobId, tree, folderId, title, hidden);
+      return folderId;
+    }
+
+    var parentId = preferSibling ? state.parentId : (state.rootId || getNodeDataId(rootNode));
+    if (!parentId) throw new Error("Save this costing page first, then create the support folder.");
+
+    setStatus("Creating " + (hidden ? "hidden // " : "") + title + " folder...", "info");
+    var created = await saveHeadingItemDirect({
+      jobId: jobId,
+      id: "",
+      parentId: parentId,
+      rawName: (hidden ? "// " : "") + title,
+      allowPlainRawName: true,
+      renderType: "normal",
+      title: title,
+      desc: "",
+      memo: "",
+      flag: 0,
+      customFields: ""
+    });
+
+    return String(created.id || "");
+  }
+
+  async function normaliseCostingSupportFolderHeading(jobId, tree, folderId, title, hidden) {
+    var node = findHeadingNodeByDataId(tree, folderId);
+    if (!node) return;
+
+    var expectedRaw = (hidden ? "// " : "") + title;
+    var raw = getNodeRawTitle(node);
+    var parsed = parseHeadingBaseMeta(raw);
+    var hasWrongRenderType = parsed.renderType !== "normal";
+    var hasWrongVisibility = !!parsed.hidden !== !!hidden;
+    var hasWrongTitle = normalizeGenericMatchText(parsed.name || getNodeTitle(node)) !== normalizeGenericMatchText(title);
+
+    if (!hasWrongRenderType && !hasWrongVisibility && !hasWrongTitle && normaliseWhitespace(raw) === normaliseWhitespace(expectedRaw)) return;
+
+    setStatus("Normalising " + title + " support folder...", "info");
+    await saveHeadingItemDirect({
+      jobId: jobId,
+      id: folderId,
+      parentId: getParentHeadingDataId(tree, node),
+      rawName: expectedRaw,
+      allowPlainRawName: true,
+      renderType: "normal",
+      title: title,
+      desc: getNodeDescription(node),
+      memo: getNodeTechnical(node),
+      flag: getNodeFlag(node),
+      customFields: getNodeCustomFields(node)
+    });
+  }
+
+  function findHeadingNodeByDataId(tree, dataId) {
+    if (!tree || !dataId) return null;
+    var nodes = getAllHeadingNodes(tree);
+    for (var i = 0; i < nodes.length; i++) {
+      if (getNodeDataId(nodes[i]) === String(dataId)) return nodes[i];
+    }
+    return null;
+  }
+
   async function openTechnicalSummaryEditor(state) {
     state = normaliseGenericState(state || editor.current || {});
     var jobId = getCurrentJobId();
@@ -3666,54 +3819,23 @@
       return;
     }
 
-    var currentTitle = normalizeGenericMatchText(state.title);
-    var isTechnicalSummary = currentTitle === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE);
-    var isTechnicalUse = currentTitle === normalizeGenericMatchText(COSTING_TECHNICAL_USE_TITLE);
-    if (isTechnicalSummary) {
-      setStatus("You are already editing Technical Summary. Add client revenue lines below.", "info");
-      return;
-    }
-
-    var treeNow = getTree();
-    var folderId = String(state.costingTechnicalSummaryId || findSiblingOrChildHeadingDataId(treeNow, editor.rootNode, COSTING_TECHNICAL_SUMMARY_TITLE, isTechnicalUse) || "");
-    var technicalSummaryParentId = isTechnicalUse ? state.parentId : state.rootId;
-    if (!folderId) {
-      try {
-        setStatus("Creating visible Technical Summary folder...", "info");
-        var created = await saveHeadingItemDirect({
-          jobId: jobId,
-          id: "",
-          parentId: technicalSummaryParentId,
-          rawName: COSTING_TECHNICAL_SUMMARY_TITLE,
-          allowPlainRawName: true,
-          renderType: "normal",
-          title: COSTING_TECHNICAL_SUMMARY_TITLE,
-          desc: "",
-          memo: "",
-          flag: 0,
-          customFields: ""
-        });
-        folderId = String(created.id || "");
-        state.costingTechnicalSummaryId = folderId;
-        if (editor.current) editor.current.costingTechnicalSummaryId = folderId;
-        refreshSupplyingList();
-      } catch (err) {
-        warn("Could not create Technical Summary folder", err);
-        setStatus(getErrorMessage(err, "Could not create the Technical Summary folder."), "error");
-        return;
+    try {
+      var folderId = await ensureCostingSupportFolder(jobId, getTree(), editor.rootNode, state, COSTING_TECHNICAL_SUMMARY_TITLE, false);
+      state.costingTechnicalSummaryId = folderId;
+      if (!state.costingSummaryRows.length && !isGenericCostingSupportState(state)) {
+        state.costingSummaryRows.push(blankGenericRow("costingRevenue"));
       }
-    }
-
-    setStatus("Opening Technical Summary editor...", "info");
-    setTimeout(function () {
-      var tree = getTree();
-      var selected = selectTreeHeadingByDataId(tree, folderId);
-      if (!selected) {
-        setStatus("Technical Summary is ready. Select it in the supplying list to add client revenue lines.", "warning");
-        return;
+      if (isGenericCostingSummaryState(state) && !state.rows.length) {
+        state.rows.push(blankGenericRow("costingRevenue"));
       }
-      openEditor();
-    }, 900);
+      editor.current = normaliseGenericState(state);
+      renderEditor(editor.current);
+      refreshSupplyingList();
+      setStatus("Technical Summary is ready. Add client-facing revenue lines below; the parent Dept page stays selected as the visual context.", "success");
+    } catch (err) {
+      warn("Could not create Technical Summary folder", err);
+      setStatus(getErrorMessage(err, "Could not create the Technical Summary folder."), "error");
+    }
   }
 
   async function openTechnicalUsePicker(state) {
@@ -3724,40 +3846,16 @@
       return;
     }
 
-    var currentTitle = normalizeGenericMatchText(state.title);
-    var isTechnicalSummary = currentTitle === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE);
-    var isTechnicalUse = currentTitle === normalizeGenericMatchText(COSTING_TECHNICAL_USE_TITLE);
-    var technicalUseParentId = isTechnicalSummary ? state.parentId : state.rootId;
-    var treeNow = getTree();
-    var folderId = isTechnicalUse
-      ? String(state.rootId || "")
-      : String(state.costingTechnicalUseId || findSiblingOrChildHeadingDataId(treeNow, editor.rootNode, COSTING_TECHNICAL_USE_TITLE, isTechnicalSummary) || "");
-
-    if (!folderId) {
-      try {
-        setStatus("Creating hidden // Technical Use folder...", "info");
-        var created = await saveHeadingItemDirect({
-          jobId: jobId,
-          id: "",
-          parentId: technicalUseParentId,
-          rawName: "// " + COSTING_TECHNICAL_USE_TITLE,
-          allowPlainRawName: true,
-          renderType: "normal",
-          title: COSTING_TECHNICAL_USE_TITLE,
-          desc: "",
-          memo: "",
-          flag: 0,
-          customFields: ""
-        });
-        folderId = String(created.id || "");
-        state.costingTechnicalUseId = folderId;
-        if (editor.current) editor.current.costingTechnicalUseId = folderId;
-        refreshSupplyingList();
-      } catch (err) {
-        warn("Could not create Technical Use folder", err);
-        setStatus(getErrorMessage(err, "Could not create the hidden Technical Use folder."), "error");
-        return;
-      }
+    var folderId = "";
+    try {
+      folderId = await ensureCostingSupportFolder(jobId, getTree(), editor.rootNode, state, COSTING_TECHNICAL_USE_TITLE, true);
+      state.costingTechnicalUseId = folderId;
+      if (editor.current) editor.current.costingTechnicalUseId = folderId;
+      refreshSupplyingList();
+    } catch (err) {
+      warn("Could not create Technical Use folder", err);
+      setStatus(getErrorMessage(err, "Could not create the hidden Technical Use folder."), "error");
+      return;
     }
 
     setStatus("Opening native picker for // Technical Use...", "info");
