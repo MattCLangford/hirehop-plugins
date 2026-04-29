@@ -242,8 +242,14 @@
       setStatus("", "");
     });
 
-    $("#" + CFG.bodyId).on("change", '[data-generic-field="renderType"]', function () {
+    $("#" + CFG.bodyId).on("change", '[data-generic-field="renderType"]', async function () {
       if (editor.saving || editor.mode !== MODE_GENERIC) return;
+      var nextRenderType = String($(this).val() || "");
+      if (nextRenderType === "dept" && shouldOpenGenericDeptChildFromSection()) {
+        $(this).val("section");
+        await openOrCreateGenericDeptChildFromSection();
+        return;
+      }
       editor.current = readGenericFormState(editor.current);
       renderEditor(editor.current);
       setStatus("", "");
@@ -256,6 +262,14 @@
       if (!$img.length) $img = $('<img alt="">').prependTo($panel);
       if (url) $img.attr("src", url);
       else $img.remove();
+    });
+
+    $("#" + CFG.bodyId).on("input", '[data-generic-field="technical"]', function () {
+      syncGenericPageImagePreview($(this));
+    });
+
+    $("#" + CFG.bodyId).on("input", '[data-generic-row-field="imageUrl"]', function () {
+      syncGenericRowImagePreview($(this));
     });
 
     $("#" + CFG.bodyId).on("click", "[data-weo-action]", function (e) {
@@ -1845,7 +1859,7 @@
   }
 
   function setBusy(isBusy) {
-    $("#" + CFG.bodyId).find("input,textarea,button").prop("disabled", !!isBusy);
+    $("#" + CFG.bodyId).find("input,textarea,button,select").prop("disabled", !!isBusy);
     $("#" + CFG.closeId + ",#" + CFG.modalId + " .weo-x").prop("disabled", !!isBusy);
     $("#" + CFG.saveId).prop("disabled", !!isBusy).text(isBusy ? "Saving..." : "Save changes");
   }
@@ -2596,6 +2610,24 @@
     return "";
   }
 
+  function findDeptChildHeadingNode(tree, node, targetTitle) {
+    if (!tree || !node) return null;
+
+    var children = getDirectChildHeadingNodes(tree, node);
+    var target = normalizeGenericMatchText(targetTitle);
+    var fallback = null;
+
+    for (var i = 0; i < children.length; i++) {
+      var child = children[i];
+      var parsed = parseHeadingBaseMeta(getNodeRawTitle(child));
+      if (parsed.renderType !== "dept") continue;
+      if (!fallback) fallback = child;
+      if (!target || normalizeGenericMatchText(parsed.name || getNodeTitle(child)) === target) return child;
+    }
+
+    return fallback;
+  }
+
   function getGenericRenderTypeForStorage(headingMeta, title) {
     var normalisedTitle = normalizeGenericMatchText(title || (headingMeta && headingMeta.name) || "");
     if (normalisedTitle === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE) ||
@@ -2611,6 +2643,102 @@
     var text = normaliseText(getNodeRawTitle(node));
     if (/^section\b/.test(text)) return "section";
     return "dept";
+  }
+
+  function shouldOpenGenericDeptChildFromSection() {
+    if (editor.mode !== MODE_GENERIC || !editor.rootNode) return false;
+
+    var state = normaliseGenericState(editor.current || {});
+    if (state.layoutId !== GENERIC_LAYOUTS.SECTION_COVER) return false;
+
+    return parseHeadingBaseMeta(getNodeRawTitle(editor.rootNode)).renderType === "section";
+  }
+
+  async function openOrCreateGenericDeptChildFromSection() {
+    var tree = getTree();
+    var sectionNode = editor.rootNode;
+    if (!tree || !sectionNode) {
+      setStatus("Could not find the current Section page.", "error");
+      return;
+    }
+
+    var jobId = getCurrentJobId();
+    if (!jobId) {
+      setStatus("Could not detect the current job ID.", "error");
+      return;
+    }
+
+    var state = readGenericFormState(editor.current);
+    var error = validateGenericState(state);
+    if (error) {
+      setStatus(error, "error");
+      editor.current = normaliseGenericState(state);
+      renderEditor(editor.current);
+      return;
+    }
+
+    var sectionId = getNodeDataId(sectionNode);
+    var deptTitle = cleanHeadingTitle(state.title || getNodeTitle(sectionNode) || "New Dept");
+    var deptNode = findDeptChildHeadingNode(tree, sectionNode, deptTitle);
+    var deptId = deptNode ? getNodeDataId(deptNode) : "";
+
+    editor.saving = true;
+    setBusy(true);
+
+    try {
+      if (genericStateSignature(state) !== genericStateSignature(editor.original || {})) {
+        setStatus("Saving Section page first...", "info");
+        var savedSection = await applyGenericPageState(jobId, tree, sectionNode, state);
+        editor.original = clone(savedSection);
+        editor.current = clone(savedSection);
+      }
+
+      if (!deptId) {
+        setStatus("Creating Dept page...", "info");
+        var created = await saveHeadingItemDirect({
+          jobId: jobId,
+          id: "",
+          parentId: sectionId,
+          renderType: "dept",
+          title: deptTitle,
+          desc: "",
+          memo: composeStoredPageMetaText("", buildGenericPageMeta({ layoutId: GENERIC_LAYOUTS.DEPT_TABLE }, null)),
+          flag: getNodeFlag(sectionNode),
+          customFields: getNodeCustomFields(sectionNode)
+        });
+        deptId = String(created.id || "");
+      }
+
+      refreshSupplyingList();
+      setTimeout(refreshSupplyingList, 450);
+      await delay(950);
+
+      tree = getTree();
+      var freshSectionNode = findHeadingNodeByDataId(tree, sectionId) || sectionNode;
+      deptNode = findHeadingNodeByDataId(tree, deptId) || findDeptChildHeadingNode(tree, freshSectionNode, deptTitle);
+      if (!deptNode) {
+        setStatus("Dept page is ready in the supplying list. Select it and open the editor again if it does not appear immediately.", "warning");
+        return;
+      }
+
+      selectTreeHeadingByDataId(tree, deptId || getNodeDataId(deptNode));
+      editor.mode = MODE_GENERIC;
+      editor.rootNode = deptNode;
+      editor.original = readGenericPageState(tree, deptNode);
+      editor.current = clone(editor.original);
+      editor.selectedRegionId = "";
+      setModalTitle("Proposal Page Editor", "Edit the selected proposal page visually. Costing table rows are left untouched unless this is a people or timeline style page.");
+      renderEditor(editor.current);
+      setStatus("Opened Dept costing page.", "success");
+    } catch (err) {
+      warn("Could not open Dept child page", err);
+      setStatus(getErrorMessage(err, "Could not open the Dept costing page."), "error");
+      editor.current = normaliseGenericState(state);
+      renderEditor(editor.current);
+    } finally {
+      editor.saving = false;
+      setBusy(false);
+    }
   }
 
   function splitEditableTitleSuffix(title) {
@@ -2775,7 +2903,7 @@
       additional: getGenericDataField(data, ["ADDITIONAL", "DESCRIPTION", "additional"]),
       technical: getGenericDataField(data, ["TECHNICAL", "technical"]),
       imageUrl: getGenericDataField(data, ["IMAGE_URL", "image_url", "IMG_URL", "img_url"]),
-      revenue: getGenericDataField(data, ["VALUE", "value", "TOTAL", "total", "PRICE", "price", "UNIT_PRICE", "unit_price"]),
+      revenue: getGenericRevenueFieldValue(data),
       qty: getGenericDataField(data, ["QTY", "qty"]),
       nodeData: cloneItemSnapshot(data)
     });
@@ -2795,6 +2923,46 @@
       if (data[keys[i]] != null) return String(data[keys[i]] || "");
     }
     return "";
+  }
+
+  function getGenericRevenueFieldValue(data) {
+    data = data || {};
+    var sellKeys = ["PRICE", "price", "UNIT_PRICE", "unit_price", "TOTAL", "total"];
+    var firstSellValue = "";
+    var hasSellValue = false;
+    var hasNonZeroSellValue = false;
+
+    for (var i = 0; i < sellKeys.length; i++) {
+      if (data[sellKeys[i]] == null) continue;
+      var sellValue = String(data[sellKeys[i]] || "");
+      if (!hasSellValue) firstSellValue = sellValue;
+      hasSellValue = true;
+      if (normaliseMoneyForPayload(sellValue) !== "0") {
+        hasNonZeroSellValue = true;
+        return sellValue;
+      }
+    }
+
+    var expectedCostValue = getGenericDataField(data, ["VALUE", "value"]);
+    if (hasSellValue && !hasNonZeroSellValue && normaliseMoneyForPayload(expectedCostValue) !== "0") return expectedCostValue;
+    return expectedCostValue || firstSellValue;
+  }
+
+  function isLegacyRevenueStoredInExpectedCost(data) {
+    data = data || {};
+    var sellKeys = ["PRICE", "price", "UNIT_PRICE", "unit_price", "TOTAL", "total"];
+    var hasNonZeroSellValue = false;
+
+    for (var i = 0; i < sellKeys.length; i++) {
+      if (data[sellKeys[i]] == null) continue;
+      if (normaliseMoneyForPayload(String(data[sellKeys[i]] || "")) !== "0") {
+        hasNonZeroSellValue = true;
+        break;
+      }
+    }
+
+    var expectedCostValue = getGenericDataField(data, ["VALUE", "value"]);
+    return !hasNonZeroSellValue && normaliseMoneyForPayload(expectedCostValue) !== "0";
   }
 
   function normaliseGenericState(state) {
@@ -2892,7 +3060,7 @@
         : "This editor updates the heading title, description and technical/image field. Existing costing rows are not changed.");
 
     if (state.layoutId === GENERIC_LAYOUTS.SECTION_COVER) {
-      note = "This title cover layout can save as either a Section or Dept heading.";
+      note = "This title cover is the Section page. Use the dropdown to open or create a child Dept costing page under this section.";
     }
     if (state.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
       note = "Details is a locked container. Keep the heading named Details; use the suffix selector only, then select a nested page heading to edit the pages inside.";
@@ -2919,15 +3087,15 @@
     var controls = [];
     if (state.layoutId === GENERIC_LAYOUTS.SECTION_COVER) {
       controls.push(genericRenderTypeSelectHtml(state.renderType, [
-        ["section", "Section heading"],
-        ["dept", "Dept heading"]
+        ["section", "Section cover"],
+        ["dept", "Open Dept costing page"]
       ]));
     }
     if (state.layoutId !== GENERIC_LAYOUTS.DETAILS_CONTAINER) {
-      controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="hidden"' + (state.hidden ? ' checked' : '') + '> Hide from render //</label>');
-      controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="additionalOptions"' + (state.additionalOptions ? ' checked' : '') + '> Use $ modifier</label>');
+      controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="hidden"' + (state.hidden ? ' checked' : '') + '> Hide page //</label>');
+      controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="additionalOptions"' + (state.additionalOptions ? ' checked' : '') + '> Optional Items $</label>');
       if (state.renderType === "section") {
-        controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="cascadeAdditionalOptions"' + (state.cascadeAdditionalOptions || state.additionalOptions ? ' checked' : '') + '> Apply $ to nested Dept pages</label>');
+        controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="cascadeAdditionalOptions"' + (state.cascadeAdditionalOptions || state.additionalOptions ? ' checked' : '') + '> Apply Optional Items to nested Dept pages</label>');
       }
     }
 
@@ -2965,7 +3133,7 @@
   }
 
   function genericRenderTypeSelectHtml(current, options) {
-    var html = '<label class="wpe-select-pill">Heading <select data-generic-field="renderType">';
+    var html = '<label class="wpe-select-pill">Open <select data-generic-field="renderType">';
     for (var i = 0; i < options.length; i++) {
       var value = options[i][0];
       var label = options[i][1];
@@ -3075,6 +3243,48 @@
     return '<div class="wpe-image-preview ' + (extraClass || "") + '">' + (url ? '<img alt="" src="' + attr(url) + '">' : '<span>Image</span>') + '</div>';
   }
 
+  function setImagePreviewUrl($preview, url) {
+    if (!$preview || !$preview.length) return;
+
+    var nextUrl = $.trim(String(url || ""));
+    var $img = $preview.find("img").first();
+    var $placeholder = $preview.children("span").first();
+
+    if (nextUrl) {
+      if (!$img.length) $img = $('<img alt="">').prependTo($preview);
+      $img.attr("src", nextUrl);
+      if ($placeholder.length) $placeholder.hide();
+      return;
+    }
+
+    if ($img.length) $img.remove();
+    if ($placeholder.length) $placeholder.show();
+    else $preview.append("<span>Image</span>");
+  }
+
+  function syncGenericPageImagePreview($input) {
+    if (!$input || !$input.length) return;
+    var url = $.trim(String($input.val() || ""));
+    var $scope = $input.closest(".wpe-image-url").parent();
+    if (!$scope.length) $scope = $input.closest(".wpe-proof");
+    setImagePreviewUrl($scope.find(".wpe-image-preview").first(), url);
+  }
+
+  function syncGenericRowImagePreview($input) {
+    if (!$input || !$input.length) return;
+    var url = $.trim(String($input.val() || ""));
+    var $row = $input.closest("[data-generic-row-uid]");
+    if (!$row.length) return;
+
+    var $preview = $row.find(".wpe-image-preview").first();
+    if (!$preview.length && $row.hasClass("wpe-pm-person")) {
+      $preview = $row.closest(".wpe-pm-stage").find(".wpe-pm-image").first();
+      if (!url) url = $.trim(String(normaliseGenericState(editor.current || {}).technical || ""));
+    }
+
+    setImagePreviewUrl($preview, url);
+  }
+
   function genericHeroHtml(state) {
     return '' +
       '<div class="wpe-proof is-dark wpe-on-image">' +
@@ -3152,7 +3362,7 @@
 
   function costingPreviewRowHtml(row, hidden) {
     row = normaliseGenericRow(row);
-    var price = row.revenue || getGenericDataField(row.nodeData || {}, ["VALUE", "value", "TOTAL", "total", "PRICE", "price", "UNIT_PRICE", "unit_price"]);
+    var price = row.revenue || getGenericRevenueFieldValue(row.nodeData || {});
     return '<div class="wpe-cost-preview-row' + (hidden ? ' is-hidden' : '') + '">' +
       '<span>' + esc(row.name || 'Untitled item') + '</span>' +
       '<span class="wpe-cost-preview-price">' + esc(price ? formatCostPreviewMoney(price) : '') + '</span>' +
@@ -3674,13 +3884,17 @@
           sourceData: row.nodeData || {}
         });
         row.id = String(result.id || row.id || "");
+        var revenue = normaliseMoneyForPayload(row.revenue || "");
+        var expectedCost = getGenericDataField(row.nodeData || {}, ["VALUE", "value"]);
+        var legacyExpectedCost = isLegacyRevenueStoredInExpectedCost(row.nodeData || {});
         row.nodeData = extendSnapshot(row.nodeData, {
           ID: row.id,
           title: row.name,
           TITLE: row.name,
-          PRICE: "0",
-          UNIT_PRICE: "0",
-          VALUE: normaliseMoneyForPayload(row.revenue || ""),
+          PRICE: revenue,
+          UNIT_PRICE: revenue,
+          TOTAL: revenue,
+          VALUE: legacyExpectedCost ? "0" : (expectedCost || "0"),
           ADDITIONAL: row.additional || "",
           TECHNICAL: row.technical || ""
         });
@@ -3706,7 +3920,8 @@
     var data = row.nodeData || {};
     if (!row.id) return true;
     return String(row.name || "") !== getGenericDataField(data, ["title", "TITLE", "name", "NAME"]) ||
-      normaliseMoneyForPayload(row.revenue || "") !== normaliseMoneyForPayload(getGenericDataField(data, ["VALUE", "value", "TOTAL", "total", "PRICE", "price"])) ||
+      isLegacyRevenueStoredInExpectedCost(data) ||
+      normaliseMoneyForPayload(row.revenue || "") !== normaliseMoneyForPayload(getGenericRevenueFieldValue(data)) ||
       String(row.additional || "") !== getGenericDataField(data, ["ADDITIONAL", "DESCRIPTION", "additional"]) ||
       String(row.technical || "") !== getGenericDataField(data, ["TECHNICAL", "technical"]);
   }
@@ -3717,6 +3932,9 @@
     var row = normaliseGenericRow(options.row);
     var source = options.sourceData || {};
     var revenue = normaliseMoneyForPayload(row.revenue || "");
+    var sourceExpectedCost = isLegacyRevenueStoredInExpectedCost(source)
+      ? "0"
+      : String(source.value == null ? (source.VALUE == null ? 0 : source.VALUE) : source.value);
 
     return postItemsSave({
       parent: String(options.parentId || "0"),
@@ -3734,7 +3952,7 @@
       price_type: String(source.PRICE_TYPE == null ? 0 : source.PRICE_TYPE),
       weight: String(source.weight == null ? (source.WEIGHT == null ? 0 : source.WEIGHT) : source.weight),
       vat_rate: String(source.VAT_RATE == null ? getDefaultVatRate() : source.VAT_RATE),
-      value: revenue,
+      value: sourceExpectedCost,
       acc_nominal: String(source.ACC_NOMINAL == null ? getDefaultNominalId(1) : source.ACC_NOMINAL),
       acc_nominal_po: String(source.ACC_NOMINAL_PO == null ? getDefaultNominalId(2) : source.ACC_NOMINAL_PO),
       cost_price: String(source.COST_PRICE == null ? 0 : source.COST_PRICE),
@@ -3743,8 +3961,8 @@
       hs_code: String(source.HS_CODE || ""),
       category_id: String(source.CATEGORY_ID == null ? 0 : source.CATEGORY_ID),
       no_shortfall: String(source.NO_SHORTFALL == 1 ? 1 : 0),
-      unit_price: "0",
-      price: "0",
+      unit_price: revenue,
+      price: revenue,
       job: String(options.jobId || ""),
       no_availability: "0",
       ignore: "0"
@@ -3776,7 +3994,7 @@
       if (parsed.renderType !== "section" && parsed.renderType !== "dept") continue;
       var nextRawName = composeRawHeadingWithAdditionalOption(parsed, !!enabled);
       if (normaliseWhitespace(nextRawName) === normaliseWhitespace(raw)) continue;
-      setStatus("Updating nested $ modifier...", "info");
+      setStatus("Updating nested Optional Items setting...", "info");
       await saveHeadingItemDirect({
         jobId: jobId,
         id: getNodeDataId(node),
