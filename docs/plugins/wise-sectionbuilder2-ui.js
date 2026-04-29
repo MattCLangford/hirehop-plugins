@@ -5,7 +5,7 @@
   if (!$) return;
 
   var CFG = {
-    version: "2026-04-29.12-toolbar-polish-native-edit",
+    version: "2026-04-29.13-costing-folder-preview-picker",
     buttonId: "wise-proposal-page-editor-button",
     stylesId: "wise-proposal-page-editor-styles",
     overlayId: "wise-proposal-page-editor-overlay",
@@ -1691,7 +1691,7 @@
   async function saveHeadingItemDirect(options) {
     if (!options || !options.jobId) throw new Error("Missing heading save details.");
 
-    var name = options.rawName && shouldUseRawHeadingName(options.rawName)
+    var name = options.rawName && (shouldUseRawHeadingName(options.rawName) || options.allowPlainRawName)
       ? String(options.rawName)
       : composeStoredHeading(options.renderType || "section", options.title || "");
 
@@ -2365,6 +2365,16 @@
       "#" + CFG.modalId + " .wpe-costing-row{display:grid;grid-template-columns:minmax(0,1fr) 120px 70px;gap:6px;align-items:center;}",
       "#" + CFG.modalId + " .wpe-costing-row .wpe-field{font-size:11px;padding:6px 8px;}",
       "#" + CFG.modalId + " .wpe-costing-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center;}",
+      "#" + CFG.modalId + " .wpe-cost-preview{display:grid;gap:4px;margin-top:8px;border-top:1px solid rgba(236,151,151,.55);padding-top:7px;font-size:clamp(10px,.9vw,12px);}",
+      "#" + CFG.modalId + " .wpe-cost-preview-section{display:grid;gap:4px;}",
+      "#" + CFG.modalId + " .wpe-cost-preview-section + .wpe-cost-preview-section{margin-top:5px;padding-top:5px;border-top:1px dashed rgba(13,18,38,.16);}",
+      "#" + CFG.modalId + " .wpe-cost-preview-heading{font-weight:900;text-transform:uppercase;color:#0d1226;letter-spacing:.02em;}",
+      "#" + CFG.modalId + " .wpe-cost-preview-heading.is-hidden{color:rgba(13,18,38,.42);}",
+      "#" + CFG.modalId + " .wpe-cost-preview-row{display:grid;grid-template-columns:minmax(0,1fr) 72px;gap:8px;align-items:start;border-top:1px solid rgba(236,151,151,.35);padding-top:4px;}",
+      "#" + CFG.modalId + " .wpe-cost-preview-row:first-of-type{border-top:0;}",
+      "#" + CFG.modalId + " .wpe-cost-preview-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
+      "#" + CFG.modalId + " .wpe-cost-preview-price{text-align:right;font-weight:800;}",
+      "#" + CFG.modalId + " .wpe-cost-preview-empty{font-size:10px;color:rgba(13,18,38,.42);font-style:italic;}",
       "#" + CFG.modalId + " .wpe-page-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;border:1px solid #d9e2ec;border-radius:12px;background:#fff;padding:8px 10px;}",
       "#" + CFG.modalId + " .wpe-note-box{position:absolute;left:8%;right:8%;bottom:16%;z-index:6;border:1px dashed rgba(23,92,211,.32);border-radius:12px;background:rgba(255,255,255,.82);padding:12px;font-size:12px;line-height:1.4;color:#475467;}",
       "@media(max-width:900px){#" + CFG.modalId + " .wpe-topbar{display:grid;}#" + CFG.modalId + " .wpe-proof{min-width:720px;}#" + CFG.modalId + " .wpe-canvas-shell{padding:8px;}}"
@@ -2479,15 +2489,19 @@
     var directHeadings = getDirectChildHeadingNodes(tree, node);
     var genericRows = directRows.map(function (rowNode) { return readGenericRowState(rowNode, layoutId); });
     var managedRows = getManagedRowsForLayout(layoutId, genericRows);
-    var costingTechnicalSummaryId = findChildHeadingDataIdByName(directHeadings, COSTING_TECHNICAL_SUMMARY_TITLE);
-    var costingTechnicalUseId = findChildHeadingDataIdByName(directHeadings, COSTING_TECHNICAL_USE_TITLE);
+    var costingTechnicalSummaryNode = findChildHeadingByName(directHeadings, COSTING_TECHNICAL_SUMMARY_TITLE);
+    var costingTechnicalUseNode = findChildHeadingByName(directHeadings, COSTING_TECHNICAL_USE_TITLE);
+    var costingTechnicalSummaryId = costingTechnicalSummaryNode ? getNodeDataId(costingTechnicalSummaryNode) : "";
+    var costingTechnicalUseId = costingTechnicalUseNode ? getNodeDataId(costingTechnicalUseNode) : "";
+    var costingSummaryRows = costingTechnicalSummaryNode ? getDirectChildCustomNodes(tree, costingTechnicalSummaryNode).map(function (rowNode) { return readGenericRowState(rowNode, layoutId); }) : [];
+    var costingUseRows = costingTechnicalUseNode ? getDirectChildCustomNodes(tree, costingTechnicalUseNode).map(function (rowNode) { return readGenericRowState(rowNode, layoutId); }) : [];
 
     return normaliseGenericState({
       mode: MODE_GENERIC,
       rootId: getNodeDataId(node),
       parentId: getParentHeadingDataId(tree, node),
       rawName: rawTitle,
-      renderType: headingMeta.renderType === "section" ? "section" : (headingMeta.renderType === "dept" ? "dept" : inferRenderTypeFromNode(node)),
+      renderType: getGenericRenderTypeForStorage(headingMeta, titleInfo.title),
       hidden: !!headingMeta.hidden,
       additionalOptions: !!headingMeta.additionalOptions,
       title: titleInfo.title,
@@ -2504,8 +2518,19 @@
       originalManagedIds: managedRows.map(function (row) { return row.id; }).filter(Boolean),
       totalChildRows: directRows.length,
       costingTechnicalSummaryId: costingTechnicalSummaryId,
-      costingTechnicalUseId: costingTechnicalUseId
+      costingTechnicalUseId: costingTechnicalUseId,
+      costingSummaryRows: costingSummaryRows,
+      costingUseRows: costingUseRows
     });
+  }
+
+  function findChildHeadingByName(headings, targetName) {
+    var target = normalizeGenericMatchText(targetName);
+    for (var i = 0; i < (headings || []).length; i++) {
+      var title = normalizeGenericMatchText(getNodeTitle(headings[i]));
+      if (title === target) return headings[i];
+    }
+    return null;
   }
 
   function findChildHeadingDataIdByName(headings, targetName) {
@@ -2515,6 +2540,17 @@
       if (title === target) return getNodeDataId(headings[i]);
     }
     return "";
+  }
+
+  function getGenericRenderTypeForStorage(headingMeta, title) {
+    var normalisedTitle = normalizeGenericMatchText(title || (headingMeta && headingMeta.name) || "");
+    if (normalisedTitle === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE) ||
+        normalisedTitle === normalizeGenericMatchText(COSTING_TECHNICAL_USE_TITLE)) {
+      return "normal";
+    }
+    if (headingMeta && headingMeta.renderType === "section") return "section";
+    if (headingMeta && headingMeta.renderType === "dept") return "dept";
+    return "normal";
   }
 
   function inferRenderTypeFromNode(node) {
@@ -2679,7 +2715,7 @@
       rootId: String(state.rootId || ""),
       parentId: String(state.parentId || "0"),
       rawName: String(state.rawName || ""),
-      renderType: state.renderType === "section" ? "section" : "dept",
+      renderType: state.renderType === "section" ? "section" : (state.renderType === "normal" ? "normal" : "dept"),
       hidden: !!state.hidden,
       additionalOptions: !!state.additionalOptions,
       cascadeAdditionalOptions: !!state.cascadeAdditionalOptions,
@@ -2697,7 +2733,9 @@
       originalManagedIds: normaliseIdList(state.originalManagedIds || []),
       totalChildRows: Number(state.totalChildRows || 0) || 0,
       costingTechnicalSummaryId: String(state.costingTechnicalSummaryId || ""),
-      costingTechnicalUseId: String(state.costingTechnicalUseId || "")
+      costingTechnicalUseId: String(state.costingTechnicalUseId || ""),
+      costingSummaryRows: Array.isArray(state.costingSummaryRows) ? state.costingSummaryRows.map(normaliseGenericRow) : [],
+      costingUseRows: Array.isArray(state.costingUseRows) ? state.costingUseRows.map(normaliseGenericRow) : []
     };
   }
 
@@ -2938,6 +2976,7 @@
   }
 
   function genericDeptTableHtml(state) {
+    var costPreview = genericCostPreviewHtml(state);
     return '' +
       '<div class="wpe-proof">' +
         proofCommonHtml(false) +
@@ -2946,9 +2985,65 @@
           '<div class="wpe-kicker">' + esc(state.sectionTitle || "Section") + '</div>' +
           titleFieldHtml(state.title, "", "Dept title") +
           blurbFieldHtml(state.blurb, "", "Short blurb above the table") +
-          '<div class="wpe-note-box" style="position:static;">Costing/table rows are rendered from existing child items and are left untouched by this editor.</div>' +
+          costPreview +
         '</div>' +
       '</div>';
+  }
+
+  function genericCostPreviewHtml(state) {
+    if (!isCostingRowsLayout(state.layoutId)) return '';
+
+    var title = normalizeGenericMatchText(state.title);
+    var isTechnicalSummary = title === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE);
+    var isTechnicalUse = title === normalizeGenericMatchText(COSTING_TECHNICAL_USE_TITLE);
+
+    if (isTechnicalSummary) {
+      return costingPreviewSectionHtml(COSTING_TECHNICAL_SUMMARY_TITLE, state.rows || [], false);
+    }
+
+    if (isTechnicalUse) {
+      return costingPreviewSectionHtml('// ' + COSTING_TECHNICAL_USE_TITLE, state.rows || [], true);
+    }
+
+    var sections = [];
+    sections.push(costingPreviewSectionHtml(COSTING_TECHNICAL_SUMMARY_TITLE, state.costingSummaryRows || [], false));
+    sections.push(costingPreviewSectionHtml('// ' + COSTING_TECHNICAL_USE_TITLE + ' (hidden from client)', state.costingUseRows || [], true));
+    return '<div class="wpe-cost-preview">' + sections.join('') + '</div>';
+  }
+
+  function costingPreviewSectionHtml(title, rows, hidden) {
+    rows = (rows || []).map(normaliseGenericRow).filter(isMeaningfulGenericRow);
+    var html = '<div class="wpe-cost-preview-section">' +
+      '<div class="wpe-cost-preview-heading' + (hidden ? ' is-hidden' : '') + '">' + esc(title) + '</div>';
+
+    if (!rows.length) {
+      html += '<div class="wpe-cost-preview-empty">No rows yet.</div>';
+    } else {
+      for (var i = 0; i < rows.length; i++) {
+        html += costingPreviewRowHtml(rows[i], hidden);
+      }
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function costingPreviewRowHtml(row, hidden) {
+    row = normaliseGenericRow(row);
+    var price = row.revenue || getGenericDataField(row.nodeData || {}, ["PRICE", "price", "VALUE", "value", "UNIT_PRICE", "unit_price"]);
+    return '<div class="wpe-cost-preview-row' + (hidden ? ' is-hidden' : '') + '">' +
+      '<span>' + esc(row.name || 'Untitled item') + '</span>' +
+      '<span class="wpe-cost-preview-price">' + esc(price ? formatCostPreviewMoney(price) : '') + '</span>' +
+    '</div>';
+  }
+
+  function formatCostPreviewMoney(value) {
+    var raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^[£$€]/.test(raw)) return raw;
+    var n = normaliseMoneyForPayload(raw);
+    if (n === '0' && !/^0(?:\.0+)?$/.test(raw.replace(/[^0-9.]/g, ''))) return raw;
+    return '£' + n;
   }
 
   function genericVisualHtml(state) {
@@ -3366,6 +3461,7 @@
       id: saved.rootId || getNodeDataId(rootNode),
       parentId: saved.parentId || getParentHeadingDataId(tree, rootNode),
       rawName: headingName,
+      allowPlainRawName: saved.renderType === "normal",
       renderType: saved.renderType,
       title: saved.title,
       desc: saved.blurb,
@@ -3397,7 +3493,8 @@
     var prefix = "";
     if (state.hidden) prefix += "// ";
     if (state.additionalOptions) prefix += "$ ";
-    prefix += state.renderType === "section" ? "Section: " : "Dept: ";
+    if (state.renderType === "section") prefix += "Section: ";
+    else if (state.renderType === "dept") prefix += "Dept: ";
     return prefix + titleForStorage(state.title) + String(state.titleSuffix || "");
   }
 
@@ -3423,6 +3520,7 @@
           title: row.name,
           TITLE: row.name,
           PRICE: row.revenue || "",
+          UNIT_PRICE: "0",
           VALUE: normaliseMoneyForPayload(row.revenue || ""),
           ADDITIONAL: row.additional || "",
           TECHNICAL: row.technical || ""
@@ -3449,7 +3547,7 @@
     var data = row.nodeData || {};
     if (!row.id) return true;
     return String(row.name || "") !== getGenericDataField(data, ["title", "TITLE", "name", "NAME"]) ||
-      normaliseMoneyForPayload(row.revenue || "") !== normaliseMoneyForPayload(getGenericDataField(data, ["PRICE", "price", "VALUE", "value", "UNIT_PRICE", "unit_price"])) ||
+      normaliseMoneyForPayload(row.revenue || "") !== normaliseMoneyForPayload(getGenericDataField(data, ["PRICE", "price", "VALUE", "value"])) ||
       String(row.additional || "") !== getGenericDataField(data, ["ADDITIONAL", "DESCRIPTION", "additional"]) ||
       String(row.technical || "") !== getGenericDataField(data, ["TECHNICAL", "technical"]);
   }
@@ -3486,7 +3584,7 @@
       hs_code: String(source.HS_CODE || ""),
       category_id: String(source.CATEGORY_ID == null ? 0 : source.CATEGORY_ID),
       no_shortfall: String(source.NO_SHORTFALL == 1 ? 1 : 0),
-      unit_price: revenue,
+      unit_price: "0",
       price: revenue,
       job: String(options.jobId || ""),
       no_availability: "0",
@@ -3555,7 +3653,8 @@
     var prefix = "";
     if (parsed.hidden) prefix += "// ";
     if (enabled) prefix += "$ ";
-    prefix += parsed.renderType === "section" ? "Section: " : "Dept: ";
+    if (parsed.renderType === "section") prefix += "Section: ";
+    else if (parsed.renderType === "dept") prefix += "Dept: ";
     return prefix + titleForStorage(parsed.name || "");
   }
 
@@ -3568,21 +3667,26 @@
     }
 
     var currentTitle = normalizeGenericMatchText(state.title);
-    if (currentTitle === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE)) {
+    var isTechnicalSummary = currentTitle === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE);
+    var isTechnicalUse = currentTitle === normalizeGenericMatchText(COSTING_TECHNICAL_USE_TITLE);
+    if (isTechnicalSummary) {
       setStatus("You are already editing Technical Summary. Add client revenue lines below.", "info");
       return;
     }
 
-    var folderId = String(state.costingTechnicalSummaryId || "");
+    var treeNow = getTree();
+    var folderId = String(state.costingTechnicalSummaryId || findSiblingOrChildHeadingDataId(treeNow, editor.rootNode, COSTING_TECHNICAL_SUMMARY_TITLE, isTechnicalUse) || "");
+    var technicalSummaryParentId = isTechnicalUse ? state.parentId : state.rootId;
     if (!folderId) {
       try {
         setStatus("Creating visible Technical Summary folder...", "info");
         var created = await saveHeadingItemDirect({
           jobId: jobId,
           id: "",
-          parentId: state.rootId,
-          rawName: "Dept: " + COSTING_TECHNICAL_SUMMARY_TITLE,
-          renderType: "dept",
+          parentId: technicalSummaryParentId,
+          rawName: COSTING_TECHNICAL_SUMMARY_TITLE,
+          allowPlainRawName: true,
+          renderType: "normal",
           title: COSTING_TECHNICAL_SUMMARY_TITLE,
           desc: "",
           memo: "",
@@ -3620,10 +3724,14 @@
       return;
     }
 
-    var isTechnicalSummary = normalizeGenericMatchText(state.title) === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE);
+    var currentTitle = normalizeGenericMatchText(state.title);
+    var isTechnicalSummary = currentTitle === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE);
+    var isTechnicalUse = currentTitle === normalizeGenericMatchText(COSTING_TECHNICAL_USE_TITLE);
     var technicalUseParentId = isTechnicalSummary ? state.parentId : state.rootId;
     var treeNow = getTree();
-    var folderId = String(state.costingTechnicalUseId || findSiblingOrChildHeadingDataId(treeNow, editor.rootNode, COSTING_TECHNICAL_USE_TITLE, isTechnicalSummary) || "");
+    var folderId = isTechnicalUse
+      ? String(state.rootId || "")
+      : String(state.costingTechnicalUseId || findSiblingOrChildHeadingDataId(treeNow, editor.rootNode, COSTING_TECHNICAL_USE_TITLE, isTechnicalSummary) || "");
 
     if (!folderId) {
       try {
@@ -3632,8 +3740,9 @@
           jobId: jobId,
           id: "",
           parentId: technicalUseParentId,
-          rawName: "// Dept: " + COSTING_TECHNICAL_USE_TITLE,
-          renderType: "dept",
+          rawName: "// " + COSTING_TECHNICAL_USE_TITLE,
+          allowPlainRawName: true,
+          renderType: "normal",
           title: COSTING_TECHNICAL_USE_TITLE,
           desc: "",
           memo: "",
@@ -3656,10 +3765,12 @@
       var tree = getTree();
       var selected = selectTreeHeadingByDataId(tree, folderId);
       if (!selected) {
-        setStatus("// Technical Use is ready. Select that hidden folder, then use the Native line edit/New control to add listed items.", "warning");
+        setStatus("// Technical Use is ready. Select that hidden folder, then use the native New/list picker.", "warning");
         return;
       }
-      openNativeNewLineEditor();
+      // Hide the Wise modal before using HireHop's native picker. Otherwise the native popup can open behind this overlay.
+      $("#" + CFG.overlayId).hide();
+      setTimeout(function () { openNativeNewLineEditor({ preferListedItem: true }); }, 120);
     }, 900);
   }
 
@@ -3706,18 +3817,52 @@
     }).first();
   }
 
-  function openNativeNewLineEditor() {
+  function openNativeNewLineEditor(options) {
+    var opts = options || {};
     var $new = findNativeNewButton();
     if (!$new.length) {
       setStatus("Native HireHop New button could not be found. Select // Technical Use and use the native New/list picker.", "warning");
       return;
     }
     try {
-      $new.get(0).click();
+      clickElementLikeUser($new.get(0));
+      if (opts.preferListedItem) {
+        setTimeout(function () { clickLikelyListedItemMenuOption(); }, 350);
+        setTimeout(function () { clickLikelyListedItemMenuOption(); }, 900);
+      }
     } catch (err) {
       warn("Native new item picker failed", err);
       setStatus("Could not open the native item picker.", "error");
     }
+  }
+
+  function clickElementLikeUser(el) {
+    if (!el) return;
+    var events = ["mousedown", "mouseup", "click"];
+    for (var i = 0; i < events.length; i++) {
+      try {
+        el.dispatchEvent(new MouseEvent(events[i], { bubbles: true, cancelable: true, view: window }));
+      } catch (e) {}
+    }
+    try { el.click(); } catch (e2) {}
+  }
+
+  function clickLikelyListedItemMenuOption() {
+    var selector = 'button,a,[role="button"],li,div,span';
+    var $candidate = $(document.body).find(selector).filter(":visible").filter(function () {
+      var $el = $(this);
+      if ($el.closest("#" + CFG.overlayId).length) return false;
+      if ($el.closest("#items_tab").length && !$el.closest(".ui-menu,.ui-dialog,.popup,.modal,.dropdown,.context-menu").length) return false;
+      var text = $.trim($el.text() || $el.attr("title") || $el.attr("aria-label") || "");
+      if (!text || text.length > 80) return false;
+      return /^(?:item|list item|listed item|stock item|equipment|package|add item|add listed item)$/i.test(text);
+    }).first();
+
+    if ($candidate.length) {
+      clickElementLikeUser($candidate.get(0));
+      return true;
+    }
+    return false;
   }
 
   async function saveGenericManagedRows(jobId, state) {
