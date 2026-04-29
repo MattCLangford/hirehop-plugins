@@ -5,7 +5,7 @@
   if (!$) return;
 
   var CFG = {
-    version: "2026-04-29.10-default-supplying-list-editor",
+    version: "2026-04-29.11-default-editor-costing-modifiers-locks",
     buttonId: "wise-proposal-page-editor-button",
     stylesId: "wise-proposal-page-editor-styles",
     overlayId: "wise-proposal-page-editor-overlay",
@@ -139,7 +139,7 @@
       "#" + CFG.modalId + " textarea.weo-page-field{resize:none;line-height:1.25;}",
       "#" + CFG.modalId + " .weo-proof-kicker{font-family:'Albra Sans',Lato,'Segoe UI',Arial,sans-serif;font-size:clamp(11px,1.1vw,15px);line-height:1.05;color:var(--heritage);letter-spacing:.03em;margin-bottom:6px;}",
       "#" + CFG.modalId + " .weo-day-heading{font-weight:800;text-transform:uppercase;line-height:1.15;padding:6px 8px;font-size:clamp(11px,1.03vw,14px);}",
-      "#" + CFG.modalId + " .weo-day-blurb{min-height:42px;padding:7px 8px;font-size:clamp(10px,.94vw,13px);}",
+      "#" + CFG.modalId + " .weo-day-blurb{min-height:72px;padding:7px 8px;font-size:clamp(10px,.94vw,13px);}",
       "#" + CFG.modalId + " .weo-time-list{display:grid;gap:4px;margin-top:6px;}",
       "#" + CFG.modalId + " .weo-time-row{display:grid;grid-template-columns:minmax(54px,.34fr) 12px minmax(0,1fr) 23px;gap:4px;align-items:center;padding-top:4px;border-top:1px solid rgba(236,151,151,.48);}",
       "#" + CFG.modalId + " .weo-time-row:first-child{border-top:0;padding-top:0;}",
@@ -164,11 +164,11 @@
       "#" + CFG.modalId + " .weo-columns-grid{position:absolute;left:2.6%;right:2.6%;top:8%;bottom:12%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2.6%;z-index:3;}",
       "#" + CFG.modalId + " .weo-column{display:flex;flex-direction:column;min-width:0;min-height:0;}",
       "#" + CFG.modalId + " .weo-column .weo-page-title-fixed{position:static;width:100%;margin:0 0 8px 0;color:#0d1226;}",
-      "#" + CFG.modalId + " .weo-opening-field{min-height:54px;margin:0 0 10px 0;padding:7px 8px;font-size:clamp(10px,.93vw,13px);}",
+      "#" + CFG.modalId + " .weo-opening-field{min-height:86px;margin:0 0 10px 0;padding:7px 8px;font-size:clamp(10px,.93vw,13px);}",
       "#" + CFG.modalId + " .weo-col-schedule{display:flex;flex-direction:column;min-height:0;}",
       "#" + CFG.modalId + " .weo-col-schedule.is-empty{opacity:.82;}",
       "#" + CFG.modalId + " .weo-col-schedule .weo-day-heading{font-family:'Albra Sans',Lato,'Segoe UI',Arial,sans-serif;font-weight:400;font-size:clamp(17px,1.95vw,27px);line-height:1;text-transform:uppercase;padding:6px 8px;margin-top:6px;}",
-      "#" + CFG.modalId + " .weo-col-schedule .weo-day-blurb{min-height:38px;}",
+      "#" + CFG.modalId + " .weo-col-schedule .weo-day-blurb{min-height:64px;}",
       "#" + CFG.modalId + " .weo-editor-help{display:flex;flex-wrap:wrap;align-items:center;gap:6px;border:1px solid #d9e2ec;border-radius:12px;background:#fff;padding:8px 10px;font-size:11px;line-height:1.35;color:#475467;}",
       "#" + CFG.modalId + " .weo-editor-help span{display:inline-flex;align-items:center;border:1px solid #e4e8ef;border-radius:999px;background:#fbfcfe;padding:3px 7px;font-size:10px;font-weight:800;color:#667085;}",
       "#" + CFG.modalId + " .weo-editor-help strong{font-weight:800;color:#101828;}",
@@ -2202,11 +2202,15 @@
     CRITICAL_PATH: "critical-path",
     THANKYOU: "thankyou",
     SUSTAINABILITY: "sustainability",
-    ABOUT_US: "about-us"
+    ABOUT_US: "about-us",
+    DETAILS_CONTAINER: "details-container"
   };
 
   var GENERIC_MAX_PEOPLE = 8;
   var GENERIC_MAX_MILESTONES = 10;
+  var GENERIC_MAX_COST_LINES = 40;
+  var COSTING_TECHNICAL_SUMMARY_TITLE = "Technical Summary";
+  var COSTING_TECHNICAL_USE_TITLE = "Technical Use";
 
   function injectStyles() {
     injectEventOverviewStyles();
@@ -2243,7 +2247,7 @@
       "#" + CFG.modalId + " textarea.wpe-field{resize:none;line-height:1.25;}",
       "#" + CFG.modalId + " .wpe-heading{font-family:'Albra Sans',Lato,'Segoe UI',Arial,sans-serif;font-weight:400;text-transform:uppercase;line-height:.98;letter-spacing:.01em;}",
       "#" + CFG.modalId + " textarea.wpe-heading{font-size:clamp(25px,3vw,43px);padding:7px 9px;min-height:58px;}",
-      "#" + CFG.modalId + " .wpe-blurb{font-size:clamp(10px,.95vw,13px);padding:7px 8px;min-height:76px;}",
+      "#" + CFG.modalId + " .wpe-blurb{font-size:clamp(10px,.95vw,13px);padding:7px 8px;min-height:112px;}",
       "#" + CFG.modalId + " .wpe-small-label{display:block;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#98a2b3;margin:0 0 4px;}",
       "#" + CFG.modalId + " .wpe-kicker{font-family:'Albra Sans',Lato,'Segoe UI',Arial,sans-serif;font-size:clamp(12px,1.15vw,16px);line-height:1.05;color:#EC9797;letter-spacing:.03em;margin-bottom:6px;}",
       "#" + CFG.modalId + " .wpe-image-preview{position:relative;overflow:hidden;background:linear-gradient(145deg,#d9e2ec,#f8fafc);border:1px solid rgba(15,23,42,.12);border-radius:12px;min-height:80px;display:flex;align-items:center;justify-content:center;color:rgba(13,18,38,.42);font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;}",
@@ -2286,6 +2290,26 @@
       "#" + CFG.modalId + " .wpe-mini-btn{border:1px solid #cfd4dc;border-radius:999px;background:#fff;color:#1f2937;cursor:pointer;font-size:10px;font-weight:900;padding:5px 8px;line-height:1.1;}",
       "#" + CFG.modalId + " .wpe-mini-btn:hover{background:#f9fafb;}",
       "#" + CFG.modalId + " .wpe-mini-btn.is-danger{border-color:#fecdca;color:#b42318;}",
+      "#" + CFG.modalId + " .wpe-proof > .wpe-image-url,#" + CFG.modalId + " .wpe-full-image .wpe-image-url{left:auto;right:2.6%;top:4%;width:min(420px,38%);}",
+      "#" + CFG.modalId + " .wpe-visual-image{position:relative;}",
+      "#" + CFG.modalId + " .wpe-visual-image .wpe-image-url{left:14px;right:14px;top:14px;width:auto;}",
+      "#" + CFG.modalId + " .wpe-half-image .wpe-image-url{left:14px;right:14px;top:14px;width:auto;}",
+      "#" + CFG.modalId + " .wpe-modifier-strip{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px;}",
+      "#" + CFG.modalId + " .wpe-toggle-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #d9e2ec;border-radius:999px;background:#fbfcfe;padding:5px 8px;font-size:10px;font-weight:900;color:#475467;}",
+      "#" + CFG.modalId + " .wpe-toggle-pill input{margin:0;}",
+      "#" + CFG.modalId + " .wpe-select-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #d9e2ec;border-radius:999px;background:#fbfcfe;padding:4px 8px;font-size:10px;font-weight:900;color:#475467;}",
+      "#" + CFG.modalId + " .wpe-select-pill select{border:0;background:transparent;font-size:10px;font-weight:900;color:#101828;outline:0;}",
+      "#" + CFG.modalId + " .wpe-locked-panel{position:absolute;left:8%;right:8%;top:28%;z-index:6;border:1px dashed rgba(23,92,211,.30);border-radius:14px;background:rgba(255,255,255,.88);padding:18px;text-align:center;color:#344054;}",
+      "#" + CFG.modalId + " .wpe-locked-panel b{display:block;margin-bottom:6px;font-size:16px;color:#101828;}",
+      "#" + CFG.modalId + " .wpe-locked-panel p{margin:0 0 10px;font-size:12px;line-height:1.4;}",
+      "#" + CFG.modalId + " .wpe-costing-panel{display:grid;gap:8px;border:1px solid #d9e2ec;border-radius:12px;background:#fff;padding:10px;}",
+      "#" + CFG.modalId + " .wpe-costing-head{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;}",
+      "#" + CFG.modalId + " .wpe-costing-title{font-size:12px;font-weight:900;color:#101828;}",
+      "#" + CFG.modalId + " .wpe-costing-note{font-size:10px;color:#667085;line-height:1.35;margin-top:2px;}",
+      "#" + CFG.modalId + " .wpe-costing-lines{display:grid;gap:5px;}",
+      "#" + CFG.modalId + " .wpe-costing-row{display:grid;grid-template-columns:minmax(0,1fr) 120px 70px;gap:6px;align-items:center;}",
+      "#" + CFG.modalId + " .wpe-costing-row .wpe-field{font-size:11px;padding:6px 8px;}",
+      "#" + CFG.modalId + " .wpe-costing-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center;}",
       "#" + CFG.modalId + " .wpe-page-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;border:1px solid #d9e2ec;border-radius:12px;background:#fff;padding:8px 10px;}",
       "#" + CFG.modalId + " .wpe-note-box{position:absolute;left:8%;right:8%;bottom:16%;z-index:6;border:1px dashed rgba(23,92,211,.32);border-radius:12px;background:rgba(255,255,255,.82);padding:12px;font-size:12px;line-height:1.4;color:#475467;}",
       "@media(max-width:900px){#" + CFG.modalId + " .wpe-topbar{display:grid;}#" + CFG.modalId + " .wpe-proof{min-width:720px;}#" + CFG.modalId + " .wpe-canvas-shell{padding:8px;}}"
@@ -2397,8 +2421,11 @@
     var titleInfo = splitEditableTitleSuffix(getNodeTitle(node));
     var layoutId = resolveGenericLayoutId(tree, node, titleInfo.title || headingMeta.name);
     var directRows = getDirectChildCustomNodes(tree, node);
+    var directHeadings = getDirectChildHeadingNodes(tree, node);
     var genericRows = directRows.map(function (rowNode) { return readGenericRowState(rowNode, layoutId); });
     var managedRows = getManagedRowsForLayout(layoutId, genericRows);
+    var costingTechnicalSummaryId = findChildHeadingDataIdByName(directHeadings, COSTING_TECHNICAL_SUMMARY_TITLE);
+    var costingTechnicalUseId = findChildHeadingDataIdByName(directHeadings, COSTING_TECHNICAL_USE_TITLE);
 
     return normaliseGenericState({
       mode: MODE_GENERIC,
@@ -2420,8 +2447,19 @@
       nodeData: cloneItemSnapshot(node.data),
       rows: managedRows,
       originalManagedIds: managedRows.map(function (row) { return row.id; }).filter(Boolean),
-      totalChildRows: directRows.length
+      totalChildRows: directRows.length,
+      costingTechnicalSummaryId: costingTechnicalSummaryId,
+      costingTechnicalUseId: costingTechnicalUseId
     });
+  }
+
+  function findChildHeadingDataIdByName(headings, targetName) {
+    var target = normalizeGenericMatchText(targetName);
+    for (var i = 0; i < (headings || []).length; i++) {
+      var title = normalizeGenericMatchText(getNodeTitle(headings[i]));
+      if (title === target) return getNodeDataId(headings[i]);
+    }
+    return "";
   }
 
   function inferRenderTypeFromNode(node) {
@@ -2467,6 +2505,7 @@
 
     if (renderType === "section") {
       if (t === "hero" || t === "hero page") return GENERIC_LAYOUTS.HERO;
+      if (t === "details") return GENERIC_LAYOUTS.DETAILS_CONTAINER;
       return GENERIC_LAYOUTS.SECTION_COVER;
     }
 
@@ -2512,6 +2551,7 @@
     labels[GENERIC_LAYOUTS.THANKYOU] = "Thank you";
     labels[GENERIC_LAYOUTS.SUSTAINABILITY] = "Sustainability";
     labels[GENERIC_LAYOUTS.ABOUT_US] = "About us";
+    labels[GENERIC_LAYOUTS.DETAILS_CONTAINER] = "Details container";
     return labels[layoutId] || "Proposal page";
   }
 
@@ -2520,6 +2560,7 @@
     if (layoutId === GENERIC_LAYOUTS.PM) return rows.slice(0, 1).length ? rows.slice(0, 1) : [blankGenericRow("person")];
     if (layoutId === GENERIC_LAYOUTS.TEAM) return rows.slice(0, GENERIC_MAX_PEOPLE).length ? rows.slice(0, GENERIC_MAX_PEOPLE) : [blankGenericRow("person")];
     if (layoutId === GENERIC_LAYOUTS.CRITICAL_PATH) return rows.slice(0, GENERIC_MAX_MILESTONES).length ? rows.slice(0, GENERIC_MAX_MILESTONES) : [blankGenericRow("milestone")];
+    if (layoutId === GENERIC_LAYOUTS.DEPT_TABLE) return rows.slice(0, GENERIC_MAX_COST_LINES);
     return [];
   }
 
@@ -2527,17 +2568,30 @@
     return layoutId === GENERIC_LAYOUTS.PM || layoutId === GENERIC_LAYOUTS.TEAM || layoutId === GENERIC_LAYOUTS.CRITICAL_PATH;
   }
 
+  function isCostingRowsLayout(layoutId) {
+    return layoutId === GENERIC_LAYOUTS.DEPT_TABLE;
+  }
+
+  function shouldReadGenericRowsLayout(layoutId) {
+    return isGenericManagedRowsLayout(layoutId) || isCostingRowsLayout(layoutId);
+  }
+
+  function isGenericLockedLayout(layoutId) {
+    return layoutId === GENERIC_LAYOUTS.SUSTAINABILITY || layoutId === GENERIC_LAYOUTS.ABOUT_US;
+  }
+
   function readGenericRowState(node, layoutId) {
     var data = node && node.data ? node.data : {};
     return normaliseGenericRow({
       uid: newUid("genericrow"),
       id: getNodeDataId(node),
-      kind: layoutId === GENERIC_LAYOUTS.CRITICAL_PATH ? "milestone" : "person",
+      kind: layoutId === GENERIC_LAYOUTS.CRITICAL_PATH ? "milestone" : (layoutId === GENERIC_LAYOUTS.DEPT_TABLE ? "costingRevenue" : "person"),
       name: getGenericNodeName(node),
       altName: getGenericDataField(data, ["ALT_NAME", "ALTERNATIVE", "ALTNAME", "alt_name", "altName"]),
       additional: getGenericDataField(data, ["ADDITIONAL", "DESCRIPTION", "additional"]),
       technical: getGenericDataField(data, ["TECHNICAL", "technical"]),
       imageUrl: getGenericDataField(data, ["IMAGE_URL", "image_url", "IMG_URL", "img_url"]),
+      revenue: getGenericDataField(data, ["PRICE", "price", "VALUE", "value", "UNIT_PRICE", "unit_price"]),
       qty: getGenericDataField(data, ["QTY", "qty"]),
       nodeData: cloneItemSnapshot(data)
     });
@@ -2573,6 +2627,7 @@
       renderType: state.renderType === "section" ? "section" : "dept",
       hidden: !!state.hidden,
       additionalOptions: !!state.additionalOptions,
+      cascadeAdditionalOptions: !!state.cascadeAdditionalOptions,
       title: String(state.title || ""),
       titleSuffix: String(state.titleSuffix || ""),
       blurb: String(state.blurb || ""),
@@ -2585,7 +2640,9 @@
       nodeData: state.nodeData || null,
       rows: rows,
       originalManagedIds: normaliseIdList(state.originalManagedIds || []),
-      totalChildRows: Number(state.totalChildRows || 0) || 0
+      totalChildRows: Number(state.totalChildRows || 0) || 0,
+      costingTechnicalSummaryId: String(state.costingTechnicalSummaryId || ""),
+      costingTechnicalUseId: String(state.costingTechnicalUseId || "")
     };
   }
 
@@ -2600,6 +2657,7 @@
       additional: String(row.additional || ""),
       technical: String(row.technical || ""),
       imageUrl: String(row.imageUrl || ""),
+      revenue: String(row.revenue || ""),
       qty: String(row.qty || ""),
       nodeData: row.nodeData || null
     };
@@ -2615,6 +2673,7 @@
       additional: "",
       technical: "",
       imageUrl: "",
+      revenue: "",
       qty: "",
       nodeData: null
     };
@@ -2632,14 +2691,23 @@
       '</div>';
 
     $("#" + CFG.bodyId).html(html);
-    setSaveEnabled(true);
+    setSaveEnabled(!isGenericLockedLayout(state.layoutId));
   }
 
   function genericTopbarHtml(state) {
     var managed = isGenericManagedRowsLayout(state.layoutId);
     var note = managed
       ? "This page type stores its visible cards as child custom rows."
-      : "This editor updates the heading title, description and technical/image field. Existing costing rows are not changed.";
+      : (isCostingRowsLayout(state.layoutId)
+        ? "Use the costing builder below for client revenue lines and the hidden Technical Use folder for internal listed items."
+        : "This editor updates the heading title, description and technical/image field. Existing costing rows are not changed.");
+
+    if (state.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
+      note = "Details is a locked container. Keep the heading named Details; use the suffix selector only, then select a nested page heading to edit the pages inside.";
+    }
+    if (isGenericLockedLayout(state.layoutId)) {
+      note = "This page is locked because its visible copy is controlled by the renderer.";
+    }
 
     return '' +
       '<div class="wpe-topbar">' +
@@ -2647,12 +2715,61 @@
           '<div class="wpe-layout-kicker">Detected page type</div>' +
           '<div class="wpe-layout-title">' + esc(state.layoutLabel) + '</div>' +
           '<div class="wpe-layout-note">' + esc(note) + '</div>' +
+          genericModifierControlsHtml(state) +
         '</div>' +
         '<div class="wpe-help"><strong>Visual editor:</strong> edit the fields directly on the page mock-up. The final document may still paginate long tables automatically in the renderer.</div>' +
       '</div>';
   }
 
+  function genericModifierControlsHtml(state) {
+    if (isGenericLockedLayout(state.layoutId)) return '';
+
+    var controls = [];
+    if (state.layoutId !== GENERIC_LAYOUTS.DETAILS_CONTAINER) {
+      controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="hidden"' + (state.hidden ? ' checked' : '') + '> Hide from render //</label>');
+      controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="additionalOptions"' + (state.additionalOptions ? ' checked' : '') + '> Use $ modifier</label>');
+      if (state.renderType === "section") {
+        controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="cascadeAdditionalOptions"' + (state.cascadeAdditionalOptions || state.additionalOptions ? ' checked' : '') + '> Apply $ to nested Dept pages</label>');
+      }
+    }
+
+    if (state.layoutId === GENERIC_LAYOUTS.SUMMARY) {
+      controls.push(genericSuffixSelectHtml(state.titleSuffix, [
+        [" - None", "Project total only"],
+        [" - Dept", "Subtotal by Dept"],
+        [" - Section", "Subtotal by Section"]
+      ]));
+    } else if (state.layoutId === GENERIC_LAYOUTS.THANKYOU) {
+      controls.push(genericSuffixSelectHtml(state.titleSuffix, [
+        ["", "Default layout"],
+        [" - Alt", "Alt layout"]
+      ]));
+    } else if (state.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
+      controls.push(genericSuffixSelectHtml(state.titleSuffix, [
+        ["", "Auto alternate"],
+        [" - Left", "First image left"],
+        [" - Right", "First image right"]
+      ]));
+    }
+
+    return controls.length ? '<div class="wpe-modifier-strip">' + controls.join('') + '</div>' : '';
+  }
+
+  function genericSuffixSelectHtml(current, options) {
+    var html = '<label class="wpe-select-pill">Suffix <select data-generic-field="titleSuffix">';
+    for (var i = 0; i < options.length; i++) {
+      var value = options[i][0];
+      var label = options[i][1];
+      html += '<option value="' + attr(value) + '"' + (String(current || '') === value ? ' selected' : '') + '>' + esc(label) + '</option>';
+    }
+    html += '</select></label>';
+    return html;
+  }
+
   function genericActionsHtml(state) {
+    if (state.layoutId === GENERIC_LAYOUTS.DEPT_TABLE) return genericCostingActionsHtml(state);
+    if (isGenericLockedLayout(state.layoutId)) return '<div class="wpe-page-actions"><span>This renderer-controlled page is locked. Select another heading to edit.</span></div>';
+
     var add = "";
     if (state.layoutId === GENERIC_LAYOUTS.TEAM) {
       add = '<button type="button" class="wpe-mini-btn" data-weo-action="add-generic-row" data-row-kind="person"' + (state.rows.length >= GENERIC_MAX_PEOPLE ? ' disabled' : '') + '>+ Add person</button>';
@@ -2668,6 +2785,40 @@
     return '<div class="wpe-page-actions">' + warning + add + '</div>';
   }
 
+  function genericCostingActionsHtml(state) {
+    var rows = (state.rows || []).map(normaliseGenericRow);
+    var rowHtml = rows.map(function (row, index) { return genericCostingRowHtml(row, index); }).join("");
+    if (!rowHtml) rowHtml = '<div class="wpe-costing-note">No client-facing revenue lines yet. Add one below.</div>';
+
+    var isTechnicalSummary = normalizeGenericMatchText(state.title) === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE);
+    var revenueButton = isTechnicalSummary
+      ? '<button type="button" class="wpe-mini-btn" data-weo-action="add-costing-revenue-row" data-row-kind="costingRevenue"' + (rows.length >= GENERIC_MAX_COST_LINES ? ' disabled' : '') + '>+ Client revenue line</button>'
+      : '<button type="button" class="wpe-mini-btn" data-weo-action="open-technical-summary-editor">Open/create Technical Summary</button>';
+    if (!isTechnicalSummary) rowHtml = '<div class="wpe-costing-note">Select or create Technical Summary to add the client-facing revenue lines that render in the proposal.</div>';
+
+    return '' +
+      '<div class="wpe-costing-panel">' +
+        '<div class="wpe-costing-head">' +
+          '<div><div class="wpe-costing-title">Costing builder</div><div class="wpe-costing-note">Client-facing custom revenue lines render in the visible Technical Summary. Internal inventory/package items should live in the hidden // Technical Use folder.</div></div>' +
+          '<div class="wpe-costing-actions">' +
+            revenueButton +
+            '<button type="button" class="wpe-mini-btn" data-weo-action="open-technical-use-picker">+ Listed internal item</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="wpe-costing-lines">' + rowHtml + '</div>' +
+      '</div>';
+  }
+
+  function genericCostingRowHtml(row, index) {
+    row = normaliseGenericRow(row);
+    return '' +
+      '<div class="wpe-costing-row" data-generic-row-uid="' + attr(row.uid) + '" data-row-id="' + attr(row.id) + '" data-row-kind="costingRevenue" data-row-index="' + index + '">' +
+        '<input class="wpe-field" data-generic-row-field="name" value="' + attr(row.name) + '" placeholder="Client-friendly line item name">' +
+        '<input class="wpe-field" data-generic-row-field="revenue" value="' + attr(row.revenue) + '" placeholder="Revenue £">' +
+        '<button type="button" class="wpe-mini-btn is-danger" data-weo-action="remove-generic-row" data-row-index="' + index + '">Remove</button>' +
+      '</div>';
+  }
+
   function genericCanvasHtml(state) {
     if (state.layoutId === GENERIC_LAYOUTS.HERO) return genericHeroHtml(state);
     if (state.layoutId === GENERIC_LAYOUTS.SECTION_COVER) return genericSectionCoverHtml(state);
@@ -2679,8 +2830,9 @@
     if (state.layoutId === GENERIC_LAYOUTS.TEAM) return genericTeamHtml(state);
     if (state.layoutId === GENERIC_LAYOUTS.CRITICAL_PATH) return genericCriticalPathHtml(state);
     if (state.layoutId === GENERIC_LAYOUTS.THANKYOU) return genericThankYouHtml(state);
-    if (state.layoutId === GENERIC_LAYOUTS.SUSTAINABILITY) return genericFixedContentHtml(state, "Treating the planet wisely", "The sustainability page text is hard-coded in the renderer. This editor lets you update the heading name and background image/technical field.", true);
-    if (state.layoutId === GENERIC_LAYOUTS.ABOUT_US) return genericFixedContentHtml(state, "About us", "The About Us copy is hard-coded in the renderer. This editor lets you update the heading name and underlay image/technical field.", true);
+    if (state.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) return genericDetailsContainerHtml(state);
+    if (state.layoutId === GENERIC_LAYOUTS.SUSTAINABILITY) return genericLockedPageHtml(state, "Sustainability", "This page is locked. The renderer controls the sustainability title, copy and image treatment.", true);
+    if (state.layoutId === GENERIC_LAYOUTS.ABOUT_US) return genericLockedPageHtml(state, "About Us", "This page is locked. The renderer controls the About Us title, copy and image treatment.", true);
     return genericDeptTableHtml(state);
   }
 
@@ -2874,13 +3026,32 @@
   }
 
   function genericFixedContentHtml(state, heading, note, dark) {
+    return genericLockedPageHtml(state, heading, note, dark);
+  }
+
+  function genericLockedPageHtml(state, heading, note, dark) {
     return '' +
       '<div class="wpe-proof' + (dark ? ' is-dark wpe-on-image' : '') + '">' +
         '<div class="wpe-full-image">' + imagePreviewHtml(state.technical) + '</div>' +
-        technicalFieldHtml(state.technical, "Image / background URL") +
-        '<div class="wpe-center-title">' + titleFieldHtml(state.title, "", heading) + '</div>' +
-        '<div class="wpe-note-box"' + (dark ? ' style="background:rgba(13,18,38,.55);color:#fffdf9;border-color:rgba(255,255,255,.28);"' : '') + '>' + esc(note) + '</div>' +
+        '<div class="wpe-locked-panel"' + (dark ? ' style="background:rgba(13,18,38,.62);color:#fffdf9;border-color:rgba(255,255,255,.28);"' : '') + '>' +
+          '<b>' + esc(heading || state.title || "Locked page") + '</b>' +
+          '<p>' + esc(note || "This renderer-controlled page is locked.") + '</p>' +
+          '<p>Select another heading in the supplying list to edit a configurable proposal page.</p>' +
+        '</div>' +
         proofCommonHtml(dark) +
+      '</div>';
+  }
+
+  function genericDetailsContainerHtml(state) {
+    return '' +
+      '<div class="wpe-proof">' +
+        proofCommonHtml(false) +
+        '<div class="wpe-center-title"><div class="wpe-heading" style="font-size:clamp(34px,4.4vw,62px);line-height:.98;text-align:center;">DETAILS</div></div>' +
+        '<div class="wpe-locked-panel">' +
+          '<b>Details is a container</b>' +
+          '<p>Do not rename this heading or add an image URL here. Select one of the nested headings inside Details to edit the actual front proposal pages.</p>' +
+          '<p>The suffix selector above controls whether the first image-led nested page starts left or right.</p>' +
+        '</div>' +
       '</div>';
   }
 
@@ -2892,10 +3063,27 @@
     var $title = $body.find('[data-generic-field="title"]').first();
     var $blurb = $body.find('[data-generic-field="blurb"]').first();
     var $technical = $body.find('[data-generic-field="technical"]').first();
+    var $titleSuffix = $body.find('[data-generic-field="titleSuffix"]').first();
+    var $hidden = $body.find('[data-generic-field="hidden"]').first();
+    var $additionalOptions = $body.find('[data-generic-field="additionalOptions"]').first();
+    var $cascadeAdditionalOptions = $body.find('[data-generic-field="cascadeAdditionalOptions"]').first();
 
     if ($title.length) state.title = titleForStorage($title.val());
     if ($blurb.length) state.blurb = String($blurb.val() || "");
     if ($technical.length) state.technical = $.trim(String($technical.val() || ""));
+    if ($titleSuffix.length) state.titleSuffix = String($titleSuffix.val() || "");
+    if ($hidden.length) state.hidden = !!$hidden.prop("checked");
+    if ($additionalOptions.length) state.additionalOptions = !!$additionalOptions.prop("checked");
+    if ($cascadeAdditionalOptions.length) state.cascadeAdditionalOptions = !!$cascadeAdditionalOptions.prop("checked");
+
+    if (state.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
+      state.title = "Details";
+      state.technical = prior.technical || "";
+      state.blurb = prior.blurb || "";
+      state.hidden = false;
+      state.additionalOptions = false;
+      state.cascadeAdditionalOptions = false;
+    }
 
     var oldRows = indexGenericRowsByUid(prior.rows || []);
     var rows = [];
@@ -2914,13 +3102,18 @@
         additional: String($card.find('[data-generic-row-field="additional"]').first().val() || ""),
         technical: String($card.find('[data-generic-row-field="technical"]').first().val() || ""),
         imageUrl: $.trim(String($card.find('[data-generic-row-field="imageUrl"]').first().val() || "")),
+        revenue: $.trim(String($card.find('[data-generic-row-field="revenue"]').first().val() || oldRow.revenue || "")),
         qty: String($card.find('[data-generic-row-field="qty"]').first().val() || oldRow.qty || ""),
         nodeData: oldRow.nodeData || null
       }));
     });
 
-    if (isGenericManagedRowsLayout(state.layoutId)) {
-      state.rows = rows.length ? rows : [blankGenericRow(state.layoutId === GENERIC_LAYOUTS.CRITICAL_PATH ? "milestone" : "person")];
+    if (shouldReadGenericRowsLayout(state.layoutId)) {
+      if (isCostingRowsLayout(state.layoutId)) {
+        state.rows = rows;
+      } else {
+        state.rows = rows.length ? rows : [blankGenericRow(state.layoutId === GENERIC_LAYOUTS.CRITICAL_PATH ? "milestone" : "person")];
+      }
     }
 
     return normaliseGenericState(state);
@@ -2941,6 +3134,28 @@
     var rowKind = String($btn.attr("data-row-kind") || "person");
     var state = readGenericFormState(editor.current);
 
+    if (action === "open-technical-summary-editor") {
+      openTechnicalSummaryEditor(state);
+      return;
+    }
+
+    if (action === "open-technical-use-picker") {
+      openTechnicalUsePicker(state);
+      return;
+    }
+
+    if (action === "add-costing-revenue-row") {
+      if (normalizeGenericMatchText(state.title) !== normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE)) {
+        setStatus("Open Technical Summary first, then add client revenue lines there.", "warning");
+        return;
+      }
+      if (state.rows.length >= GENERIC_MAX_COST_LINES) {
+        setStatus("This costing table can show up to " + GENERIC_MAX_COST_LINES + " client revenue lines.", "warning");
+        return;
+      }
+      state.rows.push(blankGenericRow("costingRevenue"));
+    }
+
     if (action === "add-generic-row") {
       var limit = state.layoutId === GENERIC_LAYOUTS.CRITICAL_PATH ? GENERIC_MAX_MILESTONES : GENERIC_MAX_PEOPLE;
       if (state.rows.length >= limit) {
@@ -2952,7 +3167,7 @@
 
     if (action === "remove-generic-row" && rowIndex >= 0 && rowIndex < state.rows.length) {
       state.rows.splice(rowIndex, 1);
-      if (!state.rows.length) state.rows.push(blankGenericRow(state.layoutId === GENERIC_LAYOUTS.CRITICAL_PATH ? "milestone" : "person"));
+      if (!state.rows.length && !isCostingRowsLayout(state.layoutId)) state.rows.push(blankGenericRow(state.layoutId === GENERIC_LAYOUTS.CRITICAL_PATH ? "milestone" : "person"));
     }
 
     editor.current = normaliseGenericState(state);
@@ -2973,6 +3188,9 @@
       layoutId: state.layoutId,
       title: $.trim(String(state.title || "")),
       titleSuffix: String(state.titleSuffix || ""),
+      hidden: !!state.hidden,
+      additionalOptions: !!state.additionalOptions,
+      cascadeAdditionalOptions: !!state.cascadeAdditionalOptions,
       blurb: $.trim(String(state.blurb || "")),
       technical: $.trim(String(state.technical || "")),
       rows: (state.rows || []).map(function (row) {
@@ -2983,7 +3201,8 @@
           altName: $.trim(row.altName),
           additional: $.trim(row.additional),
           technical: $.trim(row.technical),
-          imageUrl: $.trim(row.imageUrl)
+          imageUrl: $.trim(row.imageUrl),
+          revenue: $.trim(row.revenue)
         };
       })
     });
@@ -2991,6 +3210,8 @@
 
   function validateGenericState(state) {
     state = normaliseGenericState(state);
+    if (isGenericLockedLayout(state.layoutId)) return "This page is locked by the renderer and cannot be edited here.";
+    if (state.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER && normalizeGenericMatchText(state.title) !== "details") return "The Details container must remain named Details.";
     if (!$.trim(state.title) && state.layoutId !== GENERIC_LAYOUTS.FPVISUAL) return "Add a page title.";
 
     if (state.layoutId === GENERIC_LAYOUTS.CRITICAL_PATH) {
@@ -3014,12 +3235,20 @@
       if (!$.trim(pm.name)) return "Add the project manager name.";
     }
 
+    if (state.layoutId === GENERIC_LAYOUTS.DEPT_TABLE) {
+      var costingRows = state.rows.filter(isMeaningfulGenericRow);
+      for (var c = 0; c < costingRows.length; c++) {
+        if (!$.trim(costingRows[c].name)) return "Each client revenue line needs a name.";
+        if (!$.trim(costingRows[c].revenue)) return "Each client revenue line needs a revenue value.";
+      }
+    }
+
     return "";
   }
 
   function isMeaningfulGenericRow(row) {
     row = normaliseGenericRow(row);
-    return !!(row.id || $.trim(row.name) || $.trim(row.altName) || $.trim(row.additional) || $.trim(row.technical) || $.trim(row.imageUrl));
+    return !!(row.id || $.trim(row.name) || $.trim(row.altName) || $.trim(row.additional) || $.trim(row.technical) || $.trim(row.imageUrl) || $.trim(row.revenue));
   }
 
   async function saveGenericEditor() {
@@ -3067,6 +3296,13 @@
 
   async function applyGenericPageState(jobId, tree, rootNode, state) {
     var saved = normaliseGenericState(clone(state));
+    if (saved.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
+      saved.title = "Details";
+      saved.hidden = false;
+      saved.additionalOptions = false;
+      saved.cascadeAdditionalOptions = false;
+    }
+
     var headingName = composeGenericStoredHeading(saved);
 
     setStatus("Saving heading...", "info");
@@ -3088,6 +3324,16 @@
       saved.rows = await saveGenericManagedRows(jobId, saved);
     }
 
+    if (isCostingRowsLayout(saved.layoutId) && normalizeGenericMatchText(saved.title) === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE)) {
+      saved.rows = await saveCostingRevenueRows(jobId, saved);
+    } else if (isCostingRowsLayout(saved.layoutId)) {
+      saved.rows = [];
+    }
+
+    if (saved.renderType === "section" && saved.cascadeAdditionalOptions) {
+      await applyAdditionalOptionsToDescendantPages(jobId, tree, rootNode, saved.additionalOptions);
+    }
+
     return normaliseGenericState(saved);
   }
 
@@ -3098,6 +3344,325 @@
     if (state.additionalOptions) prefix += "$ ";
     prefix += state.renderType === "section" ? "Section: " : "Dept: ";
     return prefix + titleForStorage(state.title) + String(state.titleSuffix || "");
+  }
+
+  async function saveCostingRevenueRows(jobId, state) {
+    var rowsToSave = (state.rows || []).map(normaliseGenericRow).filter(isMeaningfulGenericRow);
+    var originalIds = normaliseIdList(state.originalManagedIds || []);
+    var keepIds = [];
+    var savedRows = [];
+
+    for (var i = 0; i < rowsToSave.length; i++) {
+      var row = rowsToSave[i];
+      if (!row.id || costingRevenueRowNeedsSave(row)) {
+        setStatus("Saving client revenue line " + String(i + 1) + "...", "info");
+        var result = await saveCostingRevenueItemDirect({
+          jobId: jobId,
+          parentId: state.rootId,
+          row: row,
+          sourceData: row.nodeData || {}
+        });
+        row.id = String(result.id || row.id || "");
+        row.nodeData = extendSnapshot(row.nodeData, {
+          ID: row.id,
+          title: row.name,
+          TITLE: row.name,
+          PRICE: row.revenue || "",
+          VALUE: normaliseMoneyForPayload(row.revenue || ""),
+          ADDITIONAL: row.additional || "",
+          TECHNICAL: row.technical || ""
+        });
+      }
+      if (row.id) keepIds.push(row.id);
+      savedRows.push(row);
+    }
+
+    var deleteIds = [];
+    for (var d = 0; d < originalIds.length; d++) {
+      if (keepIds.indexOf(originalIds[d]) === -1) deleteIds.push(originalIds[d]);
+    }
+    if (deleteIds.length) {
+      setStatus("Removing deleted client revenue lines...", "info");
+      await deleteItemsDirect(deleteIds, jobId, 3);
+    }
+
+    return savedRows;
+  }
+
+  function costingRevenueRowNeedsSave(row) {
+    row = normaliseGenericRow(row);
+    var data = row.nodeData || {};
+    if (!row.id) return true;
+    return String(row.name || "") !== getGenericDataField(data, ["title", "TITLE", "name", "NAME"]) ||
+      normaliseMoneyForPayload(row.revenue || "") !== normaliseMoneyForPayload(getGenericDataField(data, ["PRICE", "price", "VALUE", "value", "UNIT_PRICE", "unit_price"])) ||
+      String(row.additional || "") !== getGenericDataField(data, ["ADDITIONAL", "DESCRIPTION", "additional"]) ||
+      String(row.technical || "") !== getGenericDataField(data, ["TECHNICAL", "technical"]);
+  }
+
+  async function saveCostingRevenueItemDirect(options) {
+    if (!options || !options.jobId || !options.parentId) throw new Error("Missing costing revenue save details.");
+
+    var row = normaliseGenericRow(options.row);
+    var source = options.sourceData || {};
+    var revenue = normaliseMoneyForPayload(row.revenue || "");
+
+    return postItemsSave({
+      parent: String(options.parentId || "0"),
+      flag: String(source.FLAG == null ? 0 : source.FLAG),
+      priority_confirm: "0",
+      custom_fields: normaliseCustomFields(source.CUSTOM_FIELDS),
+      kind: "3",
+      local: formatLocalDateTime(new Date()),
+      id: String(row.id || source.ID || "0"),
+      qty: "1",
+      name: String(row.name || ""),
+      list_id: String(source.LIST_ID || "0"),
+      cust_add: String(row.additional || source.ADDITIONAL || ""),
+      memo: String(row.technical || source.TECHNICAL || ""),
+      price_type: String(source.PRICE_TYPE == null ? 0 : source.PRICE_TYPE),
+      weight: String(source.weight == null ? (source.WEIGHT == null ? 0 : source.WEIGHT) : source.weight),
+      vat_rate: String(source.VAT_RATE == null ? getDefaultVatRate() : source.VAT_RATE),
+      value: revenue,
+      acc_nominal: String(source.ACC_NOMINAL == null ? getDefaultNominalId(1) : source.ACC_NOMINAL),
+      acc_nominal_po: String(source.ACC_NOMINAL_PO == null ? getDefaultNominalId(2) : source.ACC_NOMINAL_PO),
+      cost_price: String(source.COST_PRICE == null ? 0 : source.COST_PRICE),
+      no_scan: String(source.NO_SCAN == 1 ? 1 : 0),
+      country_origin: String(source.COUNTRY_ORIGIN || ""),
+      hs_code: String(source.HS_CODE || ""),
+      category_id: String(source.CATEGORY_ID == null ? 0 : source.CATEGORY_ID),
+      no_shortfall: String(source.NO_SHORTFALL == 1 ? 1 : 0),
+      unit_price: revenue,
+      price: revenue,
+      job: String(options.jobId || ""),
+      no_availability: "0",
+      ignore: "0"
+    }, row.id || source.ID);
+  }
+
+  function normaliseMoneyForPayload(value) {
+    var text = String(value || "").trim();
+    if (!text) return "0";
+    var cleaned = text.replace(/[^0-9,.-]/g, "");
+    var lastComma = cleaned.lastIndexOf(",");
+    var lastDot = cleaned.lastIndexOf(".");
+    if (lastComma !== -1 && lastDot !== -1) {
+      cleaned = lastDot > lastComma ? cleaned.replace(/,/g, "") : cleaned.replace(/\./g, "").replace(/,/g, ".");
+    } else if (lastComma !== -1) {
+      cleaned = /,\d{1,2}$/.test(cleaned) ? cleaned.replace(/,/g, ".") : cleaned.replace(/,/g, "");
+    }
+    var n = parseFloat(cleaned);
+    if (!Number.isFinite(n)) return "0";
+    return String(Math.round(n * 100) / 100);
+  }
+
+  async function applyAdditionalOptionsToDescendantPages(jobId, tree, rootNode, enabled) {
+    var descendants = getDescendantPageHeadingNodes(tree, rootNode);
+    for (var i = 0; i < descendants.length; i++) {
+      var node = descendants[i];
+      var raw = getNodeRawTitle(node);
+      var parsed = parseHeadingBaseMeta(raw);
+      if (parsed.renderType !== "section" && parsed.renderType !== "dept") continue;
+      var nextRawName = composeRawHeadingWithAdditionalOption(parsed, !!enabled);
+      if (normaliseWhitespace(nextRawName) === normaliseWhitespace(raw)) continue;
+      setStatus("Updating nested $ modifier...", "info");
+      await saveHeadingItemDirect({
+        jobId: jobId,
+        id: getNodeDataId(node),
+        parentId: getParentHeadingDataId(tree, node),
+        rawName: nextRawName,
+        renderType: parsed.renderType,
+        title: parsed.name,
+        desc: getNodeDescription(node),
+        memo: getNodeTechnical(node),
+        flag: getNodeFlag(node),
+        customFields: getNodeCustomFields(node)
+      });
+    }
+  }
+
+  function getDescendantPageHeadingNodes(tree, rootNode) {
+    var out = [];
+    function walk(node) {
+      var children = getDirectChildHeadingNodes(tree, node);
+      for (var i = 0; i < children.length; i++) {
+        var child = children[i];
+        var parsed = parseHeadingBaseMeta(getNodeRawTitle(child));
+        if (parsed.renderType === "section" || parsed.renderType === "dept") out.push(child);
+        walk(child);
+      }
+    }
+    if (tree && rootNode) walk(rootNode);
+    return out;
+  }
+
+  function composeRawHeadingWithAdditionalOption(parsed, enabled) {
+    parsed = parsed || {};
+    var prefix = "";
+    if (parsed.hidden) prefix += "// ";
+    if (enabled) prefix += "$ ";
+    prefix += parsed.renderType === "section" ? "Section: " : "Dept: ";
+    return prefix + titleForStorage(parsed.name || "");
+  }
+
+  async function openTechnicalSummaryEditor(state) {
+    state = normaliseGenericState(state || editor.current || {});
+    var jobId = getCurrentJobId();
+    if (!jobId || !state.rootId) {
+      setStatus("Save this costing page first, then create the Technical Summary folder.", "warning");
+      return;
+    }
+
+    var currentTitle = normalizeGenericMatchText(state.title);
+    if (currentTitle === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE)) {
+      setStatus("You are already editing Technical Summary. Add client revenue lines below.", "info");
+      return;
+    }
+
+    var folderId = String(state.costingTechnicalSummaryId || "");
+    if (!folderId) {
+      try {
+        setStatus("Creating visible Technical Summary folder...", "info");
+        var created = await saveHeadingItemDirect({
+          jobId: jobId,
+          id: "",
+          parentId: state.rootId,
+          rawName: "Dept: " + COSTING_TECHNICAL_SUMMARY_TITLE,
+          renderType: "dept",
+          title: COSTING_TECHNICAL_SUMMARY_TITLE,
+          desc: "",
+          memo: "",
+          flag: 0,
+          customFields: ""
+        });
+        folderId = String(created.id || "");
+        state.costingTechnicalSummaryId = folderId;
+        if (editor.current) editor.current.costingTechnicalSummaryId = folderId;
+        refreshSupplyingList();
+      } catch (err) {
+        warn("Could not create Technical Summary folder", err);
+        setStatus(getErrorMessage(err, "Could not create the Technical Summary folder."), "error");
+        return;
+      }
+    }
+
+    setStatus("Opening Technical Summary editor...", "info");
+    setTimeout(function () {
+      var tree = getTree();
+      var selected = selectTreeHeadingByDataId(tree, folderId);
+      if (!selected) {
+        setStatus("Technical Summary is ready. Select it in the supplying list to add client revenue lines.", "warning");
+        return;
+      }
+      openEditor();
+    }, 900);
+  }
+
+  async function openTechnicalUsePicker(state) {
+    state = normaliseGenericState(state || editor.current || {});
+    var jobId = getCurrentJobId();
+    if (!jobId || !state.rootId) {
+      setStatus("Save this costing page first, then add listed internal items.", "warning");
+      return;
+    }
+
+    var isTechnicalSummary = normalizeGenericMatchText(state.title) === normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE);
+    var technicalUseParentId = isTechnicalSummary ? state.parentId : state.rootId;
+    var treeNow = getTree();
+    var folderId = String(state.costingTechnicalUseId || findSiblingOrChildHeadingDataId(treeNow, editor.rootNode, COSTING_TECHNICAL_USE_TITLE, isTechnicalSummary) || "");
+
+    if (!folderId) {
+      try {
+        setStatus("Creating hidden // Technical Use folder...", "info");
+        var created = await saveHeadingItemDirect({
+          jobId: jobId,
+          id: "",
+          parentId: technicalUseParentId,
+          rawName: "// Dept: " + COSTING_TECHNICAL_USE_TITLE,
+          renderType: "dept",
+          title: COSTING_TECHNICAL_USE_TITLE,
+          desc: "",
+          memo: "",
+          flag: 0,
+          customFields: ""
+        });
+        folderId = String(created.id || "");
+        state.costingTechnicalUseId = folderId;
+        if (editor.current) editor.current.costingTechnicalUseId = folderId;
+        refreshSupplyingList();
+      } catch (err) {
+        warn("Could not create Technical Use folder", err);
+        setStatus(getErrorMessage(err, "Could not create the hidden Technical Use folder."), "error");
+        return;
+      }
+    }
+
+    setStatus("Opening native picker for // Technical Use...", "info");
+    setTimeout(function () {
+      var tree = getTree();
+      var selected = selectTreeHeadingByDataId(tree, folderId);
+      if (!selected) {
+        setStatus("// Technical Use is ready. Select that hidden folder, then use the Native line edit/New control to add listed items.", "warning");
+        return;
+      }
+      openNativeNewLineEditor();
+    }, 900);
+  }
+
+  function findSiblingOrChildHeadingDataId(tree, node, targetName, preferSibling) {
+    if (!tree || !node) return "";
+    var scopeNode = node;
+    if (preferSibling) {
+      var parent = getParentHeadingNode(tree, node);
+      if (parent) scopeNode = parent;
+    }
+    return findChildHeadingDataIdByName(getDirectChildHeadingNodes(tree, scopeNode), targetName);
+  }
+
+  function selectTreeHeadingByDataId(tree, dataId) {
+    if (!tree || !dataId) return false;
+    var nodes = getAllHeadingNodes(tree);
+    for (var i = 0; i < nodes.length; i++) {
+      if (getNodeDataId(nodes[i]) !== String(dataId)) continue;
+      try {
+        if (typeof tree.deselect_all === "function") tree.deselect_all();
+        if (typeof tree.open_node === "function") {
+          var parentId = tree.get_parent(nodes[i]);
+          if (parentId && parentId !== "#") tree.open_node(parentId);
+        }
+        if (typeof tree.select_node === "function") tree.select_node(nodes[i].id);
+        editor.lastClickedNodeId = nodes[i].id;
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  function findNativeNewButton() {
+    var $scope = $("#items_tab > div:first-child");
+    if (!$scope.length) return $();
+    return $scope.find('button,a,[role="button"],input[type="button"],input[type="submit"]').filter(":visible").filter(function () {
+      var $el = $(this);
+      if ($el.closest("#" + CFG.overlayId).length) return false;
+      if ($el.is("#" + CFG.buttonId) || $el.is("#" + CFG.nativeFallbackId)) return false;
+      var text = $.trim($el.text() || $el.val() || $el.attr("title") || $el.attr("aria-label") || "");
+      return /^new\b/i.test(text);
+    }).first();
+  }
+
+  function openNativeNewLineEditor() {
+    var $new = findNativeNewButton();
+    if (!$new.length) {
+      setStatus("Native HireHop New button could not be found. Select // Technical Use and use the native New/list picker.", "warning");
+      return;
+    }
+    try {
+      $new.get(0).click();
+    } catch (err) {
+      warn("Native new item picker failed", err);
+      setStatus("Could not open the native item picker.", "error");
+    }
   }
 
   async function saveGenericManagedRows(jobId, state) {
