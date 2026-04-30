@@ -5,7 +5,7 @@
   if (!$) return;
 
   var CFG = {
-    version: "2026-04-30.03-editor-preview-special-pages-and-safe-native-picker",
+    version: "2026-04-30.04-hero-lock-labour-day-folders-and-preview-fixes",
     buttonId: "wise-proposal-page-editor-button",
     stylesId: "wise-proposal-page-editor-styles",
     overlayId: "wise-proposal-page-editor-overlay",
@@ -2488,6 +2488,8 @@
   var MODE_GENERIC = "generic";
   var GENERIC_META_EDITOR = "genericPage";
   var GENERIC_META_VERSION = 1;
+  var LABOUR_DAY_META_EDITOR = "genericLabourDay";
+  var LABOUR_DAY_META_VERSION = 1;
 
   var GENERIC_LAYOUTS = {
     HERO: "hero",
@@ -2569,6 +2571,9 @@
       "#" + CFG.modalId + " .wpe-small-label{display:block;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#98a2b3;margin:0 0 4px;}",
       "#" + CFG.modalId + " .wpe-kicker{font-family:'Albra Sans',Lato,'Segoe UI',Arial,sans-serif;font-size:clamp(11px,1.02vw,14px);line-height:1.05;color:#EC9797;letter-spacing:.03em;margin-bottom:5px;}",
       "#" + CFG.modalId + " .wpe-image-preview{position:relative;overflow:hidden;background:linear-gradient(145deg,#d9e2ec,#f8fafc);border:1px solid rgba(15,23,42,.12);border-radius:12px;min-height:72px;display:flex;align-items:center;justify-content:center;text-align:center;padding:18px;color:rgba(13,18,38,.42);font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;}",
+      "#" + CFG.modalId + " .wpe-image-preview span{position:relative;z-index:1;}",
+      "#" + CFG.modalId + " .wpe-image-preview.is-cover-status{align-items:flex-end;justify-content:flex-start;text-align:left;padding:16px 18px 14px;}",
+      "#" + CFG.modalId + " .wpe-image-preview.is-cover-status span{padding:6px 8px;border-radius:999px;background:rgba(255,255,255,.86);color:rgba(13,18,38,.58);box-shadow:0 4px 14px rgba(15,23,42,.08);}",
       "#" + CFG.modalId + " .wpe-image-preview img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;}",
       "#" + CFG.modalId + " .wpe-image-url{position:absolute;left:12px;right:12px;top:12px;z-index:8;border:1px solid rgba(255,255,255,.28);border-radius:12px;background:rgba(13,18,38,.56);backdrop-filter:blur(3px);padding:7px;color:#fff;}",
       "#" + CFG.modalId + " .wpe-image-url label{display:block;margin-bottom:4px;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.84);}",
@@ -2588,6 +2593,9 @@
       "#" + CFG.modalId + " .wpe-venue-title-lock{border:1px dashed rgba(255,255,255,.34);border-radius:10px;background:rgba(13,18,38,.36);padding:7px 8px;color:#fffdf9;}",
       "#" + CFG.modalId + " .wpe-venue-title-lock b{display:block;font-family:'Albra Sans',Lato,'Segoe UI',Arial,sans-serif;font-size:clamp(22px,2.7vw,36px);font-weight:400;line-height:.98;text-transform:uppercase;letter-spacing:.01em;}",
       "#" + CFG.modalId + " .wpe-venue-title-lock span{display:block;margin-top:5px;font-size:10px;line-height:1.3;color:rgba(255,253,249,.72);}",
+      "#" + CFG.modalId + " .wpe-fixed-title-lock{border:1px dashed rgba(255,255,255,.34);border-radius:10px;background:rgba(13,18,38,.36);padding:10px 12px;color:#fffdf9;}",
+      "#" + CFG.modalId + " .wpe-fixed-title-lock b{display:block;font-family:'Albra Sans',Lato,'Segoe UI',Arial,sans-serif;font-size:clamp(28px,3.7vw,50px);font-weight:400;line-height:.98;text-transform:uppercase;letter-spacing:.01em;}",
+      "#" + CFG.modalId + " .wpe-fixed-title-lock span{display:block;margin-top:6px;font-size:10px;line-height:1.3;color:rgba(255,253,249,.76);}",
       "#" + CFG.modalId + " .wpe-visual-stage{position:absolute;inset:0;display:grid;grid-template-columns:25% 75%;z-index:2;}",
       "#" + CFG.modalId + " .wpe-visual-copy{display:flex;flex-direction:column;justify-content:flex-end;gap:7px;padding:0 8% 13%;}",
       "#" + CFG.modalId + " .wpe-visual-image{height:100%;border-radius:0;}",
@@ -2663,6 +2671,21 @@
       "#" + CFG.modalId + " .wpe-cost-preview-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
       "#" + CFG.modalId + " .wpe-cost-preview-price{text-align:right;font-weight:800;}",
       "#" + CFG.modalId + " .wpe-cost-preview-empty{font-size:10px;color:rgba(13,18,38,.42);font-style:italic;}",
+      "#" + CFG.modalId + " .wpe-labour-copy{width:40%;}",
+      "#" + CFG.modalId + " .wpe-labour-days{display:grid;gap:7px;margin-top:2px;min-width:0;}",
+      "#" + CFG.modalId + " .wpe-labour-days.is-columns{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}",
+      "#" + CFG.modalId + " .wpe-labour-day{display:grid;gap:5px;min-width:0;border:1px solid rgba(13,18,38,.12);border-radius:12px;background:rgba(255,255,255,.92);padding:8px;box-shadow:0 4px 12px rgba(15,23,42,.05);}",
+      "#" + CFG.modalId + " .wpe-labour-day.is-empty{border-style:dashed;background:rgba(255,255,255,.76);}",
+      "#" + CFG.modalId + " .wpe-labour-day-head{display:flex;justify-content:space-between;gap:8px;align-items:center;}",
+      "#" + CFG.modalId + " .wpe-labour-day-count{font-size:9px;font-weight:900;color:#667085;text-transform:uppercase;letter-spacing:.05em;}",
+      "#" + CFG.modalId + " .wpe-labour-day .wpe-field{font-size:10px;padding:4px 5px;}",
+      "#" + CFG.modalId + " .wpe-labour-day textarea.wpe-field{min-height:48px;}",
+      "#" + CFG.modalId + " .wpe-labour-day-items{min-height:28px;font-size:10px;line-height:1.35;color:#344054;border-top:1px solid rgba(13,18,38,.08);padding-top:5px;}",
+      "#" + CFG.modalId + " .wpe-labour-day-items.is-empty{color:#98a2b3;font-style:italic;}",
+      "#" + CFG.modalId + " .wpe-labour-day-actions{display:flex;gap:5px;flex-wrap:wrap;}",
+      "#" + CFG.modalId + " .wpe-labour-day-actions .wpe-mini-btn{flex:1 1 0;min-width:96px;}",
+      "#" + CFG.modalId + " .wpe-labour-columns-shell{position:absolute;left:5%;right:5%;top:12%;bottom:13%;z-index:5;display:grid;grid-template-rows:auto 1fr;gap:10px;}",
+      "#" + CFG.modalId + " .wpe-labour-columns-copy{display:grid;gap:7px;max-width:46%;}",
       "#" + CFG.modalId + " .wpe-dept-columns-grid{position:absolute;left:3.2%;right:3.2%;top:12%;bottom:14%;z-index:5;display:grid;grid-template-columns:1.05fr 1.1fr .85fr;gap:2.4%;align-items:start;}",
       "#" + CFG.modalId + " .wpe-dept-columns-copy,.wpe-dept-columns-table,.wpe-dept-columns-note{min-width:0;display:grid;gap:7px;}",
       "#" + CFG.modalId + " .wpe-dept-columns-copy .wpe-blurb{min-height:126px;}",
@@ -2751,6 +2774,30 @@
     };
   }
 
+  function getLabourDayParentForSelection(tree, headingNode) {
+    if (!tree || !headingNode || !headingNode.data || Number(headingNode.data.kind) !== 0) return null;
+
+    var parent = getParentHeadingNode(tree, headingNode);
+    if (!parent) return null;
+
+    var parentHeadingMeta = parseHeadingBaseMeta(getNodeRawTitle(parent));
+    var parentTitleInfo = splitEditableTitleSuffix(getNodeTitle(parent));
+    var parentLayoutId = resolveGenericLayoutId(tree, parent, parentTitleInfo.title || parentHeadingMeta.name, readGenericLayoutIdFromMeta(extractStoredPageMeta(getNodeTechnical(parent)).meta));
+    var parentRenderType = getGenericRenderTypeForStorage(parentHeadingMeta, parentTitleInfo.title);
+    if (!isLabourDeptLayoutState({ layoutId: parentLayoutId, renderType: parentRenderType, title: parentTitleInfo.title })) return null;
+
+    var metaInfo = extractStoredPageMeta(getNodeTechnical(headingNode));
+    var dayMeta = readLabourDayMeta(metaInfo.meta);
+    var title = normalizeGenericMatchText(getNodeTitle(headingNode));
+    if (!dayMeta && !/^day\b/.test(title)) return null;
+
+    return {
+      parent: parent,
+      kind: "labourDay",
+      notice: "This Day folder stores crew resource items. Opened the parent Labour page so you can manage the day cards in context."
+    };
+  }
+
   function renderEditor(state) {
     if ((state && state.mode === MODE_GENERIC) || editor.mode === MODE_GENERIC) return renderGenericEditor(state || editor.current);
     if (state) state.mode = MODE_EVENT_OVERVIEW;
@@ -2798,6 +2845,7 @@
     var costingUseRows = costingTechnicalUseNode ? getDirectChildCustomNodes(tree, costingTechnicalUseNode).map(function (rowNode) { return readGenericRowState(rowNode, layoutId); }) : [];
     var renderType = getGenericRenderTypeForStorage(headingMeta, titleInfo.title);
     var canUseDeptLayout = isLabourDeptLayoutState({ layoutId: layoutId, renderType: renderType, title: titleInfo.title });
+    var labourDays = canUseDeptLayout ? readLabourDayStates(tree, node, directHeadings, technicalInfo.meta) : [];
 
     return normaliseGenericState({
       mode: MODE_GENERIC,
@@ -2813,13 +2861,14 @@
       technical: technicalInfo.baseText,
       layoutId: layoutId,
       deptLayout: canUseDeptLayout ? (readGenericDeptLayoutFromMeta(technicalInfo.meta) || LAYOUT_IMAGE) : LAYOUT_IMAGE,
-      layoutLabel: genericLayoutLabel(layoutId),
+      layoutLabel: canUseDeptLayout ? "Labour day-folder page" : genericLayoutLabel(layoutId),
       sectionTitle: getNearestSectionTitleForGeneric(tree, node),
       flag: getNodeFlag(node),
       customFields: getNodeCustomFields(node),
       pageMeta: technicalInfo.meta,
       nodeData: cloneItemSnapshot(node.data),
       rows: managedRows,
+      labourDays: labourDays,
       originalManagedIds: managedRows.map(function (row) { return row.id; }).filter(Boolean),
       totalChildRows: directRows.length,
       totalChildItems: totalChildItems,
@@ -2848,6 +2897,63 @@
       if (title === target) return getNodeDataId(headings[i]);
     }
     return "";
+  }
+
+  function readLabourDayStates(tree, node, directHeadings) {
+    var days = [];
+    var candidates = (directHeadings || []).filter(function (heading) {
+      var title = normalizeGenericMatchText(getNodeTitle(heading));
+      return title !== normalizeGenericMatchText(COSTING_TECHNICAL_SUMMARY_TITLE) && title !== normalizeGenericMatchText(COSTING_TECHNICAL_USE_TITLE);
+    });
+    var bySlot = {};
+    var fallback = [];
+
+    for (var i = 0; i < candidates.length; i++) {
+      var heading = candidates[i];
+      var meta = readLabourDayMeta(extractStoredPageMeta(getNodeTechnical(heading)).meta);
+      var slotIndex = meta && meta.slotKey ? SLOT_KEYS.indexOf(String(meta.slotKey || "")) : -1;
+      if (slotIndex === -1 && meta && meta.columnIndex != null) slotIndex = toInt(meta.columnIndex, -1);
+      if (slotIndex >= 0 && slotIndex < CFG.maxSchedules && !bySlot[slotIndex]) bySlot[slotIndex] = heading;
+      else fallback.push(heading);
+    }
+
+    for (var slot = 0; slot < CFG.maxSchedules; slot++) {
+      var headingNode = bySlot[slot] || null;
+      if (!headingNode && fallback.length) headingNode = fallback.shift();
+      days.push(headingNode ? readLabourDayState(tree, headingNode, slot) : blankLabourDay(slot === 0 ? "Day of event" : ""));
+    }
+
+    return days.slice(0, CFG.maxSchedules);
+  }
+
+  function readLabourDayState(tree, headingNode, index) {
+    var metaInfo = extractStoredPageMeta(getNodeTechnical(headingNode));
+    var childItems = getDirectChildNodes(tree, headingNode).filter(function (child) {
+      return !!(child && child.data && Number(child.data.kind) !== 0);
+    });
+    var itemIds = [];
+    var itemNames = [];
+
+    for (var i = 0; i < childItems.length; i++) {
+      var child = childItems[i];
+      var id = getNodeDataId(child);
+      var name = getGenericNodeName(child);
+      if (id) itemIds.push(id);
+      if (name && itemNames.length < 4) itemNames.push(name);
+    }
+
+    return normaliseLabourDay({
+      uid: newUid("labourday"),
+      id: getNodeDataId(headingNode),
+      title: getNodeTitle(headingNode) || (index === 0 ? "Day of event" : ""),
+      intro: getNodeDescription(headingNode),
+      baseMemo: metaInfo.baseText || "",
+      meta: readLabourDayMeta(metaInfo.meta),
+      nodeData: cloneItemSnapshot(headingNode.data),
+      itemIds: itemIds,
+      itemCount: childItems.length,
+      itemNames: itemNames
+    });
   }
 
   function findDeptChildHeadingNode(tree, node, targetTitle) {
@@ -2991,7 +3097,7 @@
     if (!tree || !headingNode) throw new Error("Missing proposal page heading.");
 
     var supportFolderNotice = "";
-    var supportParent = getCostingSupportParentForSelection(tree, headingNode);
+    var supportParent = getCostingSupportParentForSelection(tree, headingNode) || getLabourDayParentForSelection(tree, headingNode);
     if (supportParent && supportParent.parent) {
       headingNode = supportParent.parent;
       supportFolderNotice = supportParent.notice;
@@ -3169,9 +3275,17 @@
     return !!(state && state.layoutId === GENERIC_LAYOUTS.VENUE_HERO);
   }
 
+  function isFixedHeroState(state) {
+    return !!(state && state.layoutId === GENERIC_LAYOUTS.HERO && state.renderType === "section");
+  }
+
   function isLabourDeptLayoutState(state) {
     if (!state || state.layoutId !== GENERIC_LAYOUTS.DEPT_TABLE || state.renderType !== "dept") return false;
     return /^labou?r\b/.test(normalizeGenericMatchText(state.title));
+  }
+
+  function shouldUseLabourDayFolders(state) {
+    return isLabourDeptLayoutState(state) && !isGenericCostingSupportState(state);
   }
 
   function isCostingSectionLayout(layoutId) {
@@ -3364,18 +3478,26 @@
     state = state || {};
     var layoutId = String(state.layoutId || GENERIC_LAYOUTS.DEPT_TABLE);
     var rows = Array.isArray(state.rows) ? state.rows.map(normaliseGenericRow) : [];
+    var labourDays = Array.isArray(state.labourDays) ? state.labourDays.slice(0, CFG.maxSchedules).map(normaliseLabourDay) : [];
+    var renderType = state.renderType === "section" ? "section" : (state.renderType === "normal" ? "normal" : "dept");
+    var title = String(state.title || "");
+    var hidden = !!state.hidden;
     if (isGenericManagedRowsLayout(layoutId) && !rows.length) rows.push(blankGenericRow(layoutId === GENERIC_LAYOUTS.CRITICAL_PATH ? "milestone" : "person"));
+    if (layoutId === GENERIC_LAYOUTS.HERO && renderType === "section") {
+      title = "Hero";
+      hidden = false;
+    }
 
     return {
       mode: MODE_GENERIC,
       rootId: String(state.rootId || ""),
       parentId: String(state.parentId || "0"),
       rawName: String(state.rawName || ""),
-      renderType: state.renderType === "section" ? "section" : (state.renderType === "normal" ? "normal" : "dept"),
-      hidden: !!state.hidden,
+      renderType: renderType,
+      hidden: hidden,
       additionalOptions: !!state.additionalOptions,
       cascadeAdditionalOptions: !!state.cascadeAdditionalOptions,
-      title: String(state.title || ""),
+      title: title,
       titleSuffix: String(state.titleSuffix || ""),
       blurb: String(state.blurb || ""),
       technical: String(state.technical || ""),
@@ -3388,6 +3510,7 @@
       pageMeta: normaliseMeta(state.pageMeta),
       nodeData: state.nodeData || null,
       rows: rows,
+      labourDays: labourDays,
       originalManagedIds: normaliseIdList(state.originalManagedIds || []),
       totalChildRows: Number(state.totalChildRows || 0) || 0,
       totalChildItems: Number(state.totalChildItems || state.totalChildRows || 0) || 0,
@@ -3433,6 +3556,76 @@
     };
   }
 
+  function getDefaultLabourDayTitle(index) {
+    if (Number(index) === 0) return "Day of event";
+    return "Day " + String(Number(index) + 1);
+  }
+
+  function normaliseLabourDay(day) {
+    day = day || {};
+    var itemIds = normaliseIdList(day.itemIds || []);
+    var itemNames = Array.isArray(day.itemNames) ? day.itemNames.map(function (name) { return String(name || ""); }).filter(Boolean) : [];
+
+    return {
+      uid: String(day.uid || newUid("labourday")),
+      id: String(day.id || ""),
+      title: cleanHeadingTitle(day.title || ""),
+      intro: String(day.intro || ""),
+      baseMemo: String(day.baseMemo || ""),
+      meta: readLabourDayMeta(day.meta),
+      nodeData: day.nodeData || null,
+      itemIds: itemIds,
+      itemCount: Math.max(itemIds.length, Number(day.itemCount || 0) || 0),
+      itemNames: itemNames.slice(0, 4)
+    };
+  }
+
+  function blankLabourDay(defaultTitle) {
+    return normaliseLabourDay({
+      title: defaultTitle == null ? "" : String(defaultTitle),
+      intro: "",
+      baseMemo: "",
+      meta: null,
+      nodeData: null,
+      itemIds: [],
+      itemCount: 0,
+      itemNames: []
+    });
+  }
+
+  function getLabourDayAtIndex(state, index) {
+    var days = state && state.labourDays ? state.labourDays : [];
+    return normaliseLabourDay(days[index] || blankLabourDay(index === 0 ? "Day of event" : ""));
+  }
+
+  function getLabourDaysForEditor(state) {
+    var days = [];
+    for (var i = 0; i < CFG.maxSchedules; i++) {
+      days.push(getLabourDayAtIndex(state, i));
+    }
+    return days;
+  }
+
+  function isMeaningfulLabourDay(day) {
+    day = normaliseLabourDay(day);
+    return !!(day.id || $.trim(day.title) || $.trim(day.intro) || day.itemCount || day.itemIds.length);
+  }
+
+  function indexLabourDaysByUid(days) {
+    var out = {};
+    for (var i = 0; i < (days || []).length; i++) {
+      var day = days[i];
+      if (day && day.uid) out[day.uid] = normaliseLabourDay(day);
+    }
+    return out;
+  }
+
+  function readLabourDayMeta(meta) {
+    meta = normaliseMeta(meta);
+    if (!meta || String(meta.editor || "") !== LABOUR_DAY_META_EDITOR) return null;
+    return meta;
+  }
+
   function renderGenericEditor(state) {
     state = normaliseGenericState(state || editor.current || {});
     editor.current = state;
@@ -3466,8 +3659,14 @@
     if (isOurProposalSeparatorState(state)) {
       note = "Our Proposal is a fixed visual separator. The only editable setting is whether it is hidden from the proposal.";
     }
+    if (isFixedHeroState(state)) {
+      note = "Hero is the fixed opening page. Its heading name and visibility are locked; only the background image is edited here.";
+    }
     if (isVenueHeroState(state)) {
       note = "The venue name is taken from the project details automatically. You can edit the description, image URL and hide setting only.";
+    }
+    if (shouldUseLabourDayFolders(state)) {
+      note = "Labour uses up to three Day folders for crew resource items. Edit the day titles here, then open a day folder's listed-item picker to manage the crew inside it.";
     }
     if (state.layoutId === GENERIC_LAYOUTS.PM || state.layoutId === GENERIC_LAYOUTS.TEAM) {
       note = "People on this page are managed from HireHop's native listed-item picker, not from manual fields in this editor.";
@@ -3501,10 +3700,10 @@
     if (state.layoutId === GENERIC_LAYOUTS.SECTION_COVER) {
       controls.push(sectionDeptPickerHtml(state));
     }
-    if (isLabourDeptLayoutState(state) && !isGenericCostingSupportState(state)) {
+    if (shouldUseLabourDayFolders(state)) {
       controls.push(genericDeptLayoutControlsHtml(state));
     }
-    if (state.layoutId !== GENERIC_LAYOUTS.DETAILS_CONTAINER) {
+    if (state.layoutId !== GENERIC_LAYOUTS.DETAILS_CONTAINER && !isFixedHeroState(state)) {
       controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="hidden"' + (state.hidden ? ' checked' : '') + '> Hide page //</label>');
       if (isOptionalItemsEligibleState(state)) {
         controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="additionalOptions"' + (state.additionalOptions ? ' checked' : '') + '> Optional Items $</label>');
@@ -3584,11 +3783,12 @@
 
   function genericDeptLayoutControlsHtml(state) {
     var current = normaliseLayout(state.deptLayout || LAYOUT_IMAGE);
+    var isLabour = shouldUseLabourDayFolders(state);
 
     return '' +
       '<div class="wpe-dept-layout-options">' +
-        genericDeptLayoutPillHtml(LAYOUT_IMAGE, current, "Table with half-page image", "Use one costing table with an image area on the right.") +
-        genericDeptLayoutPillHtml(LAYOUT_COLUMNS, current, "Three columns, no image", "Use columns when the page needs more text or rows, not a picture.") +
+        genericDeptLayoutPillHtml(LAYOUT_IMAGE, current, isLabour ? "Image split" : "Table with half-page image", isLabour ? "Use the image-led layout with the day folders stacked beside it." : "Use one costing table with an image area on the right.") +
+        genericDeptLayoutPillHtml(LAYOUT_COLUMNS, current, isLabour ? "Three day columns" : "Three columns, no image", isLabour ? "Use three columns when the labour page needs up to three Day folders side by side." : "Use columns when the page needs more text or rows, not a picture.") +
       '</div>';
   }
 
@@ -3624,6 +3824,7 @@
 
   function genericActionsHtml(state) {
     if (isOurProposalSeparatorState(state)) return '';
+    if (shouldUseLabourDayFolders(state)) return genericLabourActionsHtml(state);
     if (state.layoutId === GENERIC_LAYOUTS.DEPT_TABLE) return genericCostingActionsHtml(state);
     if (isGenericLockedLayout(state.layoutId)) return '<div class="wpe-page-actions"><span>This renderer-controlled page is locked. Select another heading to edit.</span></div>';
 
@@ -3641,6 +3842,10 @@
     }
 
     return '<div class="wpe-page-actions">' + warning + add + '</div>';
+  }
+
+  function genericLabourActionsHtml(state) {
+    return '<div class="wpe-page-actions"><span>Each Day folder stores its crew resource items. Use the day cards on the mock-up to open a folder or launch HireHop&apos;s listed-item picker directly into that day.</span></div>';
   }
 
   function genericCostingActionsHtml(state) {
@@ -3711,6 +3916,10 @@
     return '<textarea class="wpe-field wpe-blurb ' + (className || "") + '" data-generic-field="blurb" placeholder="' + attr(placeholder || "Short page text") + '">' + esc(value) + '</textarea>';
   }
 
+  function fixedTitleLockHtml(title, note) {
+    return '<div class="wpe-fixed-title-lock"><b>' + esc(title || "") + '</b><span>' + esc(note || "") + '</span></div>';
+  }
+
   function technicalFieldHtml(value, label, placeholder) {
     return '' +
       '<div class="wpe-image-url">' +
@@ -3763,7 +3972,7 @@
       '<div class="wpe-proof is-dark wpe-on-image">' +
         '<div class="wpe-full-image">' + imagePreviewHtml(state.technical) + '</div>' +
         technicalFieldHtml(state.technical, "Hero background image") +
-        '<div class="wpe-center-title">' + titleFieldHtml(state.title, "", "Hero") + '</div>' +
+        '<div class="wpe-center-title">' + fixedTitleLockHtml("Hero", "This opening page title is fixed by the renderer.") + '</div>' +
         '<div class="wpe-note-box">Hero metadata such as client, venue, date, project number and version comes from HireHop job fields and is not edited here.</div>' +
         proofCommonHtml(true) +
       '</div>';
@@ -3775,7 +3984,7 @@
     var headingLabel = state.renderType === "dept" ? "Dept" : "Section";
     return '' +
       '<div class="wpe-proof">' +
-        '<div class="wpe-full-image">' + imagePreviewHtml(state.technical) + '</div>' +
+        '<div class="wpe-full-image">' + imagePreviewHtml(state.technical, "is-cover-status") + '</div>' +
         technicalFieldHtml(state.technical, headingLabel + " background image") +
         '<div class="wpe-center-title">' + titleFieldHtml(state.title, "", headingLabel + " title") + '</div>' +
         proofCommonHtml(false) +
@@ -3795,7 +4004,8 @@
   }
 
   function genericDeptTableHtml(state) {
-    if (isLabourDeptLayoutState(state) && normaliseLayout(state.deptLayout || LAYOUT_IMAGE) === LAYOUT_COLUMNS) return genericDeptColumnsHtml(state);
+    if (shouldUseLabourDayFolders(state) && normaliseLayout(state.deptLayout || LAYOUT_IMAGE) === LAYOUT_COLUMNS) return genericLabourDeptColumnsHtml(state);
+    if (shouldUseLabourDayFolders(state)) return genericLabourDeptTableHtml(state);
 
     var costPreview = genericCostPreviewHtml(state);
     return '' +
@@ -3807,6 +4017,20 @@
           titleFieldHtml(state.title, "", "Dept title") +
           blurbFieldHtml(state.blurb, "", "Short blurb above the table") +
           costPreview +
+        '</div>' +
+      '</div>';
+  }
+
+  function genericLabourDeptTableHtml(state) {
+    return '' +
+      '<div class="wpe-proof">' +
+        proofCommonHtml(false) +
+        '<div class="wpe-half-image">' + imagePreviewHtml(state.technical) + technicalFieldHtml(state.technical, "Half-page image URL") + '</div>' +
+        '<div class="wpe-left-copy wpe-labour-copy">' +
+          '<div class="wpe-kicker">' + esc(state.sectionTitle || "Section") + '</div>' +
+          titleFieldHtml(state.title, "", "Dept title") +
+          blurbFieldHtml(state.blurb, "", "Short intro above the day folders") +
+          genericLabourDayCardsHtml(state, false) +
         '</div>' +
       '</div>';
   }
@@ -3925,6 +4149,8 @@
   }
 
   function genericDeptColumnsHtml(state) {
+    if (shouldUseLabourDayFolders(state)) return genericLabourDeptColumnsHtml(state);
+
     var costPreview = genericCostPreviewHtml(state);
 
     return '' +
@@ -3940,6 +4166,59 @@
           '<div class="wpe-dept-columns-note"><b>No-image layout</b><span>This option tells the proposal renderer to use a three-column page instead of the half-image table layout.</span></div>' +
         '</div>' +
       '</div>';
+  }
+
+  function genericLabourDeptColumnsHtml(state) {
+    return '' +
+      '<div class="wpe-proof is-dept-columns">' +
+        proofCommonHtml(false) +
+        '<div class="wpe-labour-columns-shell">' +
+          '<div class="wpe-labour-columns-copy">' +
+            '<div class="wpe-kicker">' + esc(state.sectionTitle || "Section") + '</div>' +
+            titleFieldHtml(state.title, "", "Dept title") +
+            blurbFieldHtml(state.blurb, "", "Short intro above the day columns") +
+          '</div>' +
+          genericLabourDayCardsHtml(state, true) +
+        '</div>' +
+      '</div>';
+  }
+
+  function genericLabourDayCardsHtml(state, asColumns) {
+    var days = getLabourDaysForEditor(state);
+    var cards = [];
+
+    for (var i = 0; i < days.length; i++) {
+      cards.push(genericLabourDayCardHtml(days[i], i));
+    }
+
+    return '<div class="wpe-labour-days' + (asColumns ? ' is-columns' : '') + '">' + cards.join("") + '</div>';
+  }
+
+  function genericLabourDayCardHtml(day, index) {
+    day = normaliseLabourDay(day);
+    var count = Math.max(day.itemCount, day.itemIds.length);
+    var countLabel = count === 1 ? "1 item" : String(count) + " items";
+    var preview = formatLabourDayItemPreview(day);
+    var placeholder = getDefaultLabourDayTitle(index);
+
+    return '' +
+      '<div class="wpe-labour-day' + (isMeaningfulLabourDay(day) ? '' : ' is-empty') + '" data-labour-day-uid="' + attr(day.uid) + '" data-labour-day-id="' + attr(day.id) + '" data-labour-day-index="' + index + '">' +
+        '<div class="wpe-labour-day-head"><span class="wpe-small-label">Day ' + esc(String(index + 1)) + '</span><span class="wpe-labour-day-count">' + esc(countLabel) + '</span></div>' +
+        '<input class="wpe-field" type="text" data-labour-day-field="title" value="' + attr(day.title) + '" placeholder="' + attr(placeholder) + '">' +
+        '<textarea class="wpe-field" data-labour-day-field="intro" placeholder="Optional short note above the crew list.">' + esc(day.intro) + '</textarea>' +
+        '<div class="wpe-labour-day-items' + (count ? '' : ' is-empty') + '">' + esc(preview) + '</div>' +
+        '<div class="wpe-labour-day-actions">' +
+          '<button type="button" class="wpe-mini-btn" data-weo-action="open-labour-day-folder" data-labour-day-index="' + index + '"' + (day.id ? '' : ' disabled') + '>Open folder</button>' +
+          '<button type="button" class="wpe-mini-btn" data-weo-action="open-labour-day-picker" data-labour-day-index="' + index + '">Add crew items</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function formatLabourDayItemPreview(day) {
+    day = normaliseLabourDay(day);
+    if (day.itemNames.length) return day.itemNames.join(" · ");
+    if (Math.max(day.itemCount, day.itemIds.length)) return "Crew resource items are saved in this folder.";
+    return "No crew resource items added yet.";
   }
 
   function genericTeamHtml(state) {
@@ -4076,6 +4355,10 @@
     if ($hidden.length) state.hidden = !!$hidden.prop("checked");
     if ($additionalOptions.length) state.additionalOptions = !!$additionalOptions.prop("checked");
     if ($cascadeAdditionalOptions.length) state.cascadeAdditionalOptions = !!$cascadeAdditionalOptions.prop("checked");
+    if (isFixedHeroState(state)) {
+      state.title = "Hero";
+      state.hidden = false;
+    }
     if (!isOptionalItemsEligibleState(state)) state.additionalOptions = false;
     if (!isLabourDeptLayoutState(state)) state.deptLayout = LAYOUT_IMAGE;
     state.cascadeAdditionalOptions = false;
@@ -4087,6 +4370,36 @@
       state.hidden = true;
       state.additionalOptions = false;
       state.cascadeAdditionalOptions = false;
+    }
+
+    if (shouldUseLabourDayFolders(state)) {
+      var oldDays = indexLabourDaysByUid(prior.labourDays || []);
+      var nextDays = [];
+      $body.find(".wpe-labour-day[data-labour-day-uid]").each(function () {
+        var $card = $(this);
+        var uid = String($card.attr("data-labour-day-uid") || newUid("labourday"));
+        var oldDay = oldDays[uid] || {};
+        var dayIndex = toInt($card.attr("data-labour-day-index"), nextDays.length);
+        var title = cleanHeadingTitle($card.find('[data-labour-day-field="title"]').first().val());
+        var intro = String($card.find('[data-labour-day-field="intro"]').first().val() || "");
+        var hasExistingContent = !!(oldDay && (oldDay.id || oldDay.itemCount || (oldDay.itemIds || []).length));
+        if (!title && (hasExistingContent || $.trim(intro))) title = getDefaultLabourDayTitle(dayIndex);
+
+        nextDays.push(normaliseLabourDay({
+          uid: uid,
+          id: String($card.attr("data-labour-day-id") || oldDay.id || ""),
+          title: title,
+          intro: intro,
+          baseMemo: String(oldDay.baseMemo || ""),
+          meta: oldDay.meta || null,
+          nodeData: oldDay.nodeData || null,
+          itemIds: oldDay.itemIds || [],
+          itemCount: oldDay.itemCount || 0,
+          itemNames: oldDay.itemNames || []
+        }));
+      });
+      state.labourDays = nextDays;
+      return normaliseGenericState(state);
     }
 
     var costingSupport = isGenericCostingSupportState(prior);
@@ -4142,6 +4455,7 @@
   function runGenericEditorAction($btn) {
     var action = String($btn.attr("data-weo-action") || "");
     var rowIndex = toInt($btn.attr("data-row-index"), -1);
+    var dayIndex = toInt($btn.attr("data-labour-day-index"), -1);
     var rowKind = String($btn.attr("data-row-kind") || "person");
     var state = readGenericFormState(editor.current);
 
@@ -4187,6 +4501,16 @@
 
     if (action === "open-native-managed-people") {
       openNativeManagedPeoplePicker(state);
+      return;
+    }
+
+    if (action === "open-labour-day-folder" && dayIndex >= 0) {
+      openLabourDayFolder(state, dayIndex);
+      return;
+    }
+
+    if (action === "open-labour-day-picker" && dayIndex >= 0) {
+      openLabourDayPicker(state, dayIndex);
       return;
     }
 
@@ -4247,6 +4571,18 @@
         };
       });
     }
+    function serialiseLabourDays(days) {
+      return (days || []).map(function (day) {
+        day = normaliseLabourDay(day);
+        return {
+          id: day.id,
+          title: $.trim(day.title),
+          intro: $.trim(day.intro),
+          itemIds: normaliseIdList(day.itemIds || []),
+          itemCount: Number(day.itemCount || 0) || 0
+        };
+      });
+    }
 
     return JSON.stringify({
       layoutId: state.layoutId,
@@ -4260,6 +4596,7 @@
       blurb: $.trim(String(state.blurb || "")),
       technical: $.trim(String(state.technical || "")),
       rows: serialiseRows(state.rows),
+      labourDays: serialiseLabourDays(state.labourDays),
       costingSummaryRows: serialiseRows(state.costingSummaryRows),
       costingUseRows: serialiseRows(state.costingUseRows)
     });
@@ -4270,6 +4607,7 @@
     if (isGenericLockedLayout(state.layoutId)) return "This page is locked by the renderer and cannot be edited here.";
     if (state.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER && normalizeGenericMatchText(state.title) !== "details") return "The Details container must remain named Details.";
     if (!$.trim(state.title) && state.layoutId !== GENERIC_LAYOUTS.FPVISUAL) return "Add a page title.";
+    if (isFixedHeroState(state) && normalizeGenericMatchText(state.title) !== "hero") return "The Hero page title is fixed and must stay named Hero.";
 
     if (state.layoutId === GENERIC_LAYOUTS.CRITICAL_PATH) {
       var activeMilestones = state.rows.filter(isMeaningfulGenericRow);
@@ -4277,6 +4615,16 @@
       for (var i = 0; i < activeMilestones.length; i++) {
         if (!$.trim(activeMilestones[i].name) || !$.trim(activeMilestones[i].additional)) return "Each milestone needs a date/name and description.";
       }
+    }
+
+    if (shouldUseLabourDayFolders(state)) {
+      var labourDays = getLabourDaysForEditor(state);
+      for (var l = 0; l < labourDays.length; l++) {
+        var day = normaliseLabourDay(labourDays[l]);
+        if (!isMeaningfulLabourDay(day)) continue;
+        if (!$.trim(day.title)) return "Each active Labour day folder needs a heading.";
+      }
+      return "";
     }
 
     if (state.layoutId === GENERIC_LAYOUTS.DEPT_TABLE) {
@@ -4420,6 +4768,97 @@
     setTimeout(function () { openNativeNewLineEditor({ preferListedItem: true }); }, 140);
   }
 
+  async function openLabourDayFolder(state, dayIndex) {
+    state = normaliseGenericState(state || editor.current || {});
+    if (!shouldUseLabourDayFolders(state)) return;
+
+    var persisted = await persistGenericStateIfNeeded({
+      savingMessage: "Saving Labour page before opening the Day folder...",
+      errorMessage: "Could not save the Labour page before opening the Day folder.",
+      rerender: true,
+      refreshList: true,
+      successMessage: "Saved."
+    });
+    if (!persisted.ok) return;
+
+    state = normaliseGenericState(persisted.state || editor.current || state);
+    var day = getLabourDayAtIndex(state, dayIndex);
+    if (!day.id) {
+      setStatus("Use Add crew items to create this Day folder first.", "warning");
+      return;
+    }
+
+    var tree = getTree();
+    if (!tree || !selectTreeHeadingByDataId(tree, day.id)) {
+      setStatus("Could not select that Day folder in the supplying list.", "warning");
+      return;
+    }
+
+    setStatus("Selected " + (day.title || getDefaultLabourDayTitle(dayIndex)) + ".", "success");
+  }
+
+  async function openLabourDayPicker(state, dayIndex) {
+    state = normaliseGenericState(state || editor.current || {});
+    if (!shouldUseLabourDayFolders(state)) return;
+
+    var persisted = await persistGenericStateIfNeeded({
+      savingMessage: "Saving Labour page before opening HireHop's listed-item picker...",
+      errorMessage: "Could not save the Labour page before opening the listed-item picker.",
+      rerender: true,
+      refreshList: true,
+      successMessage: "Saved. Preparing Day folder..."
+    });
+    if (!persisted.ok) return;
+
+    state = normaliseGenericState(persisted.state || editor.current || state);
+    var jobId = getCurrentJobId();
+    if (!jobId || !state.rootId) {
+      setStatus("Save the Labour page first, then add crew items.", "warning");
+      return;
+    }
+
+    try {
+      var ensured = await ensureLabourDayFolder(jobId, getTree(), editor.rootNode, state, dayIndex);
+      state = ensured.state;
+      editor.original = clone(state);
+      editor.current = clone(state);
+      renderEditor(editor.current);
+      refreshSupplyingList();
+    } catch (err) {
+      warn("Could not prepare Labour Day folder", err);
+      setStatus(getErrorMessage(err, "Could not prepare the Day folder."), "error");
+      return;
+    }
+
+    var day = getLabourDayAtIndex(state, dayIndex);
+    setStatus("Opening HireHop's listed-item picker for " + (day.title || getDefaultLabourDayTitle(dayIndex)) + "...", "info");
+    setTimeout(function () {
+      var tree = getTree();
+      if (!tree || !selectTreeHeadingByDataId(tree, day.id)) {
+        setStatus("The Day folder is ready. Select it in the list, then use HireHop's native New/list picker.", "warning");
+        return;
+      }
+      hideEditorOverlayForNativePopup();
+      setTimeout(function () { openNativeNewLineEditor({ preferListedItem: true }); }, 120);
+    }, 900);
+  }
+
+  async function ensureLabourDayFolder(jobId, tree, rootNode, state, dayIndex) {
+    state = normaliseGenericState(state || {});
+    var days = getLabourDaysForEditor(state);
+    var day = normaliseLabourDay(days[dayIndex] || {});
+
+    if (!$.trim(day.title)) day.title = getDefaultLabourDayTitle(dayIndex);
+    days[dayIndex] = day;
+    state.labourDays = days;
+    state.labourDays = await saveLabourDayFolders(jobId, tree, rootNode, state);
+
+    return {
+      state: normaliseGenericState(state),
+      day: getLabourDayAtIndex(state, dayIndex)
+    };
+  }
+
   async function saveGenericEditor() {
     await persistGenericStateIfNeeded({
       savingMessage: "Saving page...",
@@ -4435,6 +4874,12 @@
     if (saved.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
       saved.title = "Details";
       saved.hidden = true;
+      saved.additionalOptions = false;
+      saved.cascadeAdditionalOptions = false;
+    }
+    if (isFixedHeroState(saved)) {
+      saved.title = "Hero";
+      saved.hidden = false;
       saved.additionalOptions = false;
       saved.cascadeAdditionalOptions = false;
     }
@@ -4464,7 +4909,9 @@
       saved.rows = await saveGenericManagedRows(jobId, saved);
     }
 
-    if (isCostingRowsLayout(saved.layoutId)) {
+    if (shouldUseLabourDayFolders(saved)) {
+      saved.labourDays = await saveLabourDayFolders(jobId, tree, rootNode, saved);
+    } else if (isCostingRowsLayout(saved.layoutId)) {
       if (isGenericCostingSummaryState(saved)) {
         saved.rows = await saveCostingRevenueRows(jobId, saved);
       } else if (isGenericCostingSupportState(saved)) {
@@ -4495,6 +4942,85 @@
     if (state.additionalOptions) prefix += "$ ";
     prefix += headingPrefixForRenderType(state.renderType);
     return prefix + titleForStorage(state.title) + String(state.titleSuffix || "");
+  }
+
+  async function saveLabourDayFolders(jobId, tree, rootNode, state) {
+    var original = normaliseGenericState(editor.original || {});
+    var originalById = indexById(original.labourDays || []);
+    var nextDays = [];
+    var daysToSave = getLabourDaysForEditor(state);
+
+    for (var i = 0; i < daysToSave.length; i++) {
+      var day = normaliseLabourDay(daysToSave[i]);
+      var originalDay = day.id ? originalById[day.id] : null;
+      if (!isMeaningfulLabourDay(day)) {
+        nextDays.push(day);
+        continue;
+      }
+
+      if (!$.trim(day.title)) day.title = getDefaultLabourDayTitle(i);
+      var dayMeta = buildLabourDayMeta(day, i, originalDay && originalDay.meta && originalDay.meta.updatedAt);
+      var dayMemo = composeStoredPageMetaText(day.baseMemo || "", dayMeta);
+
+      if (!day.id) {
+        setStatus("Creating " + getDefaultLabourDayTitle(i).toLowerCase() + " folder...", "info");
+        var created = await saveHeadingItemDirect({
+          jobId: jobId,
+          id: "",
+          parentId: state.rootId || getNodeDataId(rootNode),
+          rawName: day.title,
+          allowPlainRawName: true,
+          renderType: "normal",
+          title: day.title,
+          desc: day.intro,
+          memo: dayMemo,
+          flag: getSnapshotFlag(day.nodeData),
+          customFields: getSnapshotCustomFields(day.nodeData)
+        });
+        day.id = String(created.id || "");
+      } else if (labourDayNeedsSave(day, originalDay, dayMemo)) {
+        setStatus("Saving " + day.title + " folder...", "info");
+        dayMeta.updatedAt = formatLocalDateTime(new Date());
+        dayMemo = composeStoredPageMetaText(day.baseMemo || "", dayMeta);
+        await saveHeadingItemDirect({
+          jobId: jobId,
+          id: day.id,
+          parentId: state.rootId || getNodeDataId(rootNode),
+          rawName: day.title,
+          allowPlainRawName: true,
+          renderType: "normal",
+          title: day.title,
+          desc: day.intro,
+          memo: dayMemo,
+          flag: getSnapshotFlag(day.nodeData),
+          customFields: getSnapshotCustomFields(day.nodeData)
+        });
+      }
+
+      day.meta = dayMeta;
+      day.baseMemo = day.baseMemo || "";
+      day.nodeData = extendSnapshot(day.nodeData, { ID: day.id, title: day.title, TITLE: day.title, DESCRIPTION: day.intro, TECHNICAL: dayMemo });
+      nextDays.push(day);
+    }
+
+    return nextDays.slice(0, CFG.maxSchedules).map(normaliseLabourDay);
+  }
+
+  function buildLabourDayMeta(day, index, previousUpdatedAt) {
+    return {
+      editor: LABOUR_DAY_META_EDITOR,
+      version: LABOUR_DAY_META_VERSION,
+      slotKey: SLOT_KEYS[index] || SLOT_KEYS[0],
+      columnIndex: index,
+      updatedAt: previousUpdatedAt || formatLocalDateTime(new Date())
+    };
+  }
+
+  function labourDayNeedsSave(day, originalDay, memo) {
+    if (!originalDay) return true;
+    return String(day.title || "") !== String(originalDay.title || "") ||
+      String(day.intro || "") !== String(originalDay.intro || "") ||
+      String(memo || "") !== composeStoredPageMetaText(originalDay.baseMemo || "", originalDay.meta || null);
   }
 
   async function saveCostingRevenueRows(jobId, state) {
