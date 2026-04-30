@@ -5,7 +5,7 @@
   if (!$) return;
 
   var CFG = {
-    version: "2026-04-30.01-generic-heading-navigation-and-costing-sync",
+    version: "2026-04-30.02-editor-preview-and-layout-navigation",
     buttonId: "wise-proposal-page-editor-button",
     stylesId: "wise-proposal-page-editor-styles",
     overlayId: "wise-proposal-page-editor-overlay",
@@ -77,7 +77,8 @@
     nativeEditCaptureInstalled: false,
     nativeBypassClick: false,
     treeDefaultOpenInstalled: false,
-    previewDocked: false
+    previewDocked: false,
+    previewSuppressed: false
   };
 
   log("Proposal page editor loaded", CFG.version);
@@ -137,13 +138,15 @@
       "#" + CFG.overlayId + ".has-preview-dock{justify-content:center;}",
       "#" + CFG.modalId + "{width:min(" + UI_COMPACT.modalMaxWidth + "px,calc(100vw - " + (UI_COMPACT.modalViewportGap * 2) + "px));max-height:calc(100vh - " + (UI_COMPACT.modalViewportGap * 2) + "px);display:flex;flex-direction:column;overflow:hidden;background:#f6f8fb;border:1px solid #d0d5dd;border-radius:16px;box-shadow:0 24px 64px rgba(15,23,42,.28);color:#1f2937;font-family:inherit;}",
       "#" + CFG.overlayId + ".has-preview-dock #" + CFG.modalId + "{border-top-right-radius:0;border-bottom-right-radius:0;}",
-      "#" + EDITOR_PREVIEW.dockId + "{display:none;width:min(420px,33vw);max-height:calc(100vh - " + (UI_COMPACT.modalViewportGap * 2) + "px);border:1px solid #d0d5dd;border-left:0;border-radius:0 16px 16px 0;overflow:hidden;background:#fff;box-shadow:0 24px 64px rgba(15,23,42,.18);}",
+      "#" + EDITOR_PREVIEW.dockId + "{display:none;width:min(630px,50vw);max-height:calc(100vh - " + (UI_COMPACT.modalViewportGap * 2) + "px);border:1px solid #d0d5dd;border-left:0;border-radius:0 16px 16px 0;overflow:hidden;background:#fff;box-shadow:0 24px 64px rgba(15,23,42,.18);}",
       "#" + CFG.overlayId + ".has-preview-dock #" + EDITOR_PREVIEW.dockId + "{display:flex;flex-direction:column;}",
-      "#" + EDITOR_PREVIEW.dockId + " > #" + EDITOR_PREVIEW.previewRightPaneId + "{display:flex!important;flex:1 1 auto!important;width:100%!important;min-width:0!important;border-left:0!important;background:#fff;}",
-      "#" + EDITOR_PREVIEW.dockId + " > #" + EDITOR_PREVIEW.previewRightPaneId + ".is-wide-doc{display:flex!important;flex:1 1 auto!important;width:100%!important;min-width:0!important;}",
-      "#" + EDITOR_PREVIEW.dockId + " #wise-doc-preview-panel{min-height:0;height:100%;}",
-      "#" + EDITOR_PREVIEW.dockId + " #wise-doc-preview-viewport{min-height:420px;}",
-      "#" + CFG.overlayId + ".has-preview-dock #wise-doc-preview-close{display:none;}",
+      "#" + EDITOR_PREVIEW.dockId + " > #" + EDITOR_PREVIEW.previewRightPaneId + "{display:flex!important;flex:1 1 auto!important;width:100%!important;height:100%!important;min-width:0!important;border-left:0!important;background:#fff;}",
+      "#" + EDITOR_PREVIEW.dockId + " > #" + EDITOR_PREVIEW.previewRightPaneId + ".is-wide-doc{display:flex!important;flex:1 1 auto!important;width:100%!important;height:100%!important;min-width:0!important;}",
+      "#" + EDITOR_PREVIEW.dockId + " #wise-doc-preview-panel{display:flex!important;flex-direction:column!important;min-height:0!important;height:100%!important;}",
+      "#" + EDITOR_PREVIEW.dockId + " #wise-doc-preview-panel .wise-doc-preview-toolbar{gap:8px;}",
+      "#" + EDITOR_PREVIEW.dockId + " #wise-doc-preview-panel .wise-doc-preview-render,#" + EDITOR_PREVIEW.dockId + " #wise-doc-preview-refresh,#" + EDITOR_PREVIEW.dockId + " #wise-doc-preview-auto{display:none!important;}",
+      "#" + EDITOR_PREVIEW.dockId + " #wise-doc-preview-viewport{flex:1 1 auto!important;min-height:0!important;height:auto!important;}",
+      "#" + CFG.modalId + " .weo-image-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.56);background:linear-gradient(145deg,#0f172a,#1d4ed8);}",
       "#" + CFG.modalId + " *{box-sizing:border-box;}",
       "#" + CFG.modalId + " .weo-head{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;padding:11px 14px 8px;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);border-bottom:1px solid #e4e8ef;}",
       "#" + CFG.modalId + " .weo-title{font-size:16px;font-weight:800;line-height:1.15;letter-spacing:-.01em;color:#101828;}",
@@ -264,6 +267,13 @@
       setStatus("", "");
     });
 
+    $("#" + CFG.bodyId).on("change", 'input[name="wpe-dept-layout"],[data-generic-field="titleSuffix"],[data-generic-field="hidden"],[data-generic-field="additionalOptions"]', function () {
+      if (editor.saving || editor.mode !== MODE_GENERIC) return;
+      editor.current = readGenericFormState(editor.current);
+      renderEditor(editor.current);
+      setStatus("", "");
+    });
+
     $("#" + CFG.bodyId).on("change", '[data-generic-field="renderType"]', async function () {
       if (editor.saving || editor.mode !== MODE_GENERIC) return;
       var nextRenderType = String($(this).val() || "");
@@ -278,12 +288,8 @@
     });
 
     $("#" + CFG.bodyId).on("input", '[data-field="imageUrl"]', function () {
-      var url = $.trim(String($(this).val() || ""));
       var $panel = $(this).closest(".weo-proof-image-panel");
-      var $img = $panel.find("img").first();
-      if (!$img.length) $img = $('<img alt="">').prependTo($panel);
-      if (url) $img.attr("src", url);
-      else $img.remove();
+      $panel.find("img").remove();
     });
 
     $("#" + CFG.bodyId).on("input", '[data-generic-field="technical"]', function () {
@@ -614,6 +620,8 @@
 
   function showOverlay() {
     $("#" + CFG.overlayId).css("display", "flex");
+    editor.previewSuppressed = false;
+    ensureEditorPreviewPanelOpen();
     attachEditorPreviewDockSoon();
   }
 
@@ -623,8 +631,24 @@
   }
 
   function attachEditorPreviewDockSoon() {
-    setTimeout(attachEditorPreviewDock, 10);
-    setTimeout(attachEditorPreviewDock, 140);
+    setTimeout(function () { ensureEditorPreviewPanelOpen(); attachEditorPreviewDock(); }, 10);
+    setTimeout(function () { ensureEditorPreviewPanelOpen(); attachEditorPreviewDock(); }, 180);
+    setTimeout(function () { ensureEditorPreviewPanelOpen(); attachEditorPreviewDock(); }, 720);
+    setTimeout(function () { ensureEditorPreviewPanelOpen(); attachEditorPreviewDock(); }, 1600);
+  }
+
+  function ensureEditorPreviewPanelOpen() {
+    if (!$("#" + CFG.overlayId).is(":visible")) return;
+    if (window.innerWidth < EDITOR_PREVIEW.minViewportWidth) return;
+    if (editor.previewSuppressed) return;
+
+    var $toggle = $("#wise-doc-preview-toggle").first();
+    if (!$toggle.length) return;
+
+    var $rightPane = $("#" + EDITOR_PREVIEW.previewRightPaneId);
+    if ($rightPane.length && $rightPane.is(":visible")) return;
+
+    try { $toggle.get(0).click(); } catch (e) {}
   }
 
   function attachEditorPreviewDock() {
@@ -646,8 +670,45 @@
       $dock.empty().append($rightPane);
     }
 
+    prepareDockedPreviewToolbar($dock);
+    matchDockedPreviewHeight();
     $overlay.addClass("has-preview-dock");
     editor.previewDocked = true;
+    updateToolbarCompression();
+  }
+
+  function prepareDockedPreviewToolbar($dock) {
+    if (!$dock || !$dock.length) return;
+
+    $dock.find("#wise-doc-preview-refresh").hide();
+    $dock.find("#wise-doc-preview-auto").closest("label").hide();
+    $dock.find(".wise-doc-preview-render").hide();
+    $dock.find("#wise-doc-preview-close").off("click").on("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDockedPreviewFromEditor();
+    });
+  }
+
+  function matchDockedPreviewHeight() {
+    var $dock = $("#" + EDITOR_PREVIEW.dockId);
+    var $modal = $("#" + CFG.modalId);
+    if (!$dock.length || !$modal.length) return;
+
+    var height = $modal.outerHeight() || 0;
+    if (height > 0) $dock.css("height", height + "px");
+  }
+
+  function closeDockedPreviewFromEditor() {
+    editor.previewSuppressed = true;
+    detachEditorPreviewDock();
+    setTimeout(function () {
+      var $toggle = $("#wise-doc-preview-toggle").first();
+      if ($toggle.length && isPreviewWindowOpen()) {
+        try { $toggle.get(0).click(); } catch (e) {}
+      }
+      updateToolbarCompression();
+    }, 0);
   }
 
   function detachEditorPreviewDock() {
@@ -662,6 +723,7 @@
     }
 
     if ($dock.length) $dock.empty();
+    $dock.css("height", "");
     $overlay.removeClass("has-preview-dock");
     editor.previewDocked = false;
   }
@@ -680,11 +742,11 @@
       '<div class="weo-visual-editor">' +
         visualLayoutSwitchHtml(state) +
         '<div class="weo-canvas-shell">' + visualCanvasHtml(state) + '</div>' +
-        visualEditorHelpHtml(state) +
       '</div>';
 
     $("#" + CFG.bodyId).html(html);
     setSaveEnabled(true);
+    if ($("#" + CFG.overlayId).is(":visible")) attachEditorPreviewDockSoon();
   }
 
   function normaliseVisualEditorState(state) {
@@ -709,7 +771,7 @@
           visualLayoutPillHtml(LAYOUT_IMAGE, layout, "Image split", "One image-led schedule page. Uses one day only.") +
           visualLayoutPillHtml(LAYOUT_COLUMNS, layout, "Three columns", "No image. Shows up to three day columns.") +
         '</div>' +
-        '<div class="weo-layout-note"><strong>Direct page editing:</strong> click into the page preview fields below. The fixed title, logo and footer are shown for context but are not editable here.</div>' +
+        proposalNavigationCardHtml() +
       '</div>';
   }
 
@@ -743,7 +805,7 @@
       '<div class="weo-proof-page is-image-layout">' +
         proofLogoHtml() +
         '<div class="weo-proof-image-panel">' +
-          (imageUrl ? '<img alt="" src="' + attr(imageUrl) + '">' : '') +
+          '<div class="weo-image-placeholder">Image shown in document preview</div>' +
           '<div class="weo-image-url-card">' +
             '<label>Feature image URL</label>' +
             '<input type="text" data-field="imageUrl" value="' + attr(imageUrl) + '" placeholder="https://...">' +
@@ -863,6 +925,16 @@
     var scheduleIndex = toInt($btn.attr("data-schedule-index"), -1);
     var rowIndex = toInt($btn.attr("data-row-index"), -1);
     var state = readFormState(editor.current);
+
+    if (action === "navigate-prev") {
+      navigateProposalEditor(-1);
+      return;
+    }
+
+    if (action === "navigate-next") {
+      navigateProposalEditor(1);
+      return;
+    }
 
     if (scheduleIndex >= 0) {
       while (state.schedules.length <= scheduleIndex && state.schedules.length < CFG.maxSchedules) {
@@ -1058,43 +1130,78 @@
   }
 
   async function saveEventOverviewEditor() {
-    if (editor.saving) return;
+    await persistEventOverviewStateIfNeeded({
+      savingMessage: "Saving changes...",
+      successMessage: "Saved.",
+      errorMessage: "Could not save changes.",
+      missingNodeMessage: "Could not find “" + CFG.requiredRawSectionName + "” before saving.",
+      rerender: true,
+      refreshList: true
+    });
+  }
+
+  async function persistEventOverviewStateIfNeeded(options) {
+    options = options || {};
+    if (editor.saving) return { ok: false };
 
     var state = readFormState(editor.current);
     var error = validateEventOverviewState(state);
     if (error) {
       setStatus(error, "error");
-      return;
+      return { ok: false };
+    }
+
+    var tree = getTree();
+    if (!tree || !editor.rootNode) {
+      setStatus(options.missingNodeMessage || "Could not find the Event Overview page before saving.", "error");
+      return { ok: false };
+    }
+
+    var changed = buildEditorStateSignature(state) !== buildEditorStateSignature(editor.original || blankState());
+    if (!changed) {
+      editor.current = clone(state);
+      if (options.rerender !== false) renderEditor(editor.current);
+      if (options.successMessage) setStatus(options.successMessage, "success");
+      return { ok: true, changed: false, state: normaliseEditorState(state), tree: tree };
     }
 
     var jobId = getCurrentJobId();
     if (!jobId) {
       setStatus("Could not detect the current job ID.", "error");
-      return;
+      return { ok: false };
     }
 
-    var tree = getTree();
-    var match = chooseEventOverviewSection(tree);
-    if (!tree || match.error) {
-      setStatus("Could not find “" + CFG.requiredRawSectionName + "” before saving.", "error");
-      return;
+    var rootId = state.rootId || getNodeDataId(editor.rootNode);
+    var rootNode = findHeadingNodeByDataId(tree, rootId) || getEventOverviewRootForSelection(tree, editor.rootNode);
+    if (!rootNode) {
+      var match = chooseEventOverviewSection(tree);
+      rootNode = match && !match.error ? match.node : null;
+    }
+    if (!rootNode) {
+      setStatus(options.missingNodeMessage || "Could not find the Event Overview page before saving.", "error");
+      return { ok: false };
     }
 
     editor.saving = true;
     setBusy(true);
-    setStatus("Saving changes...", "info");
+    setStatus(options.savingMessage || "Saving changes...", "info");
 
     try {
-      var savedState = await applyEventOverviewState(jobId, tree, match.node, state);
+      var savedState = await applyEventOverviewState(jobId, tree, rootNode, state);
+      savedState.mode = MODE_EVENT_OVERVIEW;
       editor.original = clone(savedState);
       editor.current = clone(savedState);
-      renderEditor(editor.current);
-      setStatus("Saved.", "success");
-      refreshSupplyingList();
-      setTimeout(refreshSupplyingList, 900);
+      if (options.rerender !== false) renderEditor(editor.current);
+      if (options.successMessage) setStatus(options.successMessage, "success");
+      if (options.refreshList) {
+        refreshSupplyingList();
+        setTimeout(refreshSupplyingList, 900);
+      }
+      return { ok: true, changed: true, state: savedState, tree: tree };
     } catch (err) {
       warn("Event Overview save failed", err);
-      setStatus(getErrorMessage(err, "Could not save changes."), "error");
+      setStatus(getErrorMessage(err, options.errorMessage || "Could not save changes."), "error");
+      return { ok: false, error: err };
     } finally {
       editor.saving = false;
       setBusy(false);
@@ -2400,9 +2507,6 @@
       "#" + CFG.modalId + " .wpe-layout-kicker{font-size:9px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;color:#98a2b3;}",
       "#" + CFG.modalId + " .wpe-layout-title{margin-top:2px;font-size:12px;font-weight:900;color:#101828;line-height:1.15;}",
       "#" + CFG.modalId + " .wpe-layout-note{margin-top:3px;font-size:10px;color:#667085;line-height:1.3;}",
-      "#" + CFG.modalId + " .wpe-help{flex:1;border:1px solid #d9e2ec;border-radius:12px;background:#fff;padding:7px 9px;font-size:10px;line-height:1.3;color:#475467;}",
-      "#" + CFG.modalId + " .wpe-help strong{font-weight:900;color:#101828;}",
-      "#" + CFG.modalId + " .wpe-help.is-warning{border-color:#fedf89;background:#fffaeb;color:#93370d;}",
       "#" + CFG.modalId + " .wpe-canvas-shell{border:1px solid #d6deea;border-radius:16px;background:#dfe5ee;padding:10px;overflow:auto;}",
       "#" + CFG.modalId + " .wpe-proof{--paper:#fffdf9;--ink:#0d1226;--heritage:#EC9797;position:relative;width:min(100%," + UI_COMPACT.proofMaxWidth + "px);min-width:" + UI_COMPACT.proofMinWidth + "px;aspect-ratio:318/178.9;margin:0 auto;background:var(--paper);overflow:hidden;border-radius:8px;box-shadow:0 10px 30px rgba(15,23,42,.18);color:var(--ink);font-family:Lato,'Segoe UI',Arial,sans-serif;}",
       "#" + CFG.modalId + " .wpe-proof.is-dark{background:#0d1226;color:#fffdf9;}",
@@ -2419,7 +2523,7 @@
       "#" + CFG.modalId + " .wpe-blurb{font-size:clamp(9px,.88vw,12px);padding:6px 7px;min-height:88px;}",
       "#" + CFG.modalId + " .wpe-small-label{display:block;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#98a2b3;margin:0 0 4px;}",
       "#" + CFG.modalId + " .wpe-kicker{font-family:'Albra Sans',Lato,'Segoe UI',Arial,sans-serif;font-size:clamp(11px,1.02vw,14px);line-height:1.05;color:#EC9797;letter-spacing:.03em;margin-bottom:5px;}",
-      "#" + CFG.modalId + " .wpe-image-preview{position:relative;overflow:hidden;background:linear-gradient(145deg,#d9e2ec,#f8fafc);border:1px solid rgba(15,23,42,.12);border-radius:12px;min-height:72px;display:flex;align-items:center;justify-content:center;color:rgba(13,18,38,.42);font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;}",
+      "#" + CFG.modalId + " .wpe-image-preview{position:relative;overflow:hidden;background:linear-gradient(145deg,#d9e2ec,#f8fafc);border:1px solid rgba(15,23,42,.12);border-radius:12px;min-height:72px;display:flex;align-items:center;justify-content:center;text-align:center;padding:18px;color:rgba(13,18,38,.42);font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;}",
       "#" + CFG.modalId + " .wpe-image-preview img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;}",
       "#" + CFG.modalId + " .wpe-image-url{position:absolute;left:12px;right:12px;top:12px;z-index:8;border:1px solid rgba(255,255,255,.28);border-radius:12px;background:rgba(13,18,38,.56);backdrop-filter:blur(3px);padding:7px;color:#fff;}",
       "#" + CFG.modalId + " .wpe-image-url label{display:block;margin-bottom:4px;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.84);}",
@@ -2471,6 +2575,19 @@
       "#" + CFG.modalId + " .wpe-input-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #d9e2ec;border-radius:999px;background:#fbfcfe;padding:4px 7px;font-size:9px;font-weight:900;color:#475467;}",
       "#" + CFG.modalId + " .wpe-input-pill input{border:0;background:transparent;font-size:9px;font-weight:700;color:#101828;outline:0;min-width:150px;}",
       "#" + CFG.modalId + " .wpe-inline-group{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}",
+      "#" + CFG.modalId + " .wpe-title-cover-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;flex-basis:100%;}",
+      "#" + CFG.modalId + " .wpe-title-cover-option{display:grid;gap:6px;align-content:start;border:1px solid #e4e8ef;border-radius:12px;background:#fbfcfe;padding:8px;}",
+      "#" + CFG.modalId + " .wpe-title-cover-option b{display:block;font-size:10px;color:#101828;line-height:1.2;}",
+      "#" + CFG.modalId + " .wpe-title-cover-option span{display:block;margin-top:2px;font-size:9px;line-height:1.25;color:#667085;}",
+      "#" + CFG.modalId + " .wpe-title-cover-option .wpe-select-pill,#" + CFG.modalId + " .wpe-title-cover-option .wpe-input-pill{border-radius:10px;justify-content:space-between;}",
+      "#" + CFG.modalId + " .wpe-title-cover-option .wpe-select-pill select{max-width:170px;}",
+      "#" + CFG.modalId + " .wpe-title-cover-option .wpe-mini-btn{justify-self:start;}",
+      "#" + CFG.modalId + " .wpe-dept-layout-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;width:100%;flex-basis:100%;}",
+      "#" + CFG.modalId + " .wpe-dept-layout-pill{display:grid;grid-template-columns:18px minmax(0,1fr);gap:7px;align-items:start;border:1px solid #d4dbe7;border-radius:12px;background:#fff;padding:7px 9px;cursor:pointer;box-shadow:0 4px 12px rgba(15,23,42,.04);}",
+      "#" + CFG.modalId + " .wpe-dept-layout-pill input{margin:1px 0 0;}",
+      "#" + CFG.modalId + " .wpe-dept-layout-pill b{display:block;font-size:10px;line-height:1.15;color:#101828;}",
+      "#" + CFG.modalId + " .wpe-dept-layout-pill span span{display:block;margin-top:2px;font-size:9px;line-height:1.25;color:#667085;}",
+      "#" + CFG.modalId + " .wpe-dept-layout-pill.is-selected{border-color:#175cd3;background:#eef4ff;box-shadow:inset 0 0 0 1px rgba(23,92,211,.08),0 4px 12px rgba(23,92,211,.08);}",
       "#" + CFG.modalId + " .wpe-locked-panel{position:absolute;left:8%;right:8%;top:28%;z-index:6;border:1px dashed rgba(23,92,211,.30);border-radius:14px;background:rgba(255,255,255,.88);padding:18px;text-align:center;color:#344054;}",
       "#" + CFG.modalId + " .wpe-locked-panel b{display:block;margin-bottom:6px;font-size:16px;color:#101828;}",
       "#" + CFG.modalId + " .wpe-locked-panel p{margin:0 0 10px;font-size:12px;line-height:1.4;}",
@@ -2495,9 +2612,18 @@
       "#" + CFG.modalId + " .wpe-cost-preview-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
       "#" + CFG.modalId + " .wpe-cost-preview-price{text-align:right;font-weight:800;}",
       "#" + CFG.modalId + " .wpe-cost-preview-empty{font-size:10px;color:rgba(13,18,38,.42);font-style:italic;}",
+      "#" + CFG.modalId + " .wpe-dept-columns-grid{position:absolute;left:3.2%;right:3.2%;top:12%;bottom:14%;z-index:5;display:grid;grid-template-columns:1.05fr 1.1fr .85fr;gap:2.4%;align-items:start;}",
+      "#" + CFG.modalId + " .wpe-dept-columns-copy,.wpe-dept-columns-table,.wpe-dept-columns-note{min-width:0;display:grid;gap:7px;}",
+      "#" + CFG.modalId + " .wpe-dept-columns-copy .wpe-blurb{min-height:126px;}",
+      "#" + CFG.modalId + " .wpe-dept-columns-note{border-left:1px solid rgba(236,151,151,.55);padding-left:10px;font-size:clamp(9px,.84vw,11px);line-height:1.35;color:#475467;}",
+      "#" + CFG.modalId + " .wpe-dept-columns-note b{display:block;color:#0d1226;text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;}",
+      "#" + CFG.modalId + " .wpe-thank-alt-title{position:absolute;left:5%;right:43%;bottom:17%;z-index:6;}",
+      "#" + CFG.modalId + " .wpe-thank-alt-title textarea{text-align:left;color:#fffdf9;background:rgba(13,18,38,.38);border-color:rgba(255,255,255,.34);}",
+      "#" + CFG.modalId + " .wpe-thank-alt-note{position:absolute;right:5%;bottom:18%;width:32%;z-index:6;background:rgba(13,18,38,.55);color:#fffdf9;border-color:rgba(255,255,255,.28);}",
       "#" + CFG.modalId + " .wpe-page-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;border:1px solid #d9e2ec;border-radius:12px;background:#fff;padding:7px 9px;}",
       "#" + CFG.modalId + " .wpe-note-box{position:absolute;left:8%;right:8%;bottom:16%;z-index:6;border:1px dashed rgba(23,92,211,.32);border-radius:12px;background:rgba(255,255,255,.82);padding:10px;font-size:11px;line-height:1.35;color:#475467;}",
-      "@media(max-width:900px){#" + CFG.modalId + " .wpe-topbar{display:grid;}#" + CFG.modalId + " .wpe-proof{min-width:600px;}#" + CFG.modalId + " .wpe-canvas-shell{padding:8px;}}"
+      "#" + CFG.modalId + " .wpe-note-box.wpe-thank-alt-note{left:auto;right:5%;bottom:18%;width:32%;background:rgba(13,18,38,.55);color:#fffdf9;border-color:rgba(255,255,255,.28);}",
+      "@media(max-width:900px){#" + CFG.modalId + " .wpe-topbar{display:grid;}#" + CFG.modalId + " .wpe-proof{min-width:600px;}#" + CFG.modalId + " .wpe-canvas-shell{padding:8px;}#" + CFG.modalId + " .wpe-title-cover-options,#" + CFG.modalId + " .wpe-dept-layout-options{grid-template-columns:1fr;}}"
     ].join("");
 
     $("head").append('<style id="' + id + '">' + css + "</style>");
@@ -2633,6 +2759,7 @@
       blurb: getNodeDescription(node),
       technical: technicalInfo.baseText,
       layoutId: layoutId,
+      deptLayout: readGenericDeptLayoutFromMeta(technicalInfo.meta) || LAYOUT_IMAGE,
       layoutLabel: genericLayoutLabel(layoutId),
       sectionTitle: getNearestSectionTitleForGeneric(tree, node),
       flag: getNodeFlag(node),
@@ -2937,7 +3064,25 @@
     meta.editor = GENERIC_META_EDITOR;
     meta.version = GENERIC_META_VERSION;
     meta.layoutId = state.layoutId;
+    if (state.layoutId === GENERIC_LAYOUTS.DEPT_TABLE) {
+      meta.deptLayout = normaliseLayout(state.deptLayout);
+      meta.deptVariant = layoutToVariant(state.deptLayout);
+      meta.layout = meta.deptLayout;
+      meta.variant = meta.deptVariant;
+    } else {
+      delete meta.deptLayout;
+      delete meta.deptVariant;
+      delete meta.layout;
+      delete meta.variant;
+    }
     return meta;
+  }
+
+  function readGenericDeptLayoutFromMeta(meta) {
+    meta = normaliseMeta(meta);
+    if (!meta || String(meta.editor || "") !== GENERIC_META_EDITOR) return "";
+    if (!meta.deptLayout && !meta.deptVariant && !meta.layout && !meta.variant) return "";
+    return normaliseLayout(meta.deptLayout || meta.layout || meta.deptVariant || meta.variant || LAYOUT_IMAGE);
   }
 
   function genericLayoutLabel(layoutId) {
@@ -3007,8 +3152,8 @@
     return parsed.renderType === "section" || parsed.renderType === "dept";
   }
 
-  function getGenericNavigationState() {
-    if (editor.mode !== MODE_GENERIC || !editor.rootNode) return null;
+  function getEditorNavigationState() {
+    if (!editor.rootNode) return null;
 
     var tree = getTree();
     if (!tree) return null;
@@ -3032,6 +3177,10 @@
       prev: index > 0 ? nodes[index - 1] : null,
       next: index < nodes.length - 1 ? nodes[index + 1] : null
     };
+  }
+
+  function getGenericNavigationState() {
+    return getEditorNavigationState();
   }
 
   function getManagedRowsForLayout(layoutId, rows) {
@@ -3162,6 +3311,7 @@
       blurb: String(state.blurb || ""),
       technical: String(state.technical || ""),
       layoutId: layoutId,
+      deptLayout: normaliseLayout(state.deptLayout || LAYOUT_IMAGE),
       layoutLabel: state.layoutLabel || genericLayoutLabel(layoutId),
       sectionTitle: String(state.sectionTitle || ""),
       flag: state.flag == null ? 0 : state.flag,
@@ -3227,6 +3377,7 @@
 
     $("#" + CFG.bodyId).html(html);
     setSaveEnabled(!isGenericLockedLayout(state.layoutId));
+    if ($("#" + CFG.overlayId).is(":visible")) attachEditorPreviewDockSoon();
   }
 
   function genericTopbarHtml(state) {
@@ -3258,8 +3409,7 @@
           '<div class="wpe-layout-note">' + esc(note) + '</div>' +
           genericModifierControlsHtml(state) +
         '</div>' +
-        genericNavigationCardHtml() +
-        '<div class="wpe-help"><strong>Visual editor:</strong> edit the fields directly on the page mock-up. The final document may still paginate long tables automatically in the renderer.</div>' +
+        proposalNavigationCardHtml() +
       '</div>';
   }
 
@@ -3269,6 +3419,9 @@
     var controls = [];
     if (state.layoutId === GENERIC_LAYOUTS.SECTION_COVER) {
       controls.push(sectionDeptPickerHtml(state));
+    }
+    if (state.layoutId === GENERIC_LAYOUTS.DEPT_TABLE && !isGenericCostingSupportState(state)) {
+      controls.push(genericDeptLayoutControlsHtml(state));
     }
     if (state.layoutId !== GENERIC_LAYOUTS.DETAILS_CONTAINER) {
       controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="hidden"' + (state.hidden ? ' checked' : '') + '> Hide page //</label>');
@@ -3299,8 +3452,8 @@
     return controls.length ? '<div class="wpe-modifier-strip">' + controls.join('') + '</div>' : '';
   }
 
-  function genericNavigationCardHtml() {
-    var nav = getGenericNavigationState();
+  function proposalNavigationCardHtml() {
+    var nav = getEditorNavigationState();
     if (!nav) return "";
 
     var position = String(nav.index + 1) + " / " + String(nav.nodes.length);
@@ -3319,6 +3472,10 @@
       '</div>';
   }
 
+  function genericNavigationCardHtml() {
+    return proposalNavigationCardHtml();
+  }
+
   function sectionDeptPickerHtml(state) {
     var tree = getTree();
     var sectionNode = tree ? (findHeadingNodeByDataId(tree, state.rootId) || editor.rootNode) : editor.rootNode;
@@ -3330,12 +3487,36 @@
     }
 
     return '' +
-      '<div class="wpe-inline-group">' +
-        '<label class="wpe-select-pill">Dept <select data-generic-field="sectionDeptTarget">' + options.join("") + '</select></label>' +
-        '<button type="button" class="wpe-mini-btn" data-weo-action="open-section-dept">Open Dept</button>' +
-        '<label class="wpe-input-pill">New Dept <input type="text" data-generic-field="newDeptTitle" placeholder="Costing page title"></label>' +
-        '<button type="button" class="wpe-mini-btn" data-weo-action="create-section-dept">Create + open</button>' +
+      '<div class="wpe-title-cover-options">' +
+        '<div class="wpe-title-cover-option">' +
+          '<div><b>Open a costing page inside this section</b><span>Choose an existing Dept heading and switch straight to editing that page.</span></div>' +
+          '<label class="wpe-select-pill">Dept page <select data-generic-field="sectionDeptTarget">' + options.join("") + '</select></label>' +
+          '<button type="button" class="wpe-mini-btn" data-weo-action="open-section-dept">Open selected Dept</button>' +
+        '</div>' +
+        '<div class="wpe-title-cover-option">' +
+          '<div><b>Create a new costing page here</b><span>Add a Dept heading under this Section, then open its editor automatically.</span></div>' +
+          '<label class="wpe-input-pill">Dept title <input type="text" data-generic-field="newDeptTitle" placeholder="e.g. Labour"></label>' +
+          '<button type="button" class="wpe-mini-btn" data-weo-action="create-section-dept">Create Dept + open</button>' +
+        '</div>' +
       '</div>';
+  }
+
+  function genericDeptLayoutControlsHtml(state) {
+    var current = normaliseLayout(state.deptLayout || LAYOUT_IMAGE);
+
+    return '' +
+      '<div class="wpe-dept-layout-options">' +
+        genericDeptLayoutPillHtml(LAYOUT_IMAGE, current, "Table with half-page image", "Use one costing table with an image area on the right.") +
+        genericDeptLayoutPillHtml(LAYOUT_COLUMNS, current, "Three columns, no image", "Use columns when the page needs more text or rows, not a picture.") +
+      '</div>';
+  }
+
+  function genericDeptLayoutPillHtml(value, current, title, note) {
+    return '' +
+      '<label class="wpe-dept-layout-pill' + (value === current ? ' is-selected' : '') + '">' +
+        '<input type="radio" name="wpe-dept-layout" data-generic-field="deptLayout" value="' + attr(value) + '"' + (value === current ? ' checked' : '') + '>' +
+        '<span><b>' + esc(title) + '</b><span>' + esc(note) + '</span></span>' +
+      '</label>';
   }
 
   function genericSuffixSelectHtml(current, options) {
@@ -3458,26 +3639,18 @@
 
   function imagePreviewHtml(url, extraClass) {
     url = $.trim(String(url || ""));
-    return '<div class="wpe-image-preview ' + (extraClass || "") + '">' + (url ? '<img alt="" src="' + attr(url) + '">' : '<span>Image</span>') + '</div>';
+    return '<div class="wpe-image-preview ' + (extraClass || "") + '"><span>' + esc(url ? "Image shown in document preview" : "Image area") + '</span></div>';
   }
 
   function setImagePreviewUrl($preview, url) {
     if (!$preview || !$preview.length) return;
 
     var nextUrl = $.trim(String(url || ""));
-    var $img = $preview.find("img").first();
     var $placeholder = $preview.children("span").first();
 
-    if (nextUrl) {
-      if (!$img.length) $img = $('<img alt="">').prependTo($preview);
-      $img.attr("src", nextUrl);
-      if ($placeholder.length) $placeholder.hide();
-      return;
-    }
-
-    if ($img.length) $img.remove();
-    if ($placeholder.length) $placeholder.show();
-    else $preview.append("<span>Image</span>");
+    $preview.find("img").remove();
+    if ($placeholder.length) $placeholder.text(nextUrl ? "Image shown in document preview" : "Image area").show();
+    else $preview.append("<span>" + esc(nextUrl ? "Image shown in document preview" : "Image area") + "</span>");
   }
 
   function syncGenericPageImagePreview($input) {
@@ -3526,6 +3699,8 @@
   }
 
   function genericDeptTableHtml(state) {
+    if (normaliseLayout(state.deptLayout || LAYOUT_IMAGE) === LAYOUT_COLUMNS) return genericDeptColumnsHtml(state);
+
     var costPreview = genericCostPreviewHtml(state);
     return '' +
       '<div class="wpe-proof">' +
@@ -3653,6 +3828,24 @@
       '</div>';
   }
 
+  function genericDeptColumnsHtml(state) {
+    var costPreview = genericCostPreviewHtml(state);
+
+    return '' +
+      '<div class="wpe-proof is-dept-columns">' +
+        proofCommonHtml(false) +
+        '<div class="wpe-dept-columns-grid">' +
+          '<div class="wpe-dept-columns-copy">' +
+            '<div class="wpe-kicker">' + esc(state.sectionTitle || "Section") + '</div>' +
+            titleFieldHtml(state.title, "", "Dept title") +
+            blurbFieldHtml(state.blurb, "", "Short intro for this three-column page") +
+          '</div>' +
+          '<div class="wpe-dept-columns-table">' + costPreview + '</div>' +
+          '<div class="wpe-dept-columns-note"><b>No-image layout</b><span>This option tells the proposal renderer to use a three-column page instead of the half-image table layout.</span></div>' +
+        '</div>' +
+      '</div>';
+  }
+
   function genericTeamHtml(state) {
     return '' +
       '<div class="wpe-proof">' +
@@ -3711,6 +3904,18 @@
   }
 
   function genericThankYouHtml(state) {
+    var isAlt = /alt/i.test(String(state.titleSuffix || ""));
+    if (isAlt) {
+      return '' +
+        '<div class="wpe-proof is-dark wpe-on-image is-thank-alt">' +
+          '<div class="wpe-full-image">' + imagePreviewHtml(state.technical) + '</div>' +
+          technicalFieldHtml(state.technical, "Thank-you background image") +
+          '<div class="wpe-thank-alt-title">' + titleFieldHtml(state.title, "", "Thank you") + '</div>' +
+          '<div class="wpe-note-box wpe-thank-alt-note">' + blurbFieldHtml(state.blurb, "", "Optional footer note") + '</div>' +
+          proofCommonHtml(true) +
+        '</div>';
+    }
+
     return '' +
       '<div class="wpe-proof is-dark wpe-on-image">' +
         '<div class="wpe-full-image">' + imagePreviewHtml(state.technical) + '</div>' +
@@ -3761,6 +3966,7 @@
     var $technical = $body.find('[data-generic-field="technical"]').first();
     var $renderType = $body.find('[data-generic-field="renderType"]').first();
     var $titleSuffix = $body.find('[data-generic-field="titleSuffix"]').first();
+    var $deptLayout = $body.find('input[name="wpe-dept-layout"]:checked').first();
     var $hidden = $body.find('[data-generic-field="hidden"]').first();
     var $additionalOptions = $body.find('[data-generic-field="additionalOptions"]').first();
     var $cascadeAdditionalOptions = $body.find('[data-generic-field="cascadeAdditionalOptions"]').first();
@@ -3770,10 +3976,12 @@
     if ($technical.length) state.technical = $.trim(String($technical.val() || ""));
     if ($renderType.length) state.renderType = String($renderType.val() || state.renderType || "dept");
     if ($titleSuffix.length) state.titleSuffix = String($titleSuffix.val() || "");
+    if ($deptLayout.length) state.deptLayout = normaliseLayout($deptLayout.val() || state.deptLayout);
     if ($hidden.length) state.hidden = !!$hidden.prop("checked");
     if ($additionalOptions.length) state.additionalOptions = !!$additionalOptions.prop("checked");
     if ($cascadeAdditionalOptions.length) state.cascadeAdditionalOptions = !!$cascadeAdditionalOptions.prop("checked");
     if (!isOptionalItemsEligibleState(state)) state.additionalOptions = false;
+    if (!isCostingRowsLayout(state.layoutId)) state.deptLayout = LAYOUT_IMAGE;
     state.cascadeAdditionalOptions = false;
 
     if (state.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
@@ -3842,12 +4050,12 @@
     var state = readGenericFormState(editor.current);
 
     if (action === "navigate-prev") {
-      navigateGenericEditor(-1);
+      navigateProposalEditor(-1);
       return;
     }
 
     if (action === "navigate-next") {
-      navigateGenericEditor(1);
+      navigateProposalEditor(1);
       return;
     }
 
@@ -3946,6 +4154,7 @@
 
     return JSON.stringify({
       layoutId: state.layoutId,
+      deptLayout: state.layoutId === GENERIC_LAYOUTS.DEPT_TABLE ? normaliseLayout(state.deptLayout) : "",
       renderType: state.renderType,
       title: $.trim(String(state.title || "")),
       titleSuffix: String(state.titleSuffix || ""),
@@ -4047,20 +4256,37 @@
   }
 
   async function navigateGenericEditor(step) {
-    var nav = getGenericNavigationState();
+    return navigateProposalEditor(step);
+  }
+
+  async function navigateProposalEditor(step) {
+    var nav = getEditorNavigationState();
     var target = step < 0 ? (nav && nav.prev) : (nav && nav.next);
     if (!target) {
       setStatus("No more proposal headings in that direction.", "warning");
       return;
     }
 
-    var persisted = await persistGenericStateIfNeeded({
-      savingMessage: "Saving page before opening the next heading...",
-      errorMessage: "Could not save changes before changing headings.",
-      rerender: false,
-      refreshList: true
-    });
-    if (!persisted.ok) return;
+    if (editor.mode === MODE_GENERIC) {
+      var genericState = normaliseGenericState(editor.current || {});
+      if (!isGenericLockedLayout(genericState.layoutId)) {
+        var persisted = await persistGenericStateIfNeeded({
+          savingMessage: "Saving page before opening the next heading...",
+          errorMessage: "Could not save changes before changing headings.",
+          rerender: false,
+          refreshList: true
+        });
+        if (!persisted.ok) return;
+      }
+    } else if (editor.mode === MODE_EVENT_OVERVIEW) {
+      var overviewPersisted = await persistEventOverviewStateIfNeeded({
+        savingMessage: "Saving Event Overview before opening the next heading...",
+        errorMessage: "Could not save Event Overview before changing headings.",
+        rerender: false,
+        refreshList: true
+      });
+      if (!overviewPersisted.ok) return;
+    }
 
     var opened = openEditorForHeadingDataId(getNodeDataId(target), {
       showOverlay: false,
