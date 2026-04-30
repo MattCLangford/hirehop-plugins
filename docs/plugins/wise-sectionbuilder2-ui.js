@@ -5,7 +5,7 @@
   if (!$) return;
 
   var CFG = {
-    version: "2026-04-29.15-generic-heading-type-compact-ui",
+    version: "2026-04-30.01-generic-heading-navigation-and-costing-sync",
     buttonId: "wise-proposal-page-editor-button",
     stylesId: "wise-proposal-page-editor-styles",
     overlayId: "wise-proposal-page-editor-overlay",
@@ -54,6 +54,14 @@
     proofMinWidth: 640
   };
 
+  var EDITOR_PREVIEW = {
+    dockId: "wise-proposal-page-editor-preview-dock",
+    placeholderId: "wise-proposal-page-editor-preview-placeholder",
+    previewWorkspaceId: "wise-doc-preview-workspace",
+    previewRightPaneId: "wise-doc-preview-right-pane",
+    minViewportWidth: 1460
+  };
+
   var editor = {
     ready: false,
     saving: false,
@@ -68,7 +76,8 @@
     nativeEditEl: null,
     nativeEditCaptureInstalled: false,
     nativeBypassClick: false,
-    treeDefaultOpenInstalled: false
+    treeDefaultOpenInstalled: false,
+    previewDocked: false
   };
 
   log("Proposal page editor loaded", CFG.version);
@@ -106,7 +115,10 @@
     $(window).on("load.wiseEventOverview focus.wiseEventOverview", attempt);
     $(document).on("ajaxComplete.wiseEventOverview", attempt);
     $(window).on("resize.wiseToolbarCompression", function () {
-      if (editor.ready) updateToolbarCompression();
+      if (editor.ready) {
+        updateToolbarCompression();
+        if ($("#" + CFG.overlayId).is(":visible")) attachEditorPreviewDock();
+      }
     });
     $(document).on("click.wiseToolbarCompression", "#wise-doc-preview-toggle", function () {
       setTimeout(updateToolbarCompression, 80);
@@ -121,8 +133,17 @@
     if ($("#" + CFG.stylesId).length) return;
 
     var css = [
-      "#" + CFG.overlayId + "{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:" + UI_COMPACT.modalViewportGap + "px;background:rgba(9,15,28,.56);backdrop-filter:blur(3px);z-index:100000;}",
+      "#" + CFG.overlayId + "{position:fixed;inset:0;display:none;align-items:center;justify-content:center;gap:0;padding:" + UI_COMPACT.modalViewportGap + "px;background:rgba(9,15,28,.56);backdrop-filter:blur(3px);z-index:100000;}",
+      "#" + CFG.overlayId + ".has-preview-dock{justify-content:center;}",
       "#" + CFG.modalId + "{width:min(" + UI_COMPACT.modalMaxWidth + "px,calc(100vw - " + (UI_COMPACT.modalViewportGap * 2) + "px));max-height:calc(100vh - " + (UI_COMPACT.modalViewportGap * 2) + "px);display:flex;flex-direction:column;overflow:hidden;background:#f6f8fb;border:1px solid #d0d5dd;border-radius:16px;box-shadow:0 24px 64px rgba(15,23,42,.28);color:#1f2937;font-family:inherit;}",
+      "#" + CFG.overlayId + ".has-preview-dock #" + CFG.modalId + "{border-top-right-radius:0;border-bottom-right-radius:0;}",
+      "#" + EDITOR_PREVIEW.dockId + "{display:none;width:min(420px,33vw);max-height:calc(100vh - " + (UI_COMPACT.modalViewportGap * 2) + "px);border:1px solid #d0d5dd;border-left:0;border-radius:0 16px 16px 0;overflow:hidden;background:#fff;box-shadow:0 24px 64px rgba(15,23,42,.18);}",
+      "#" + CFG.overlayId + ".has-preview-dock #" + EDITOR_PREVIEW.dockId + "{display:flex;flex-direction:column;}",
+      "#" + EDITOR_PREVIEW.dockId + " > #" + EDITOR_PREVIEW.previewRightPaneId + "{display:flex!important;flex:1 1 auto!important;width:100%!important;min-width:0!important;border-left:0!important;background:#fff;}",
+      "#" + EDITOR_PREVIEW.dockId + " > #" + EDITOR_PREVIEW.previewRightPaneId + ".is-wide-doc{display:flex!important;flex:1 1 auto!important;width:100%!important;min-width:0!important;}",
+      "#" + EDITOR_PREVIEW.dockId + " #wise-doc-preview-panel{min-height:0;height:100%;}",
+      "#" + EDITOR_PREVIEW.dockId + " #wise-doc-preview-viewport{min-height:420px;}",
+      "#" + CFG.overlayId + ".has-preview-dock #wise-doc-preview-close{display:none;}",
       "#" + CFG.modalId + " *{box-sizing:border-box;}",
       "#" + CFG.modalId + " .weo-head{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;padding:11px 14px 8px;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);border-bottom:1px solid #e4e8ef;}",
       "#" + CFG.modalId + " .weo-title{font-size:16px;font-weight:800;line-height:1.15;letter-spacing:-.01em;color:#101828;}",
@@ -195,7 +216,7 @@
       "#" + CFG.statusId + ".is-success{color:#027a48;}",
       "#" + CFG.statusId + ".is-warning{color:#b54708;}",
       "#" + CFG.statusId + ".is-info{color:#175cd3;}",
-      "@media(max-width:900px){#" + CFG.modalId + "{width:calc(100vw - 16px);max-height:calc(100vh - 16px);}#" + CFG.overlayId + "{padding:8px;}#" + CFG.modalId + " .weo-layout-strip{display:grid;}#" + CFG.modalId + " .weo-layout-options{width:100%;}#" + CFG.modalId + " .weo-proof-page{min-width:600px;}#" + CFG.modalId + " .weo-canvas-shell{padding:8px;}}",
+      "@media(max-width:900px){#" + CFG.modalId + "{width:calc(100vw - 16px);max-height:calc(100vh - 16px);}#" + CFG.overlayId + "{padding:8px;}#" + CFG.modalId + " .weo-layout-strip{display:grid;}#" + CFG.modalId + " .weo-layout-options{width:100%;}#" + CFG.modalId + " .weo-proof-page{min-width:600px;}#" + CFG.modalId + " .weo-canvas-shell{padding:8px;}#" + EDITOR_PREVIEW.dockId + "{display:none!important;}}",
       "@media(max-width:720px){#" + CFG.modalId + " .weo-layout-options{grid-template-columns:1fr;}#" + CFG.modalId + " .weo-footer{flex-direction:column;align-items:stretch;}#" + CFG.modalId + " .weo-footer .weo-btn{width:100%;}}"
     ].join("");
 
@@ -224,6 +245,7 @@
             '</div>' +
           '</div>' +
         '</div>' +
+        '<div id="' + EDITOR_PREVIEW.dockId + '" aria-hidden="true"></div>' +
       '</div>';
 
     $("body").append(html);
@@ -576,7 +598,7 @@
     if (editor.saving) return;
 
     if (hasUnsavedEditorChanges()) {
-      var discard = window.confirm("Discard your unsaved Event Overview changes?");
+      var discard = window.confirm("Discard your unsaved page editor changes?");
       if (!discard) return;
     }
 
@@ -585,12 +607,63 @@
 
   function closeEditor() {
     if (editor.saving) return;
+    detachEditorPreviewDock();
     $("#" + CFG.overlayId).hide();
     setStatus("", "");
   }
 
   function showOverlay() {
     $("#" + CFG.overlayId).css("display", "flex");
+    attachEditorPreviewDockSoon();
+  }
+
+  function hideEditorOverlayForNativePopup() {
+    detachEditorPreviewDock();
+    $("#" + CFG.overlayId).hide();
+  }
+
+  function attachEditorPreviewDockSoon() {
+    setTimeout(attachEditorPreviewDock, 10);
+    setTimeout(attachEditorPreviewDock, 140);
+  }
+
+  function attachEditorPreviewDock() {
+    var $overlay = $("#" + CFG.overlayId);
+    var $dock = $("#" + EDITOR_PREVIEW.dockId);
+    var $rightPane = $("#" + EDITOR_PREVIEW.previewRightPaneId);
+
+    if (!$overlay.is(":visible") || !$dock.length) return;
+    if (window.innerWidth < EDITOR_PREVIEW.minViewportWidth || !$rightPane.length || !$rightPane.is(":visible")) {
+      detachEditorPreviewDock();
+      return;
+    }
+
+    if (!$("#" + EDITOR_PREVIEW.placeholderId).length) {
+      $('<div id="' + EDITOR_PREVIEW.placeholderId + '" style="display:none;"></div>').insertBefore($rightPane);
+    }
+
+    if ($rightPane.parent().attr("id") !== EDITOR_PREVIEW.dockId) {
+      $dock.empty().append($rightPane);
+    }
+
+    $overlay.addClass("has-preview-dock");
+    editor.previewDocked = true;
+  }
+
+  function detachEditorPreviewDock() {
+    var $overlay = $("#" + CFG.overlayId);
+    var $dock = $("#" + EDITOR_PREVIEW.dockId);
+    var $rightPane = $("#" + EDITOR_PREVIEW.previewRightPaneId);
+    var $placeholder = $("#" + EDITOR_PREVIEW.placeholderId);
+
+    if ($rightPane.length && $placeholder.length) {
+      $placeholder.before($rightPane);
+      $placeholder.remove();
+    }
+
+    if ($dock.length) $dock.empty();
+    $overlay.removeClass("has-preview-dock");
+    editor.previewDocked = false;
   }
 
   function showMessage(title, message) {
@@ -2318,6 +2391,12 @@
       "#" + CFG.modalId + " .wpe-editor{display:grid;gap:7px;min-width:0;}",
       "#" + CFG.modalId + " .wpe-topbar{display:flex;gap:7px;align-items:stretch;justify-content:space-between;}",
       "#" + CFG.modalId + " .wpe-layout-card{border:1px solid #d6deea;border-radius:12px;background:#fff;padding:8px 9px;box-shadow:0 4px 12px rgba(15,23,42,.04);min-width:240px;}",
+      "#" + CFG.modalId + " .wpe-nav-card{display:grid;gap:6px;min-width:210px;border:1px solid #d6deea;border-radius:12px;background:#fff;padding:8px 9px;box-shadow:0 4px 12px rgba(15,23,42,.04);}",
+      "#" + CFG.modalId + " .wpe-nav-head{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:10px;font-weight:900;color:#101828;}",
+      "#" + CFG.modalId + " .wpe-nav-pos{font-size:9px;color:#667085;}",
+      "#" + CFG.modalId + " .wpe-nav-actions{display:flex;gap:6px;}",
+      "#" + CFG.modalId + " .wpe-nav-card .wpe-mini-btn{flex:1 1 0;}",
+      "#" + CFG.modalId + " .wpe-nav-caption{font-size:10px;line-height:1.3;color:#667085;}",
       "#" + CFG.modalId + " .wpe-layout-kicker{font-size:9px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;color:#98a2b3;}",
       "#" + CFG.modalId + " .wpe-layout-title{margin-top:2px;font-size:12px;font-weight:900;color:#101828;line-height:1.15;}",
       "#" + CFG.modalId + " .wpe-layout-note{margin-top:3px;font-size:10px;color:#667085;line-height:1.3;}",
@@ -2389,9 +2468,15 @@
       "#" + CFG.modalId + " .wpe-toggle-pill input{margin:0;}",
       "#" + CFG.modalId + " .wpe-select-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #d9e2ec;border-radius:999px;background:#fbfcfe;padding:4px 7px;font-size:9px;font-weight:900;color:#475467;}",
       "#" + CFG.modalId + " .wpe-select-pill select{border:0;background:transparent;font-size:9px;font-weight:900;color:#101828;outline:0;}",
+      "#" + CFG.modalId + " .wpe-input-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #d9e2ec;border-radius:999px;background:#fbfcfe;padding:4px 7px;font-size:9px;font-weight:900;color:#475467;}",
+      "#" + CFG.modalId + " .wpe-input-pill input{border:0;background:transparent;font-size:9px;font-weight:700;color:#101828;outline:0;min-width:150px;}",
+      "#" + CFG.modalId + " .wpe-inline-group{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}",
       "#" + CFG.modalId + " .wpe-locked-panel{position:absolute;left:8%;right:8%;top:28%;z-index:6;border:1px dashed rgba(23,92,211,.30);border-radius:14px;background:rgba(255,255,255,.88);padding:18px;text-align:center;color:#344054;}",
       "#" + CFG.modalId + " .wpe-locked-panel b{display:block;margin-bottom:6px;font-size:16px;color:#101828;}",
       "#" + CFG.modalId + " .wpe-locked-panel p{margin:0 0 10px;font-size:12px;line-height:1.4;}",
+      "#" + CFG.modalId + " .wpe-native-items-note{position:absolute;left:8%;right:8%;top:30%;z-index:6;border:1px dashed rgba(23,92,211,.30);border-radius:14px;background:rgba(255,255,255,.9);padding:18px;text-align:center;color:#344054;}",
+      "#" + CFG.modalId + " .wpe-native-items-note b{display:block;margin-bottom:6px;font-size:16px;color:#101828;}",
+      "#" + CFG.modalId + " .wpe-native-items-note p{margin:0 0 10px;font-size:12px;line-height:1.4;}",
       "#" + CFG.modalId + " .wpe-costing-panel{display:grid;gap:8px;border:1px solid #d9e2ec;border-radius:12px;background:#fff;padding:9px;}",
       "#" + CFG.modalId + " .wpe-costing-head{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;}",
       "#" + CFG.modalId + " .wpe-costing-title{font-size:12px;font-weight:900;color:#101828;}",
@@ -2434,7 +2519,6 @@
 
       var selected = getSelectedTreeNode(tree);
       var headingNode = selected && selected.data && Number(selected.data.kind) === 0 ? selected : getParentHeadingNode(tree, selected);
-      var supportFolderNotice = "";
 
       if (!headingNode) {
         showMessage("Select a proposal page", "Select a Section or Dept heading in the supplying list, then open the editor again.");
@@ -2442,35 +2526,7 @@
         return;
       }
 
-      var supportParent = getCostingSupportParentForSelection(tree, headingNode);
-      if (supportParent && supportParent.parent) {
-        headingNode = supportParent.parent;
-        supportFolderNotice = supportParent.notice;
-      }
-
-      var overviewRoot = getEventOverviewRootForSelection(tree, headingNode);
-      if (overviewRoot) {
-        editor.mode = MODE_EVENT_OVERVIEW;
-        editor.rootNode = overviewRoot;
-        editor.original = readEventOverviewState(tree, overviewRoot);
-        editor.original.mode = MODE_EVENT_OVERVIEW;
-        editor.current = clone(editor.original);
-        editor.selectedRegionId = "";
-        setModalTitle("Event Overview", "Edit the Event Overview page visually. The title, logo and footer are fixed; the fields on the page are editable.");
-        renderEditor(editor.current);
-        showOverlay();
-        return;
-      }
-
-      editor.mode = MODE_GENERIC;
-      editor.rootNode = headingNode;
-      editor.original = readGenericPageState(tree, headingNode);
-      editor.current = clone(editor.original);
-      editor.selectedRegionId = "";
-      setModalTitle("Proposal Page Editor", "Edit the selected proposal page visually. Costing table rows are left untouched unless this is a people or timeline style page.");
-      renderEditor(editor.current);
-      if (supportFolderNotice) setStatus(supportFolderNotice, "info");
-      showOverlay();
+      openEditorForHeadingNode(tree, headingNode, { showOverlay: true });
     } catch (err) {
       editor.rootNode = null;
       editor.original = null;
@@ -2552,6 +2608,9 @@
     var layoutId = resolveGenericLayoutId(tree, node, titleInfo.title || headingMeta.name, readGenericLayoutIdFromMeta(technicalInfo.meta));
     var directRows = getDirectChildCustomNodes(tree, node);
     var directHeadings = getDirectChildHeadingNodes(tree, node);
+    var totalChildItems = getDirectChildNodes(tree, node).filter(function (child) {
+      return !!(child && child.data && Number(child.data.kind) !== 0);
+    }).length;
     var genericRows = directRows.map(function (rowNode) { return readGenericRowState(rowNode, layoutId); });
     var managedRows = getManagedRowsForLayout(layoutId, genericRows);
     var costingTechnicalSummaryNode = findChildHeadingByName(directHeadings, COSTING_TECHNICAL_SUMMARY_TITLE);
@@ -2583,6 +2642,7 @@
       rows: managedRows,
       originalManagedIds: managedRows.map(function (row) { return row.id; }).filter(Boolean),
       totalChildRows: directRows.length,
+      totalChildItems: totalChildItems,
       costingTechnicalSummaryId: costingTechnicalSummaryId,
       costingTechnicalUseId: costingTechnicalUseId,
       costingSummaryRows: costingSummaryRows,
@@ -2654,7 +2714,8 @@
     return parseHeadingBaseMeta(getNodeRawTitle(editor.rootNode)).renderType === "section";
   }
 
-  async function openOrCreateGenericDeptChildFromSection() {
+  async function openOrCreateGenericDeptChildFromSection(options) {
+    options = options || {};
     var tree = getTree();
     var sectionNode = editor.rootNode;
     if (!tree || !sectionNode) {
@@ -2662,37 +2723,34 @@
       return;
     }
 
+    var state = readGenericFormState(editor.current);
+    var persisted = await persistGenericStateIfNeeded({
+      savingMessage: "Saving Section page first...",
+      errorMessage: "Could not save the Section page before opening the Dept page.",
+      rerender: true,
+      refreshList: false
+    });
+    if (!persisted.ok) return;
+
+    state = persisted.state || state;
+    tree = getTree();
+    sectionNode = findHeadingNodeByDataId(tree, state.rootId) || sectionNode;
     var jobId = getCurrentJobId();
     if (!jobId) {
       setStatus("Could not detect the current job ID.", "error");
       return;
     }
 
-    var state = readGenericFormState(editor.current);
-    var error = validateGenericState(state);
-    if (error) {
-      setStatus(error, "error");
-      editor.current = normaliseGenericState(state);
-      renderEditor(editor.current);
-      return;
-    }
-
     var sectionId = getNodeDataId(sectionNode);
-    var deptTitle = cleanHeadingTitle(state.title || getNodeTitle(sectionNode) || "New Dept");
-    var deptNode = findDeptChildHeadingNode(tree, sectionNode, deptTitle);
-    var deptId = deptNode ? getNodeDataId(deptNode) : "";
+    var requestedTitle = cleanHeadingTitle(options.title || state.title || getNodeTitle(sectionNode) || "New Dept");
+    var deptId = String(options.targetId || "");
+    var deptNode = deptId ? findHeadingNodeByDataId(tree, deptId) : findDeptChildHeadingNode(tree, sectionNode, requestedTitle);
+    if (deptNode) deptId = getNodeDataId(deptNode);
 
     editor.saving = true;
     setBusy(true);
 
     try {
-      if (genericStateSignature(state) !== genericStateSignature(editor.original || {})) {
-        setStatus("Saving Section page first...", "info");
-        var savedSection = await applyGenericPageState(jobId, tree, sectionNode, state);
-        editor.original = clone(savedSection);
-        editor.current = clone(savedSection);
-      }
-
       if (!deptId) {
         setStatus("Creating Dept page...", "info");
         var created = await saveHeadingItemDirect({
@@ -2700,7 +2758,7 @@
           id: "",
           parentId: sectionId,
           renderType: "dept",
-          title: deptTitle,
+          title: requestedTitle,
           desc: "",
           memo: composeStoredPageMetaText("", buildGenericPageMeta({ layoutId: GENERIC_LAYOUTS.DEPT_TABLE }, null)),
           flag: getNodeFlag(sectionNode),
@@ -2715,21 +2773,19 @@
 
       tree = getTree();
       var freshSectionNode = findHeadingNodeByDataId(tree, sectionId) || sectionNode;
-      deptNode = findHeadingNodeByDataId(tree, deptId) || findDeptChildHeadingNode(tree, freshSectionNode, deptTitle);
+      deptNode = findHeadingNodeByDataId(tree, deptId) || findDeptChildHeadingNode(tree, freshSectionNode, requestedTitle);
       if (!deptNode) {
         setStatus("Dept page is ready in the supplying list. Select it and open the editor again if it does not appear immediately.", "warning");
         return;
       }
 
-      selectTreeHeadingByDataId(tree, deptId || getNodeDataId(deptNode));
-      editor.mode = MODE_GENERIC;
-      editor.rootNode = deptNode;
-      editor.original = readGenericPageState(tree, deptNode);
-      editor.current = clone(editor.original);
-      editor.selectedRegionId = "";
-      setModalTitle("Proposal Page Editor", "Edit the selected proposal page visually. Costing table rows are left untouched unless this is a people or timeline style page.");
-      renderEditor(editor.current);
-      setStatus("Opened Dept costing page.", "success");
+      openEditorForHeadingNode(tree, deptNode, {
+        showOverlay: false,
+        notice: "Opened Dept costing page."
+      });
+      refreshSupplyingList();
+      setTimeout(refreshSupplyingList, 450);
+      attachEditorPreviewDockSoon();
     } catch (err) {
       warn("Could not open Dept child page", err);
       setStatus(getErrorMessage(err, "Could not open the Dept costing page."), "error");
@@ -2739,6 +2795,56 @@
       editor.saving = false;
       setBusy(false);
     }
+  }
+
+  function openEditorForHeadingDataId(dataId, options) {
+    var tree = getTree();
+    if (!tree || !dataId) return false;
+    var node = findHeadingNodeByDataId(tree, dataId);
+    if (!node) return false;
+    openEditorForHeadingNode(tree, node, options);
+    return true;
+  }
+
+  function openEditorForHeadingNode(tree, headingNode, options) {
+    options = options || {};
+    if (!tree || !headingNode) throw new Error("Missing proposal page heading.");
+
+    var supportFolderNotice = "";
+    var supportParent = getCostingSupportParentForSelection(tree, headingNode);
+    if (supportParent && supportParent.parent) {
+      headingNode = supportParent.parent;
+      supportFolderNotice = supportParent.notice;
+    }
+
+    var headingId = getNodeDataId(headingNode);
+    if (headingId) selectTreeHeadingByDataId(tree, headingId);
+
+    var overviewRoot = getEventOverviewRootForSelection(tree, headingNode);
+    if (overviewRoot) {
+      editor.mode = MODE_EVENT_OVERVIEW;
+      editor.rootNode = overviewRoot;
+      editor.original = readEventOverviewState(tree, overviewRoot);
+      editor.original.mode = MODE_EVENT_OVERVIEW;
+      editor.current = clone(editor.original);
+      editor.selectedRegionId = "";
+      setModalTitle("Event Overview", "Edit the Event Overview page visually. The title, logo and footer are fixed; the fields on the page are editable.");
+      renderEditor(editor.current);
+      if (supportFolderNotice) setStatus(supportFolderNotice, "info");
+      if (options.showOverlay !== false) showOverlay();
+      return;
+    }
+
+    editor.mode = MODE_GENERIC;
+    editor.rootNode = headingNode;
+    editor.original = readGenericPageState(tree, headingNode);
+    editor.current = clone(editor.original);
+    editor.selectedRegionId = "";
+    setModalTitle("Proposal Page Editor", "Edit the selected proposal page visually. Child rows stay untouched unless this page type has an in-editor builder.");
+    renderEditor(editor.current);
+    if (supportFolderNotice) setStatus(supportFolderNotice, "info");
+    if (options.notice) setStatus(options.notice, options.noticeTone || "success");
+    if (options.showOverlay !== false) showOverlay();
   }
 
   function splitEditableTitleSuffix(title) {
@@ -2855,17 +2961,88 @@
     return labels[layoutId] || "Proposal page";
   }
 
+  function isCostingSectionLayout(layoutId) {
+    return layoutId === GENERIC_LAYOUTS.SECTION_COVER;
+  }
+
+  function isOptionalItemsEligibleState(state) {
+    state = normaliseGenericState(state || {});
+    if (state.renderType !== "section" && state.renderType !== "dept") return false;
+    if (isGenericCostingSupportState(state)) return false;
+    return isCostingSectionLayout(state.layoutId) || isCostingRowsLayout(state.layoutId);
+  }
+
+  function getSectionDeptChildPages(tree, node) {
+    if (!tree || !node) return [];
+    return getDirectChildHeadingNodes(tree, node).filter(function (child) {
+      var parsed = parseHeadingBaseMeta(getNodeRawTitle(child));
+      return parsed.renderType === "dept";
+    });
+  }
+
+  function getNavigableProposalHeadingNodes(tree) {
+    var out = [];
+    if (!tree) return out;
+
+    function walk(childIds) {
+      for (var i = 0; i < (childIds || []).length; i++) {
+        var node = tree.get_node(childIds[i]);
+        if (!node || !node.id || node.id === "#") continue;
+        if (isNavigableProposalHeadingNode(tree, node)) out.push(node);
+        if (node.children && node.children.length) walk(node.children);
+      }
+    }
+
+    var root = tree.get_node("#");
+    if (root && root.children) walk(root.children);
+    return out;
+  }
+
+  function isNavigableProposalHeadingNode(tree, node) {
+    if (!tree || !node || !node.data || Number(node.data.kind) !== 0) return false;
+    if (isSelectableEventOverviewRoot(node)) return true;
+    if (findEventOverviewAncestor(tree, node)) return false;
+
+    var parsed = parseHeadingBaseMeta(getNodeRawTitle(node));
+    return parsed.renderType === "section" || parsed.renderType === "dept";
+  }
+
+  function getGenericNavigationState() {
+    if (editor.mode !== MODE_GENERIC || !editor.rootNode) return null;
+
+    var tree = getTree();
+    if (!tree) return null;
+
+    var nodes = getNavigableProposalHeadingNodes(tree);
+    var currentId = getNodeDataId(editor.rootNode);
+    var index = -1;
+
+    for (var i = 0; i < nodes.length; i++) {
+      if (getNodeDataId(nodes[i]) === currentId) {
+        index = i;
+        break;
+      }
+    }
+
+    if (index === -1) return null;
+
+    return {
+      nodes: nodes,
+      index: index,
+      prev: index > 0 ? nodes[index - 1] : null,
+      next: index < nodes.length - 1 ? nodes[index + 1] : null
+    };
+  }
+
   function getManagedRowsForLayout(layoutId, rows) {
     rows = (rows || []).map(normaliseGenericRow);
-    if (layoutId === GENERIC_LAYOUTS.PM) return rows.slice(0, 1).length ? rows.slice(0, 1) : [blankGenericRow("person")];
-    if (layoutId === GENERIC_LAYOUTS.TEAM) return rows.slice(0, GENERIC_MAX_PEOPLE).length ? rows.slice(0, GENERIC_MAX_PEOPLE) : [blankGenericRow("person")];
     if (layoutId === GENERIC_LAYOUTS.CRITICAL_PATH) return rows.slice(0, GENERIC_MAX_MILESTONES).length ? rows.slice(0, GENERIC_MAX_MILESTONES) : [blankGenericRow("milestone")];
     if (layoutId === GENERIC_LAYOUTS.DEPT_TABLE) return rows.slice(0, GENERIC_MAX_COST_LINES);
     return [];
   }
 
   function isGenericManagedRowsLayout(layoutId) {
-    return layoutId === GENERIC_LAYOUTS.PM || layoutId === GENERIC_LAYOUTS.TEAM || layoutId === GENERIC_LAYOUTS.CRITICAL_PATH;
+    return layoutId === GENERIC_LAYOUTS.CRITICAL_PATH;
   }
 
   function isCostingRowsLayout(layoutId) {
@@ -2994,6 +3171,7 @@
       rows: rows,
       originalManagedIds: normaliseIdList(state.originalManagedIds || []),
       totalChildRows: Number(state.totalChildRows || 0) || 0,
+      totalChildItems: Number(state.totalChildItems || state.totalChildRows || 0) || 0,
       costingTechnicalSummaryId: String(state.costingTechnicalSummaryId || ""),
       costingTechnicalUseId: String(state.costingTechnicalUseId || ""),
       costingSummaryRows: Array.isArray(state.costingSummaryRows) ? state.costingSummaryRows.map(normaliseGenericRow) : [],
@@ -3060,7 +3238,10 @@
         : "This editor updates the heading title, description and technical/image field. Existing costing rows are not changed.");
 
     if (state.layoutId === GENERIC_LAYOUTS.SECTION_COVER) {
-      note = "This title cover is the Section page. Use the dropdown to open or create a child Dept costing page under this section.";
+      note = "This title cover is the Section page. Use the Dept controls below to open an existing child costing page or create a new one inside this section.";
+    }
+    if (state.layoutId === GENERIC_LAYOUTS.PM || state.layoutId === GENERIC_LAYOUTS.TEAM) {
+      note = "People on this page are managed from HireHop's native listed-item picker, not from manual fields in this editor.";
     }
     if (state.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
       note = "Details is a locked container. Keep the heading named Details; use the suffix selector only, then select a nested page heading to edit the pages inside.";
@@ -3077,6 +3258,7 @@
           '<div class="wpe-layout-note">' + esc(note) + '</div>' +
           genericModifierControlsHtml(state) +
         '</div>' +
+        genericNavigationCardHtml() +
         '<div class="wpe-help"><strong>Visual editor:</strong> edit the fields directly on the page mock-up. The final document may still paginate long tables automatically in the renderer.</div>' +
       '</div>';
   }
@@ -3086,16 +3268,12 @@
 
     var controls = [];
     if (state.layoutId === GENERIC_LAYOUTS.SECTION_COVER) {
-      controls.push(genericRenderTypeSelectHtml(state.renderType, [
-        ["section", "Section cover"],
-        ["dept", "Open Dept costing page"]
-      ]));
+      controls.push(sectionDeptPickerHtml(state));
     }
     if (state.layoutId !== GENERIC_LAYOUTS.DETAILS_CONTAINER) {
       controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="hidden"' + (state.hidden ? ' checked' : '') + '> Hide page //</label>');
-      controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="additionalOptions"' + (state.additionalOptions ? ' checked' : '') + '> Optional Items $</label>');
-      if (state.renderType === "section") {
-        controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="cascadeAdditionalOptions"' + (state.cascadeAdditionalOptions || state.additionalOptions ? ' checked' : '') + '> Apply Optional Items to nested Dept pages</label>');
+      if (isOptionalItemsEligibleState(state)) {
+        controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="additionalOptions"' + (state.additionalOptions ? ' checked' : '') + '> Optional Items $</label>');
       }
     }
 
@@ -3119,6 +3297,45 @@
     }
 
     return controls.length ? '<div class="wpe-modifier-strip">' + controls.join('') + '</div>' : '';
+  }
+
+  function genericNavigationCardHtml() {
+    var nav = getGenericNavigationState();
+    if (!nav) return "";
+
+    var position = String(nav.index + 1) + " / " + String(nav.nodes.length);
+    var caption = nav.prev
+      ? "Previous: " + getNodeTitle(nav.prev)
+      : (nav.next ? "Next: " + getNodeTitle(nav.next) : "Only one proposal page is available in this list.");
+
+    return '' +
+      '<div class="wpe-nav-card">' +
+        '<div class="wpe-nav-head"><span>Heading navigation</span><span class="wpe-nav-pos">' + esc(position) + '</span></div>' +
+        '<div class="wpe-nav-actions">' +
+          '<button type="button" class="wpe-mini-btn" data-weo-action="navigate-prev"' + (nav.prev ? '' : ' disabled') + '>Previous</button>' +
+          '<button type="button" class="wpe-mini-btn" data-weo-action="navigate-next"' + (nav.next ? '' : ' disabled') + '>Next</button>' +
+        '</div>' +
+        '<div class="wpe-nav-caption">' + esc(caption) + '</div>' +
+      '</div>';
+  }
+
+  function sectionDeptPickerHtml(state) {
+    var tree = getTree();
+    var sectionNode = tree ? (findHeadingNodeByDataId(tree, state.rootId) || editor.rootNode) : editor.rootNode;
+    var depts = getSectionDeptChildPages(tree, sectionNode);
+    var options = ['<option value="">Select existing Dept page...</option>'];
+
+    for (var i = 0; i < depts.length; i++) {
+      options.push('<option value="' + attr(getNodeDataId(depts[i])) + '">' + esc(getNodeTitle(depts[i])) + '</option>');
+    }
+
+    return '' +
+      '<div class="wpe-inline-group">' +
+        '<label class="wpe-select-pill">Dept <select data-generic-field="sectionDeptTarget">' + options.join("") + '</select></label>' +
+        '<button type="button" class="wpe-mini-btn" data-weo-action="open-section-dept">Open Dept</button>' +
+        '<label class="wpe-input-pill">New Dept <input type="text" data-generic-field="newDeptTitle" placeholder="Costing page title"></label>' +
+        '<button type="button" class="wpe-mini-btn" data-weo-action="create-section-dept">Create + open</button>' +
+      '</div>';
   }
 
   function genericSuffixSelectHtml(current, options) {
@@ -3148,14 +3365,15 @@
     if (isGenericLockedLayout(state.layoutId)) return '<div class="wpe-page-actions"><span>This renderer-controlled page is locked. Select another heading to edit.</span></div>';
 
     var add = "";
-    if (state.layoutId === GENERIC_LAYOUTS.TEAM) {
-      add = '<button type="button" class="wpe-mini-btn" data-weo-action="add-generic-row" data-row-kind="person"' + (state.rows.length >= GENERIC_MAX_PEOPLE ? ' disabled' : '') + '>+ Add person</button>';
-    } else if (state.layoutId === GENERIC_LAYOUTS.CRITICAL_PATH) {
+    if (state.layoutId === GENERIC_LAYOUTS.CRITICAL_PATH) {
       add = '<button type="button" class="wpe-mini-btn" data-weo-action="add-generic-row" data-row-kind="milestone"' + (state.rows.length >= GENERIC_MAX_MILESTONES ? ' disabled' : '') + '>+ Add milestone</button>';
     }
 
     var warning = "";
-    if (!isGenericManagedRowsLayout(state.layoutId) && state.totalChildRows) {
+    if ((state.layoutId === GENERIC_LAYOUTS.PM || state.layoutId === GENERIC_LAYOUTS.TEAM)) {
+      warning = '<span>People cards are curated via HireHop internal items and are not edited directly here.</span>';
+      add = '<button type="button" class="wpe-mini-btn" data-weo-action="open-native-managed-people">Use HireHop listed-item picker</button>';
+    } else if (!isGenericManagedRowsLayout(state.layoutId) && state.totalChildRows) {
       warning = '<span>Existing child rows are preserved and not edited here.</span>';
     }
 
@@ -3427,33 +3645,29 @@
   }
 
   function genericProjectManagerHtml(state) {
-    var person = state.rows[0] || blankGenericRow("person");
     return '' +
       '<div class="wpe-proof">' +
         proofCommonHtml(false) +
         '<div class="wpe-pm-title">' + titleFieldHtml(state.title, "", "Project manager page title") + '</div>' +
-        '<div class="wpe-pm-stage">' +
-          '<div class="wpe-pm-person" data-generic-row-uid="' + attr(person.uid) + '" data-row-id="' + attr(person.id) + '" data-row-kind="person">' +
-            '<input class="wpe-field" data-generic-row-field="name" value="' + attr(person.name) + '" placeholder="Name">' +
-            '<input class="wpe-field" data-generic-row-field="altName" value="' + attr(person.altName || person.additional) + '" placeholder="Role">' +
-            '<textarea class="wpe-field wpe-blurb" data-generic-row-field="technical" placeholder="Short biography">' + esc(person.technical) + '</textarea>' +
-            '<input class="wpe-field" data-generic-row-field="imageUrl" value="' + attr(person.imageUrl) + '" placeholder="Portrait image URL">' +
-          '</div>' +
-          imagePreviewHtml(person.imageUrl || state.technical, "wpe-pm-image") +
-        '</div>' +
+        genericManagedPeopleNoteHtml("Project manager", "This card is populated from employee items added with HireHop's native listed-item picker. Use the action below to add or swap the person attached to this page.") +
       '</div>';
   }
 
   function genericTeamHtml(state) {
-    var people = state.rows.slice(0, GENERIC_MAX_PEOPLE);
-    if (!people.length) people = [blankGenericRow("person")];
-    var cards = people.map(function (person, index) { return genericPersonCardHtml(person, index); }).join("");
-
     return '' +
       '<div class="wpe-proof">' +
         proofCommonHtml(false) +
         '<div class="wpe-team-title">' + titleFieldHtml(state.title, "", "Team page title") + '</div>' +
-        '<div class="wpe-people-grid">' + cards + '</div>' +
+        genericManagedPeopleNoteHtml("Specialist team", "Team members are curated from employee inventory items selected through HireHop's native listed-item picker. This editor keeps the page title here, while the people themselves stay managed in HireHop.") +
+      '</div>';
+  }
+
+  function genericManagedPeopleNoteHtml(title, text) {
+    return '' +
+      '<div class="wpe-native-items-note">' +
+        '<b>' + esc(title) + ' is managed from native HireHop items</b>' +
+        '<p>' + esc(text) + '</p>' +
+        '<p>When you need to curate the people shown here, use the listed-item picker rather than typing names, roles, biographies or image URLs into this editor.</p>' +
       '</div>';
   }
 
@@ -3559,7 +3773,8 @@
     if ($hidden.length) state.hidden = !!$hidden.prop("checked");
     if ($additionalOptions.length) state.additionalOptions = !!$additionalOptions.prop("checked");
     if ($cascadeAdditionalOptions.length) state.cascadeAdditionalOptions = !!$cascadeAdditionalOptions.prop("checked");
-    if (state.renderType !== "section") state.cascadeAdditionalOptions = false;
+    if (!isOptionalItemsEligibleState(state)) state.additionalOptions = false;
+    state.cascadeAdditionalOptions = false;
 
     if (state.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
       state.title = "Details";
@@ -3626,6 +3841,36 @@
     var rowKind = String($btn.attr("data-row-kind") || "person");
     var state = readGenericFormState(editor.current);
 
+    if (action === "navigate-prev") {
+      navigateGenericEditor(-1);
+      return;
+    }
+
+    if (action === "navigate-next") {
+      navigateGenericEditor(1);
+      return;
+    }
+
+    if (action === "open-section-dept") {
+      var selectedDeptId = String($("#" + CFG.bodyId).find('[data-generic-field="sectionDeptTarget"]').val() || "");
+      if (!selectedDeptId) {
+        setStatus("Choose a child Dept page to open first.", "warning");
+        return;
+      }
+      openOrCreateGenericDeptChildFromSection({ targetId: selectedDeptId });
+      return;
+    }
+
+    if (action === "create-section-dept") {
+      var newDeptTitle = $.trim(String($("#" + CFG.bodyId).find('[data-generic-field="newDeptTitle"]').val() || ""));
+      if (!newDeptTitle) {
+        setStatus("Add a new Dept title first.", "warning");
+        return;
+      }
+      openOrCreateGenericDeptChildFromSection({ title: newDeptTitle });
+      return;
+    }
+
     if (action === "open-technical-summary-editor") {
       openTechnicalSummaryEditor(state);
       return;
@@ -3633,6 +3878,11 @@
 
     if (action === "open-technical-use-picker") {
       openTechnicalUsePicker(state);
+      return;
+    }
+
+    if (action === "open-native-managed-people") {
+      openNativeManagedPeoplePicker(state);
       return;
     }
 
@@ -3724,19 +3974,6 @@
       }
     }
 
-    if (state.layoutId === GENERIC_LAYOUTS.TEAM) {
-      var activePeople = state.rows.filter(isMeaningfulGenericRow);
-      if (!activePeople.length) return "Add at least one person.";
-      for (var p = 0; p < activePeople.length; p++) {
-        if (!$.trim(activePeople[p].name)) return "Each person needs a name.";
-      }
-    }
-
-    if (state.layoutId === GENERIC_LAYOUTS.PM) {
-      var pm = state.rows[0] || blankGenericRow("person");
-      if (!$.trim(pm.name)) return "Add the project manager name.";
-    }
-
     if (state.layoutId === GENERIC_LAYOUTS.DEPT_TABLE) {
       var costingRows = (isGenericCostingSupportState(state) ? state.rows : state.costingSummaryRows).filter(isMeaningfulGenericRow);
       for (var c = 0; c < costingRows.length; c++) {
@@ -3753,47 +3990,120 @@
     return !!(row.id || $.trim(row.name) || $.trim(row.altName) || $.trim(row.additional) || $.trim(row.technical) || $.trim(row.imageUrl) || $.trim(row.revenue));
   }
 
-  async function saveGenericEditor() {
-    if (editor.saving) return;
+  async function persistGenericStateIfNeeded(options) {
+    options = options || {};
+    if (editor.saving) return { ok: false };
 
     var state = readGenericFormState(editor.current);
     var error = validateGenericState(state);
     if (error) {
       setStatus(error, "error");
-      return;
+      return { ok: false };
+    }
+
+    var tree = getTree();
+    if (!tree || !editor.rootNode) {
+      setStatus(options.missingNodeMessage || "Could not find the selected page before saving.", "error");
+      return { ok: false };
+    }
+
+    var changed = genericStateSignature(state) !== genericStateSignature(editor.original || {});
+    if (!changed) {
+      editor.current = clone(state);
+      if (options.rerender !== false) renderEditor(editor.current);
+      if (options.successMessage) setStatus(options.successMessage, "success");
+      return { ok: true, changed: false, state: normaliseGenericState(state), tree: tree };
     }
 
     var jobId = getCurrentJobId();
     if (!jobId) {
       setStatus("Could not detect the current job ID.", "error");
-      return;
-    }
-
-    var tree = getTree();
-    if (!tree || !editor.rootNode) {
-      setStatus("Could not find the selected page before saving.", "error");
-      return;
+      return { ok: false };
     }
 
     editor.saving = true;
     setBusy(true);
-    setStatus("Saving page...", "info");
+    setStatus(options.savingMessage || "Saving page...", "info");
 
     try {
       var saved = await applyGenericPageState(jobId, tree, editor.rootNode, state);
       editor.original = clone(saved);
       editor.current = clone(saved);
-      renderEditor(editor.current);
-      setStatus("Saved.", "success");
-      refreshSupplyingList();
-      setTimeout(refreshSupplyingList, 900);
+      if (options.rerender !== false) renderEditor(editor.current);
+      if (options.successMessage) setStatus(options.successMessage, "success");
+      if (options.refreshList) {
+        refreshSupplyingList();
+        setTimeout(refreshSupplyingList, 900);
+      }
+      return { ok: true, changed: true, state: saved, tree: tree };
     } catch (err) {
       warn("Generic page save failed", err);
-      setStatus(getErrorMessage(err, "Could not save changes."), "error");
+      setStatus(getErrorMessage(err, options.errorMessage || "Could not save changes."), "error");
+      return { ok: false, error: err };
     } finally {
       editor.saving = false;
       setBusy(false);
     }
+  }
+
+  async function navigateGenericEditor(step) {
+    var nav = getGenericNavigationState();
+    var target = step < 0 ? (nav && nav.prev) : (nav && nav.next);
+    if (!target) {
+      setStatus("No more proposal headings in that direction.", "warning");
+      return;
+    }
+
+    var persisted = await persistGenericStateIfNeeded({
+      savingMessage: "Saving page before opening the next heading...",
+      errorMessage: "Could not save changes before changing headings.",
+      rerender: false,
+      refreshList: true
+    });
+    if (!persisted.ok) return;
+
+    var opened = openEditorForHeadingDataId(getNodeDataId(target), {
+      showOverlay: false,
+      notice: "Opened " + getNodeTitle(target) + "."
+    });
+    if (!opened) {
+      setStatus("Could not open that heading after saving. Refresh the supplying list and try again.", "warning");
+      return;
+    }
+
+    attachEditorPreviewDockSoon();
+  }
+
+  async function openNativeManagedPeoplePicker() {
+    var persisted = await persistGenericStateIfNeeded({
+      savingMessage: "Saving page before opening HireHop's listed-item picker...",
+      errorMessage: "Could not save the page before opening the listed-item picker.",
+      rerender: true,
+      refreshList: true,
+      successMessage: "Saved."
+    });
+    if (!persisted.ok) return;
+
+    var rootId = getNodeDataId(editor.rootNode);
+    var tree = getTree();
+    if (!rootId || !tree || !selectTreeHeadingByDataId(tree, rootId)) {
+      setStatus("Select this page heading in the list, then use HireHop's native New button.", "warning");
+      return;
+    }
+
+    setStatus("Opening HireHop's listed-item picker...", "info");
+    hideEditorOverlayForNativePopup();
+    setTimeout(function () { openNativeNewLineEditor({ preferListedItem: true }); }, 140);
+  }
+
+  async function saveGenericEditor() {
+    await persistGenericStateIfNeeded({
+      savingMessage: "Saving page...",
+      successMessage: "Saved.",
+      errorMessage: "Could not save changes.",
+      rerender: true,
+      refreshList: true
+    });
   }
 
   async function applyGenericPageState(jobId, tree, rootNode, state) {
@@ -3847,8 +4157,8 @@
       }
     }
 
-    if (saved.renderType === "section" && saved.cascadeAdditionalOptions) {
-      await applyAdditionalOptionsToDescendantPages(jobId, tree, rootNode, saved.additionalOptions);
+    if (isOptionalItemsEligibleState(saved)) {
+      await syncRelatedCostingAdditionalOptions(jobId, tree, rootNode, saved);
     }
 
     return normaliseGenericState(saved);
@@ -3985,44 +4295,96 @@
     return String(Math.round(n * 100) / 100);
   }
 
-  async function applyAdditionalOptionsToDescendantPages(jobId, tree, rootNode, enabled) {
-    var descendants = getDescendantPageHeadingNodes(tree, rootNode);
-    for (var i = 0; i < descendants.length; i++) {
-      var node = descendants[i];
-      var raw = getNodeRawTitle(node);
-      var parsed = parseHeadingBaseMeta(raw);
-      if (parsed.renderType !== "section" && parsed.renderType !== "dept") continue;
-      var nextRawName = composeRawHeadingWithAdditionalOption(parsed, !!enabled);
-      if (normaliseWhitespace(nextRawName) === normaliseWhitespace(raw)) continue;
-      setStatus("Updating nested Optional Items setting...", "info");
-      await saveHeadingItemDirect({
-        jobId: jobId,
-        id: getNodeDataId(node),
-        parentId: getParentHeadingDataId(tree, node),
-        rawName: nextRawName,
-        renderType: parsed.renderType,
-        title: parsed.name,
-        desc: getNodeDescription(node),
-        memo: getNodeTechnical(node),
-        flag: getNodeFlag(node),
-        customFields: getNodeCustomFields(node)
-      });
+  async function syncRelatedCostingAdditionalOptions(jobId, tree, rootNode, state) {
+    state = normaliseGenericState(state || {});
+    if (!isOptionalItemsEligibleState(state) || !tree || !rootNode) return;
+
+    if (state.renderType === "section") {
+      var descendants = getDescendantCostingDeptHeadingNodes(tree, rootNode);
+      for (var i = 0; i < descendants.length; i++) {
+        await updateHeadingAdditionalOptionIfNeeded(jobId, tree, descendants[i], !!state.additionalOptions, "Updating nested Dept Optional Items setting...");
+      }
+      return;
     }
+
+    if (state.renderType !== "dept") return;
+
+    var parentSection = getNearestCostingSectionNode(tree, rootNode);
+    if (!parentSection) return;
+
+    var enableSection = !!state.additionalOptions;
+    if (!enableSection) {
+      var siblingDepts = getSectionDeptChildPages(tree, parentSection).filter(function (child) {
+        return isCostingDeptHeadingNode(tree, child);
+      });
+      for (var s = 0; s < siblingDepts.length; s++) {
+        if (getNodeDataId(siblingDepts[s]) === state.rootId) continue;
+        if (parseHeadingBaseMeta(getNodeRawTitle(siblingDepts[s])).additionalOptions) {
+          enableSection = true;
+          break;
+        }
+      }
+    }
+
+    await updateHeadingAdditionalOptionIfNeeded(jobId, tree, parentSection, enableSection, "Updating related Section Optional Items setting...");
   }
 
-  function getDescendantPageHeadingNodes(tree, rootNode) {
+  function getDescendantCostingDeptHeadingNodes(tree, rootNode) {
     var out = [];
     function walk(node) {
       var children = getDirectChildHeadingNodes(tree, node);
       for (var i = 0; i < children.length; i++) {
         var child = children[i];
-        var parsed = parseHeadingBaseMeta(getNodeRawTitle(child));
-        if (parsed.renderType === "section" || parsed.renderType === "dept") out.push(child);
+        if (isCostingDeptHeadingNode(tree, child)) out.push(child);
         walk(child);
       }
     }
     if (tree && rootNode) walk(rootNode);
     return out;
+  }
+
+  function getNearestCostingSectionNode(tree, node) {
+    var current = getParentHeadingNode(tree, node);
+    while (current) {
+      var parsed = parseHeadingBaseMeta(getNodeRawTitle(current));
+      if (parsed.renderType === "section" && resolveGenericLayoutId(tree, current, parsed.name || getNodeTitle(current), readGenericLayoutIdFromMeta(extractStoredPageMeta(getNodeTechnical(current)).meta)) === GENERIC_LAYOUTS.SECTION_COVER) {
+        return current;
+      }
+      current = getParentHeadingNode(tree, current);
+    }
+    return null;
+  }
+
+  function isCostingDeptHeadingNode(tree, node) {
+    if (!tree || !node || !node.data || Number(node.data.kind) !== 0) return false;
+    var parsed = parseHeadingBaseMeta(getNodeRawTitle(node));
+    if (parsed.renderType !== "dept") return false;
+    var layoutId = resolveGenericLayoutId(tree, node, parsed.name || getNodeTitle(node), readGenericLayoutIdFromMeta(extractStoredPageMeta(getNodeTechnical(node)).meta));
+    return layoutId === GENERIC_LAYOUTS.DEPT_TABLE;
+  }
+
+  async function updateHeadingAdditionalOptionIfNeeded(jobId, tree, node, enabled, statusMessage) {
+    if (!tree || !node) return;
+    var raw = getNodeRawTitle(node);
+    var parsed = parseHeadingBaseMeta(raw);
+    if (parsed.renderType !== "section" && parsed.renderType !== "dept") return;
+
+    var nextRawName = composeRawHeadingWithAdditionalOption(parsed, !!enabled);
+    if (normaliseWhitespace(nextRawName) === normaliseWhitespace(raw)) return;
+
+    setStatus(statusMessage || "Updating Optional Items setting...", "info");
+    await saveHeadingItemDirect({
+      jobId: jobId,
+      id: getNodeDataId(node),
+      parentId: getParentHeadingDataId(tree, node),
+      rawName: nextRawName,
+      renderType: parsed.renderType,
+      title: parsed.name,
+      desc: getNodeDescription(node),
+      memo: getNodeTechnical(node),
+      flag: getNodeFlag(node),
+      customFields: getNodeCustomFields(node)
+    });
   }
 
   function composeRawHeadingWithAdditionalOption(parsed, enabled) {
@@ -4162,7 +4524,7 @@
         return;
       }
       // Hide the Wise modal before using HireHop's native picker. Otherwise the native popup can open behind this overlay.
-      $("#" + CFG.overlayId).hide();
+      hideEditorOverlayForNativePopup();
       setTimeout(function () { openNativeNewLineEditor({ preferListedItem: true }); }, 120);
     }, 900);
   }
