@@ -5,7 +5,7 @@
   if (!$) return;
 
   var CFG = {
-    version: "2026-04-30.04-hero-lock-labour-day-folders-and-preview-fixes",
+    version: "2026-04-30.05-labour-layout-cleanup-and-brand-refresh",
     buttonId: "wise-proposal-page-editor-button",
     stylesId: "wise-proposal-page-editor-styles",
     overlayId: "wise-proposal-page-editor-overlay",
@@ -2697,6 +2697,34 @@
       "#" + CFG.modalId + " .wpe-page-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;border:1px solid #d9e2ec;border-radius:12px;background:#fff;padding:7px 9px;}",
       "#" + CFG.modalId + " .wpe-note-box{position:absolute;left:8%;right:8%;bottom:16%;z-index:6;border:1px dashed rgba(23,92,211,.32);border-radius:12px;background:rgba(255,255,255,.82);padding:10px;font-size:11px;line-height:1.35;color:#475467;}",
       "#" + CFG.modalId + " .wpe-note-box.wpe-thank-alt-note{left:auto;right:5%;bottom:18%;width:32%;background:rgba(13,18,38,.55);color:#fffdf9;border-color:rgba(255,255,255,.28);}",
+      "#" + CFG.overlayId + "{background:rgba(13,18,38,.72);backdrop-filter:blur(10px);}",
+      "#" + CFG.modalId + "{background:#FFFDF9;border:1px solid rgba(236,151,151,.34);border-radius:22px;box-shadow:0 34px 90px rgba(13,18,38,.34);font-family:Lato,'Segoe UI',Arial,sans-serif;color:#0D1226;}",
+      "#" + CFG.modalId + " .weo-head{background:linear-gradient(135deg,rgba(255,253,249,.98) 0%,rgba(236,151,151,.18) 100%);border-bottom:1px solid rgba(236,151,151,.3);padding:14px 16px 10px;}",
+      "#" + CFG.modalId + " .weo-body{background:linear-gradient(180deg,#fffdf9 0%,#f4efe9 100%);padding:10px 12px 12px;}",
+      "#" + CFG.modalId + " .weo-title,#" + CFG.modalId + " .wpe-layout-title,#" + CFG.modalId + " .wpe-costing-title,#" + CFG.modalId + " .wpe-nav-head span:first-child{font-family:'Albra Sans',Lato,'Segoe UI',Arial,sans-serif;font-weight:400;letter-spacing:.01em;color:#0D1226;}",
+      "#" + CFG.modalId + " .weo-subtitle,#" + CFG.modalId + " .weo-layout-note,#" + CFG.modalId + " .wpe-layout-note,#" + CFG.modalId + " .wpe-nav-caption,#" + CFG.modalId + " .wpe-costing-note,#" + CFG.modalId + " .wpe-page-actions span,#" + CFG.modalId + " .wpe-note-box,#" + CFG.modalId + " .wpe-dept-columns-note{font-family:Lato,'Segoe UI',Arial,sans-serif;font-weight:300;color:rgba(13,18,38,.78);}",
+      "#" + CFG.modalId + " .weo-canvas-shell,#" + CFG.modalId + " .wpe-canvas-shell{background:linear-gradient(160deg,rgba(13,18,38,.08) 0%,rgba(236,151,151,.17) 100%);border:1px solid rgba(13,18,38,.1);border-radius:20px;box-shadow:inset 0 1px 0 rgba(255,255,255,.5);}",
+      "#" + CFG.modalId + " .weo-layout-note,#" + CFG.modalId + " .wpe-layout-card,#" + CFG.modalId + " .wpe-nav-card,#" + CFG.modalId + " .wpe-costing-panel,#" + CFG.modalId + " .wpe-page-actions,#" + CFG.modalId + " .wpe-title-cover-option,#" + CFG.modalId + " .wpe-locked-panel,#" + CFG.modalId + " .wpe-native-items-note,#" + CFG.modalId + " .wpe-separator-note{background:rgba(255,253,249,.95);border:1px solid rgba(236,151,151,.32);box-shadow:0 18px 42px rgba(13,18,38,.08);}",
+      "#" + CFG.modalId + " .weo-layout-pill,#" + CFG.modalId + " .wpe-dept-layout-pill{background:rgba(255,253,249,.96);border:1px solid rgba(13,18,38,.12);box-shadow:0 10px 24px rgba(13,18,38,.06);}",
+      "#" + CFG.modalId + " .weo-layout-pill.is-selected,#" + CFG.modalId + " .wpe-dept-layout-pill.is-selected{border-color:#EC9797;background:rgba(236,151,151,.14);box-shadow:inset 0 0 0 1px rgba(236,151,151,.16),0 14px 32px rgba(13,18,38,.09);}",
+      "#" + CFG.modalId + " .weo-page-field,#" + CFG.modalId + " .wpe-field{border:1px solid rgba(236,151,151,.42);background:rgba(255,253,249,.92);color:#0D1226;font-family:Lato,'Segoe UI',Arial,sans-serif;font-weight:300;box-shadow:0 8px 18px rgba(13,18,38,.05);}",
+      "#" + CFG.modalId + " .weo-page-field:hover,#" + CFG.modalId + " .wpe-field:hover{border-color:rgba(236,151,151,.72);background:#fff;}",
+      "#" + CFG.modalId + " .weo-page-field:focus,#" + CFG.modalId + " .wpe-field:focus{border-color:#0D1226;background:#fff;box-shadow:0 0 0 3px rgba(236,151,151,.22);}",
+      "#" + CFG.modalId + " .weo-btn,#" + CFG.modalId + " .wpe-mini-btn{border:1px solid rgba(13,18,38,.16);border-radius:999px;background:#FFFDF9;color:#0D1226;font-family:Lato,'Segoe UI',Arial,sans-serif;font-weight:700;box-shadow:0 10px 22px rgba(13,18,38,.08);}",
+      "#" + CFG.modalId + " .weo-btn:hover,#" + CFG.modalId + " .wpe-mini-btn:hover{background:#EC9797;border-color:#EC9797;color:#0D1226;}",
+      "#" + CFG.modalId + " .weo-btn.is-primary{border-color:#0D1226;background:#0D1226;color:#FFFDF9;}",
+      "#" + CFG.modalId + " .weo-btn.is-primary:hover{background:#EC9797;border-color:#EC9797;color:#0D1226;}",
+      "#" + CFG.modalId + " .wpe-mini-btn.is-danger{border-color:rgba(13,18,38,.2);background:rgba(13,18,38,.04);color:#0D1226;}",
+      "#" + CFG.modalId + " .wpe-mini-btn.is-danger:hover{background:#0D1226;border-color:#0D1226;color:#FFFDF9;}",
+      "#" + CFG.modalId + " .wpe-toggle-pill,#" + CFG.modalId + " .wpe-select-pill,#" + CFG.modalId + " .wpe-input-pill{background:rgba(255,253,249,.94);border:1px solid rgba(236,151,151,.32);color:#0D1226;}",
+      "#" + CFG.modalId + " .wpe-toggle-pill select,#" + CFG.modalId + " .wpe-select-pill select,#" + CFG.modalId + " .wpe-input-pill input{color:#0D1226;font-family:Lato,'Segoe UI',Arial,sans-serif;}",
+      "#" + CFG.modalId + " .wpe-heading,#" + CFG.modalId + " .weo-day-heading,#" + CFG.modalId + " .weo-page-title-fixed,#" + CFG.modalId + " .wpe-small-label,#" + CFG.modalId + " .wpe-layout-kicker,#" + CFG.modalId + " .wpe-kicker{font-family:'Albra Sans',Lato,'Segoe UI',Arial,sans-serif;}",
+      "#" + CFG.modalId + " .wpe-layout-kicker,#" + CFG.modalId + " .wpe-small-label,#" + CFG.modalId + " .wpe-labour-day-count{color:rgba(13,18,38,.58);}",
+      "#" + CFG.modalId + " .wpe-image-preview{background:linear-gradient(145deg,rgba(13,18,38,.1),rgba(236,151,151,.22));border:1px solid rgba(13,18,38,.1);color:rgba(13,18,38,.55);}",
+      "#" + CFG.modalId + " .wpe-image-url{background:rgba(13,18,38,.76);border:1px solid rgba(236,151,151,.34);}",
+      "#" + CFG.modalId + " .wpe-labour-day{border:1px solid rgba(13,18,38,.08);border-radius:16px;background:linear-gradient(180deg,rgba(255,253,249,.98) 0%,rgba(236,151,151,.1) 100%);box-shadow:0 14px 30px rgba(13,18,38,.08);padding:10px;}",
+      "#" + CFG.modalId + " .wpe-labour-day.is-empty{border-style:dashed;background:rgba(255,253,249,.8);}",
+      "#" + CFG.modalId + " .wpe-labour-day-items{border-top:1px solid rgba(236,151,151,.34);padding-top:7px;color:rgba(13,18,38,.78);}",
       "@media(max-width:900px){#" + CFG.modalId + " .wpe-topbar{display:grid;}#" + CFG.modalId + " .wpe-proof{min-width:600px;}#" + CFG.modalId + " .wpe-canvas-shell{padding:8px;}#" + CFG.modalId + " .wpe-title-cover-options,#" + CFG.modalId + " .wpe-dept-layout-options{grid-template-columns:1fr;}}"
     ].join("");
 
@@ -2933,6 +2961,7 @@
     });
     var itemIds = [];
     var itemNames = [];
+    var itemRefs = [];
 
     for (var i = 0; i < childItems.length; i++) {
       var child = childItems[i];
@@ -2940,6 +2969,13 @@
       var name = getGenericNodeName(child);
       if (id) itemIds.push(id);
       if (name && itemNames.length < 4) itemNames.push(name);
+      if (id) {
+        itemRefs.push({
+          id: id,
+          kind: Number(child.data && child.data.kind != null ? child.data.kind : 0),
+          name: name
+        });
+      }
     }
 
     return normaliseLabourDay({
@@ -2952,7 +2988,8 @@
       nodeData: cloneItemSnapshot(headingNode.data),
       itemIds: itemIds,
       itemCount: childItems.length,
-      itemNames: itemNames
+      itemNames: itemNames,
+      itemRefs: itemRefs
     });
   }
 
@@ -3565,6 +3602,14 @@
     day = day || {};
     var itemIds = normaliseIdList(day.itemIds || []);
     var itemNames = Array.isArray(day.itemNames) ? day.itemNames.map(function (name) { return String(name || ""); }).filter(Boolean) : [];
+    var itemRefs = Array.isArray(day.itemRefs) ? day.itemRefs.map(function (item) {
+      item = item || {};
+      return {
+        id: String(item.id || ""),
+        kind: Number(item.kind == null ? 0 : item.kind),
+        name: String(item.name || "")
+      };
+    }).filter(function (item) { return !!item.id; }) : [];
 
     return {
       uid: String(day.uid || newUid("labourday")),
@@ -3575,8 +3620,9 @@
       meta: readLabourDayMeta(day.meta),
       nodeData: day.nodeData || null,
       itemIds: itemIds,
-      itemCount: Math.max(itemIds.length, Number(day.itemCount || 0) || 0),
-      itemNames: itemNames.slice(0, 4)
+      itemCount: Math.max(itemIds.length, itemRefs.length, Number(day.itemCount || 0) || 0),
+      itemNames: itemNames.slice(0, 4),
+      itemRefs: itemRefs
     };
   }
 
@@ -3589,7 +3635,8 @@
       nodeData: null,
       itemIds: [],
       itemCount: 0,
-      itemNames: []
+      itemNames: [],
+      itemRefs: []
     });
   }
 
@@ -3604,6 +3651,20 @@
       days.push(getLabourDayAtIndex(state, i));
     }
     return days;
+  }
+
+  function getLabourDayLimitForState(state) {
+    state = normaliseGenericState(state || {});
+    return normaliseLayout(state.deptLayout || LAYOUT_IMAGE) === LAYOUT_COLUMNS ? CFG.maxSchedules : 1;
+  }
+
+  function getVisibleLabourDays(state) {
+    return getLabourDaysForEditor(state).slice(0, getLabourDayLimitForState(state));
+  }
+
+  function getLabourDayLabel(day, index) {
+    day = normaliseLabourDay(day);
+    return $.trim(day.title) || getDefaultLabourDayTitle(index);
   }
 
   function isMeaningfulLabourDay(day) {
@@ -3666,7 +3727,7 @@
       note = "The venue name is taken from the project details automatically. You can edit the description, image URL and hide setting only.";
     }
     if (shouldUseLabourDayFolders(state)) {
-      note = "Labour uses up to three Day folders for crew resource items. Edit the day titles here, then open a day folder's listed-item picker to manage the crew inside it.";
+      note = "Labour uses up to three Day folders for crew resource items. Edit the day titles here, then use each day card to save changes or delete an entire saved crew folder.";
     }
     if (state.layoutId === GENERIC_LAYOUTS.PM || state.layoutId === GENERIC_LAYOUTS.TEAM) {
       note = "People on this page are managed from HireHop's native listed-item picker, not from manual fields in this editor.";
@@ -3845,7 +3906,7 @@
   }
 
   function genericLabourActionsHtml(state) {
-    return '<div class="wpe-page-actions"><span>Each Day folder stores its crew resource items. Use the day cards on the mock-up to open a folder or launch HireHop&apos;s listed-item picker directly into that day.</span></div>';
+    return '<div class="wpe-page-actions"><span>Each Day card saves the Labour page and can delete its saved crew folder. Image split keeps one Day folder; three-column layout can keep up to three.</span></div>';
   }
 
   function genericCostingActionsHtml(state) {
@@ -4184,7 +4245,7 @@
   }
 
   function genericLabourDayCardsHtml(state, asColumns) {
-    var days = getLabourDaysForEditor(state);
+    var days = getVisibleLabourDays(state);
     var cards = [];
 
     for (var i = 0; i < days.length; i++) {
@@ -4196,10 +4257,11 @@
 
   function genericLabourDayCardHtml(day, index) {
     day = normaliseLabourDay(day);
-    var count = Math.max(day.itemCount, day.itemIds.length);
+    var count = Math.max(day.itemCount, day.itemIds.length, (day.itemRefs || []).length);
     var countLabel = count === 1 ? "1 item" : String(count) + " items";
     var preview = formatLabourDayItemPreview(day);
     var placeholder = getDefaultLabourDayTitle(index);
+    var canDelete = isMeaningfulLabourDay(day);
 
     return '' +
       '<div class="wpe-labour-day' + (isMeaningfulLabourDay(day) ? '' : ' is-empty') + '" data-labour-day-uid="' + attr(day.uid) + '" data-labour-day-id="' + attr(day.id) + '" data-labour-day-index="' + index + '">' +
@@ -4208,8 +4270,8 @@
         '<textarea class="wpe-field" data-labour-day-field="intro" placeholder="Optional short note above the crew list.">' + esc(day.intro) + '</textarea>' +
         '<div class="wpe-labour-day-items' + (count ? '' : ' is-empty') + '">' + esc(preview) + '</div>' +
         '<div class="wpe-labour-day-actions">' +
-          '<button type="button" class="wpe-mini-btn" data-weo-action="open-labour-day-folder" data-labour-day-index="' + index + '"' + (day.id ? '' : ' disabled') + '>Open folder</button>' +
-          '<button type="button" class="wpe-mini-btn" data-weo-action="open-labour-day-picker" data-labour-day-index="' + index + '">Add crew items</button>' +
+          '<button type="button" class="wpe-mini-btn" data-weo-action="save-labour-day" data-labour-day-index="' + index + '">Save</button>' +
+          '<button type="button" class="wpe-mini-btn is-danger" data-weo-action="delete-labour-day" data-labour-day-index="' + index + '"' + (canDelete ? '' : ' disabled') + '>Delete</button>' +
         '</div>' +
       '</div>';
   }
@@ -4395,10 +4457,11 @@
           nodeData: oldDay.nodeData || null,
           itemIds: oldDay.itemIds || [],
           itemCount: oldDay.itemCount || 0,
-          itemNames: oldDay.itemNames || []
+          itemNames: oldDay.itemNames || [],
+          itemRefs: oldDay.itemRefs || []
         }));
       });
-      state.labourDays = nextDays;
+      state.labourDays = nextDays.slice(0, getLabourDayLimitForState(state));
       return normaliseGenericState(state);
     }
 
@@ -4504,13 +4567,13 @@
       return;
     }
 
-    if (action === "open-labour-day-folder" && dayIndex >= 0) {
-      openLabourDayFolder(state, dayIndex);
+    if (action === "save-labour-day" && dayIndex >= 0) {
+      saveLabourDayCard(state, dayIndex);
       return;
     }
 
-    if (action === "open-labour-day-picker" && dayIndex >= 0) {
-      openLabourDayPicker(state, dayIndex);
+    if (action === "delete-labour-day" && dayIndex >= 0) {
+      deleteLabourDayCard(state, dayIndex);
       return;
     }
 
@@ -4768,95 +4831,58 @@
     setTimeout(function () { openNativeNewLineEditor({ preferListedItem: true }); }, 140);
   }
 
-  async function openLabourDayFolder(state, dayIndex) {
+  async function saveLabourDayCard(state, dayIndex) {
     state = normaliseGenericState(state || editor.current || {});
     if (!shouldUseLabourDayFolders(state)) return;
+    var day = getLabourDayAtIndex(state, dayIndex);
+    var label = getLabourDayLabel(day, dayIndex);
 
-    var persisted = await persistGenericStateIfNeeded({
-      savingMessage: "Saving Labour page before opening the Day folder...",
-      errorMessage: "Could not save the Labour page before opening the Day folder.",
+    await persistGenericStateIfNeeded({
+      savingMessage: "Saving " + label + "...",
+      errorMessage: "Could not save " + label + ".",
       rerender: true,
       refreshList: true,
-      successMessage: "Saved."
+      successMessage: label + " saved."
     });
-    if (!persisted.ok) return;
-
-    state = normaliseGenericState(persisted.state || editor.current || state);
-    var day = getLabourDayAtIndex(state, dayIndex);
-    if (!day.id) {
-      setStatus("Use Add crew items to create this Day folder first.", "warning");
-      return;
-    }
-
-    var tree = getTree();
-    if (!tree || !selectTreeHeadingByDataId(tree, day.id)) {
-      setStatus("Could not select that Day folder in the supplying list.", "warning");
-      return;
-    }
-
-    setStatus("Selected " + (day.title || getDefaultLabourDayTitle(dayIndex)) + ".", "success");
   }
 
-  async function openLabourDayPicker(state, dayIndex) {
+  async function deleteLabourDayCard(state, dayIndex) {
     state = normaliseGenericState(state || editor.current || {});
     if (!shouldUseLabourDayFolders(state)) return;
-
-    var persisted = await persistGenericStateIfNeeded({
-      savingMessage: "Saving Labour page before opening HireHop's listed-item picker...",
-      errorMessage: "Could not save the Labour page before opening the listed-item picker.",
-      rerender: true,
-      refreshList: true,
-      successMessage: "Saved. Preparing Day folder..."
-    });
-    if (!persisted.ok) return;
-
-    state = normaliseGenericState(persisted.state || editor.current || state);
-    var jobId = getCurrentJobId();
-    if (!jobId || !state.rootId) {
-      setStatus("Save the Labour page first, then add crew items.", "warning");
-      return;
-    }
-
-    try {
-      var ensured = await ensureLabourDayFolder(jobId, getTree(), editor.rootNode, state, dayIndex);
-      state = ensured.state;
-      editor.original = clone(state);
-      editor.current = clone(state);
-      renderEditor(editor.current);
-      refreshSupplyingList();
-    } catch (err) {
-      warn("Could not prepare Labour Day folder", err);
-      setStatus(getErrorMessage(err, "Could not prepare the Day folder."), "error");
-      return;
-    }
-
-    var day = getLabourDayAtIndex(state, dayIndex);
-    setStatus("Opening HireHop's listed-item picker for " + (day.title || getDefaultLabourDayTitle(dayIndex)) + "...", "info");
-    setTimeout(function () {
-      var tree = getTree();
-      if (!tree || !selectTreeHeadingByDataId(tree, day.id)) {
-        setStatus("The Day folder is ready. Select it in the list, then use HireHop's native New/list picker.", "warning");
-        return;
-      }
-      hideEditorOverlayForNativePopup();
-      setTimeout(function () { openNativeNewLineEditor({ preferListedItem: true }); }, 120);
-    }, 900);
-  }
-
-  async function ensureLabourDayFolder(jobId, tree, rootNode, state, dayIndex) {
-    state = normaliseGenericState(state || {});
     var days = getLabourDaysForEditor(state);
+    if (dayIndex < 0 || dayIndex >= days.length) return;
+
     var day = normaliseLabourDay(days[dayIndex] || {});
+    if (!isMeaningfulLabourDay(day)) {
+      days[dayIndex] = blankLabourDay("");
+      state.labourDays = days.slice(0, getLabourDayLimitForState(state));
+      editor.current = normaliseGenericState(state);
+      renderEditor(editor.current);
+      setStatus("Cleared the empty day card.", "success");
+      return;
+    }
 
-    if (!$.trim(day.title)) day.title = getDefaultLabourDayTitle(dayIndex);
-    days[dayIndex] = day;
-    state.labourDays = days;
-    state.labourDays = await saveLabourDayFolders(jobId, tree, rootNode, state);
+    var label = getLabourDayLabel(day, dayIndex);
+    if (!window.confirm('Delete "' + label + '" and every crew item saved inside it?')) return;
 
-    return {
-      state: normaliseGenericState(state),
-      day: getLabourDayAtIndex(state, dayIndex)
-    };
+    var rollbackState = clone(editor.current || state);
+    days[dayIndex] = blankLabourDay("");
+    state.labourDays = days.slice(0, getLabourDayLimitForState(state));
+    editor.current = normaliseGenericState(state);
+    renderEditor(editor.current);
+
+    var persisted = await persistGenericStateIfNeeded({
+      savingMessage: "Deleting " + label + "...",
+      errorMessage: "Could not delete " + label + ".",
+      rerender: true,
+      refreshList: true,
+      successMessage: label + " deleted."
+    });
+
+    if (!persisted.ok) {
+      editor.current = normaliseGenericState(rollbackState);
+      renderEditor(editor.current);
+    }
   }
 
   async function saveGenericEditor() {
@@ -4882,6 +4908,9 @@
       saved.hidden = false;
       saved.additionalOptions = false;
       saved.cascadeAdditionalOptions = false;
+    }
+    if (shouldUseLabourDayFolders(saved) && normaliseLayout(saved.deptLayout || LAYOUT_IMAGE) === LAYOUT_COLUMNS) {
+      saved.technical = "";
     }
 
     var headingName = composeGenericStoredHeading(saved);
@@ -4948,7 +4977,8 @@
     var original = normaliseGenericState(editor.original || {});
     var originalById = indexById(original.labourDays || []);
     var nextDays = [];
-    var daysToSave = getLabourDaysForEditor(state);
+    var daysToSave = getVisibleLabourDays(state);
+    var keepIds = [];
 
     for (var i = 0; i < daysToSave.length; i++) {
       var day = normaliseLabourDay(daysToSave[i]);
@@ -4997,10 +5027,18 @@
         });
       }
 
+      if (day.id) keepIds.push(day.id);
       day.meta = dayMeta;
       day.baseMemo = day.baseMemo || "";
       day.nodeData = extendSnapshot(day.nodeData, { ID: day.id, title: day.title, TITLE: day.title, DESCRIPTION: day.intro, TECHNICAL: dayMemo });
       nextDays.push(day);
+    }
+
+    var originalDays = getLabourDaysForEditor(original);
+    for (var d = 0; d < originalDays.length; d++) {
+      var oldDay = normaliseLabourDay(originalDays[d]);
+      if (!oldDay.id || keepIds.indexOf(oldDay.id) !== -1) continue;
+      await deleteLabourDayFolder(jobId, tree, oldDay, d);
     }
 
     return nextDays.slice(0, CFG.maxSchedules).map(normaliseLabourDay);
@@ -5021,6 +5059,54 @@
     return String(day.title || "") !== String(originalDay.title || "") ||
       String(day.intro || "") !== String(originalDay.intro || "") ||
       String(memo || "") !== composeStoredPageMetaText(originalDay.baseMemo || "", originalDay.meta || null);
+  }
+
+  function refreshLabourDayStateFromTree(tree, day, index) {
+    day = normaliseLabourDay(day);
+    if (!tree || !day.id) return day;
+    var headingNode = findHeadingNodeByDataId(tree, day.id);
+    return headingNode ? readLabourDayState(tree, headingNode, index) : day;
+  }
+
+  function groupLabourDayItemsByKind(day) {
+    day = normaliseLabourDay(day);
+    var refs = (day.itemRefs && day.itemRefs.length)
+      ? day.itemRefs
+      : (day.itemIds || []).map(function (id) {
+          return { id: String(id || ""), kind: 3, name: "" };
+        });
+    var grouped = {};
+
+    for (var i = 0; i < refs.length; i++) {
+      var ref = refs[i] || {};
+      var id = $.trim(String(ref.id || ""));
+      if (!id) continue;
+      var kind = Number(ref.kind == null ? 3 : ref.kind);
+      if (!grouped[kind]) grouped[kind] = [];
+      if (grouped[kind].indexOf(id) === -1) grouped[kind].push(id);
+    }
+
+    return grouped;
+  }
+
+  async function deleteLabourDayFolder(jobId, tree, day, index) {
+    day = refreshLabourDayStateFromTree(tree, day, index);
+    var label = getLabourDayLabel(day, index);
+    var grouped = groupLabourDayItemsByKind(day);
+    var kinds = Object.keys(grouped);
+
+    for (var i = 0; i < kinds.length; i++) {
+      var kind = Number(kinds[i]);
+      var ids = grouped[kinds[i]] || [];
+      if (!ids.length) continue;
+      setStatus("Removing crew items from " + label + "...", "info");
+      await deleteItemsDirect(ids, jobId, kind);
+    }
+
+    if (day.id) {
+      setStatus("Removing " + label + " folder...", "info");
+      await deleteItemsDirect([day.id], jobId, 0);
+    }
   }
 
   async function saveCostingRevenueRows(jobId, state) {
