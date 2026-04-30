@@ -5,7 +5,7 @@
   if (!$) return;
 
   var CFG = {
-    version: "2026-04-30.03-editor-preview-special-pages-and-safe-native-picker",
+    version: "2026-04-30.04-renderer-contract-rollout-hardening",
     buttonId: "wise-proposal-page-editor-button",
     stylesId: "wise-proposal-page-editor-styles",
     overlayId: "wise-proposal-page-editor-overlay",
@@ -41,6 +41,8 @@
     deptTemplateKey: "dept_proposed_timings"
   };
 
+  applyExternalConfig();
+
   var LAYOUT_IMAGE = "image";
   var LAYOUT_COLUMNS = "columns";
   var VARIANT_HALF_IMAGE = "half_image";
@@ -61,6 +63,37 @@
     previewRightPaneId: "wise-doc-preview-right-pane",
     minViewportWidth: 1460
   };
+
+  function applyExternalConfig() {
+    var external = window.WISE_PROPOSAL_PAGE_EDITOR_CONFIG ||
+      window.WISE_SECTIONBUILDER2_CONFIG ||
+      window.WiseProposalPageEditorConfig ||
+      null;
+    if (!external || typeof external !== "object") return;
+
+    var allowedKeys = [
+      "allowedDepotIds",
+      "allowedDepotNames",
+      "blockWhenDepotUndetected",
+      "defaultEditEnabled",
+      "defaultOpenOnTreeDoubleClick",
+      "defaultOpenOnEnter",
+      "nativeFallbackLabel",
+      "visualEditLabel"
+    ];
+
+    for (var i = 0; i < allowedKeys.length; i++) {
+      var key = allowedKeys[i];
+      if (!Object.prototype.hasOwnProperty.call(external, key)) continue;
+      if (Array.isArray(CFG[key])) {
+        CFG[key] = Array.isArray(external[key]) ? external[key].map(function (value) { return String(value); }) : CFG[key];
+      } else if (typeof CFG[key] === "boolean") {
+        CFG[key] = !!external[key];
+      } else {
+        CFG[key] = String(external[key]);
+      }
+    }
+  }
 
   var editor = {
     ready: false,
@@ -267,7 +300,7 @@
       setStatus("", "");
     });
 
-    $("#" + CFG.bodyId).on("change", 'input[name="wpe-dept-layout"],[data-generic-field="titleSuffix"],[data-generic-field="hidden"],[data-generic-field="additionalOptions"]', function () {
+    $("#" + CFG.bodyId).on("change", '[data-generic-field="titleSuffix"],[data-generic-field="hidden"],[data-generic-field="additionalOptions"]', function () {
       if (editor.saving || editor.mode !== MODE_GENERIC) return;
       editor.current = readGenericFormState(editor.current);
       renderEditor(editor.current);
@@ -951,7 +984,7 @@
     var warning = state.layout === LAYOUT_IMAGE && active.length > 1;
 
     if (warning) {
-      return '<div class="weo-editor-help is-warning"><strong>Image split saves one schedule only.</strong> Extra active days are not hidden by the document renderer; they would create extra overview pages. This editor will keep the first day only when saved.</div>';
+      return '<div class="weo-editor-help is-warning"><strong>Image split supports one active schedule here.</strong> Switch to columns, or clear the extra active schedules before saving. This prevents accidental schedule deletion or unexpected extra overview pages.</div>';
     }
 
     return '' +
@@ -1151,6 +1184,9 @@
     }
 
     if (!active.length) return "Add at least one schedule.";
+    if (state.layout === LAYOUT_IMAGE && active.length > 1) {
+      return "Image split supports one active schedule in this editor. Switch to columns or clear the extra schedules before saving.";
+    }
     if (active.length > CFG.maxSchedules) return "Use no more than three schedules.";
 
     for (var i = 0; i < active.length; i++) {
@@ -2165,9 +2201,78 @@
     return parts.join("\n\n");
   }
 
+  function rendererDirectiveKey(value) {
+    return $.trim(String(value || ""))
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  function parseRendererDirectiveString(value) {
+    var directives = {};
+    var text = $.trim(String(value || ""));
+    if (!text) return directives;
+
+    var parts = text.split(/[;,]+/);
+    for (var i = 0; i < parts.length; i++) {
+      var part = $.trim(parts[i] || "");
+      if (!part) continue;
+
+      var match = part.match(/^([a-z0-9_-]+)\s*[:=]\s*(.+)$/i);
+      if (match) directives[rendererDirectiveKey(match[1])] = $.trim(String(match[2] || ""));
+      else directives[rendererDirectiveKey(part)] = true;
+    }
+    return directives;
+  }
+
+  function mergeRendererDirectives() {
+    var merged = {};
+    for (var i = 0; i < arguments.length; i++) {
+      var source = arguments[i];
+      if (!source || typeof source !== "object") continue;
+      for (var key in source) {
+        if (Object.prototype.hasOwnProperty.call(source, key)) merged[key] = source[key];
+      }
+    }
+    return merged;
+  }
+
+  function extractRendererTitleDirective(title) {
+    var raw = $.trim(String(title || ""));
+    if (!raw) return { title: "", directiveSuffix: "", directives: {} };
+
+    var match = raw.match(/^(.*?)(\s*\[\[(.+)\]\])\s*$/);
+    if (match) {
+      return {
+        title: $.trim(String(match[1] || "")),
+        directiveSuffix: " [[" + $.trim(String(match[3] || "")) + "]]",
+        directives: parseRendererDirectiveString(match[3])
+      };
+    }
+
+    match = raw.match(/^(.*?)(\s*::\s*(.+))\s*$/);
+    if (match) {
+      return {
+        title: $.trim(String(match[1] || "")),
+        directiveSuffix: " :: " + $.trim(String(match[3] || "")),
+        directives: parseRendererDirectiveString(match[3])
+      };
+    }
+
+    return { title: raw, directiveSuffix: "", directives: {} };
+  }
+
   function parseHeadingBaseMeta(value) {
     var raw = $.trim(String(value || ""));
-    var meta = { additionalOptions: false, hidden: false, renderType: "normal", name: raw };
+    var meta = {
+      additionalOptions: false,
+      hidden: false,
+      renderType: "normal",
+      name: raw,
+      rendererPrefixDirective: "",
+      rendererTitleDirective: "",
+      directives: {}
+    };
     var changed = true;
 
     while (changed) {
@@ -2184,7 +2289,13 @@
       }
     }
 
-    if (/^section\s*:\s*/i.test(raw)) {
+    var prefixMatch = raw.match(/^(section|dept)\s*(\[(.*?)\])?\s*:\s*/i);
+    if (prefixMatch) {
+      meta.renderType = String(prefixMatch[1] || "").toLowerCase() === "section" ? "section" : "dept";
+      meta.rendererPrefixDirective = prefixMatch[2] ? String(prefixMatch[2] || "") : "";
+      meta.directives = mergeRendererDirectives(meta.directives, parseRendererDirectiveString(prefixMatch[3]));
+      raw = raw.slice(prefixMatch[0].length);
+    } else if (/^section\s*:\s*/i.test(raw)) {
       meta.renderType = "section";
       raw = raw.replace(/^section\s*:\s*/i, "");
     } else if (/^dept\s*:\s*/i.test(raw)) {
@@ -2192,7 +2303,10 @@
       raw = raw.replace(/^dept\s*:\s*/i, "");
     }
 
-    meta.name = $.trim(raw);
+    var titleInfo = extractRendererTitleDirective(raw);
+    meta.name = $.trim(titleInfo.title);
+    meta.rendererTitleDirective = titleInfo.directiveSuffix;
+    meta.directives = mergeRendererDirectives(meta.directives, titleInfo.directives);
     return meta;
   }
 
@@ -2200,15 +2314,17 @@
     return headingPrefixForRenderType(renderType || "section") + cleanHeadingTitle(title || "");
   }
 
-  function headingPrefixForRenderType(renderType) {
-    if (renderType === "section") return "Section: ";
-    if (renderType === "dept") return "Dept: ";
+  function headingPrefixForRenderType(renderType, rendererPrefixDirective) {
+    var directive = $.trim(String(rendererPrefixDirective || ""));
+    if (directive && directive.charAt(0) !== "[") directive = "[" + directive + "]";
+    if (renderType === "section") return "Section" + directive + ": ";
+    if (renderType === "dept") return "Dept" + directive + ": ";
     return "";
   }
 
   function shouldUseRawHeadingName(value) {
     var text = $.trim(String(value == null ? "" : value));
-    return !!text && (/^(\/\/\s*)?(\$\s*)?(section|dept)\s*:/i.test(text) || /^\/\/\s*/.test(text) || /^\$\s*/.test(text));
+    return !!text && (/^(\/\/\s*)?(\$\s*)?(section|dept)\s*(?:\[[^\]]*\])?\s*:/i.test(text) || /^\/\/\s*/.test(text) || /^\$\s*/.test(text));
   }
 
   function getNodeTitle(node) {
@@ -2508,6 +2624,32 @@
     DETAILS_CONTAINER: "details-container"
   };
 
+  // Keep these mappings aligned with the document renderer's CONFIG mappings.
+  // The final renderer reads heading prefixes/titles/directives, not editor memo metadata.
+  var RENDERER_SECTION_LAYOUTS = {
+    "hero": GENERIC_LAYOUTS.HERO,
+    "hero page": GENERIC_LAYOUTS.HERO,
+    "our proposal": GENERIC_LAYOUTS.SECTION_COVER
+  };
+
+  var RENDERER_DEPT_LAYOUTS = {
+    "discipline costing": GENERIC_LAYOUTS.DEPT_TABLE,
+    "labour": GENERIC_LAYOUTS.DEPT_TABLE,
+    "general requirements": GENERIC_LAYOUTS.DEPT_TABLE,
+    "your dedicated project manager": GENERIC_LAYOUTS.PM,
+    "your specialist team": GENERIC_LAYOUTS.TEAM,
+    "experience expertise": GENERIC_LAYOUTS.EXP,
+    "our experts": GENERIC_LAYOUTS.EXPERTS,
+    "venue hero": GENERIC_LAYOUTS.VENUE_HERO,
+    "project total": GENERIC_LAYOUTS.SUMMARY,
+    "proposal summary": GENERIC_LAYOUTS.SUMMARY,
+    "critical path": GENERIC_LAYOUTS.CRITICAL_PATH,
+    "sustainability": GENERIC_LAYOUTS.SUSTAINABILITY,
+    "about us": GENERIC_LAYOUTS.ABOUT_US,
+    "thank you": GENERIC_LAYOUTS.THANKYOU,
+    "fpvisual": GENERIC_LAYOUTS.FPVISUAL
+  };
+
   var GENERIC_MAX_PEOPLE = 8;
   var GENERIC_MAX_MILESTONES = 10;
   var GENERIC_MAX_COST_LINES = 40;
@@ -2599,10 +2741,6 @@
       "#" + CFG.modalId + " .wpe-pm-image{width:min(100%,232px);aspect-ratio:1/1;border-radius:999px;justify-self:center;}",
       "#" + CFG.modalId + " .wpe-team-title{position:absolute;left:5%;right:5%;top:13%;z-index:5;}",
       "#" + CFG.modalId + " .wpe-people-grid{position:absolute;left:5%;right:5%;top:34%;bottom:13%;z-index:5;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:start;}",
-      "#" + CFG.modalId + " .wpe-person-card{display:grid;gap:5px;min-width:0;}",
-      "#" + CFG.modalId + " .wpe-avatar{width:64px;height:64px;border-radius:999px;margin:0 auto 2px;}",
-      "#" + CFG.modalId + " .wpe-person-card .wpe-field{text-align:center;font-size:10px;padding:4px 5px;}",
-      "#" + CFG.modalId + " .wpe-person-card textarea.wpe-field{min-height:36px;}",
       "#" + CFG.modalId + " .wpe-timeline-title{position:absolute;left:3%;right:3%;top:12%;z-index:5;}",
       "#" + CFG.modalId + " .wpe-timeline{position:absolute;left:3%;right:3%;top:44%;bottom:14%;z-index:5;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;align-items:start;border-top:5px solid #EC9797;padding-top:10px;}",
       "#" + CFG.modalId + " .wpe-milestone-card{display:grid;gap:5px;min-width:0;}",
@@ -2631,12 +2769,6 @@
       "#" + CFG.modalId + " .wpe-title-cover-option .wpe-select-pill,#" + CFG.modalId + " .wpe-title-cover-option .wpe-input-pill{border-radius:10px;justify-content:space-between;}",
       "#" + CFG.modalId + " .wpe-title-cover-option .wpe-select-pill select{max-width:170px;}",
       "#" + CFG.modalId + " .wpe-title-cover-option .wpe-mini-btn{justify-self:start;}",
-      "#" + CFG.modalId + " .wpe-dept-layout-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;width:100%;flex-basis:100%;}",
-      "#" + CFG.modalId + " .wpe-dept-layout-pill{display:grid;grid-template-columns:18px minmax(0,1fr);gap:7px;align-items:start;border:1px solid #d4dbe7;border-radius:12px;background:#fff;padding:7px 9px;cursor:pointer;box-shadow:0 4px 12px rgba(15,23,42,.04);}",
-      "#" + CFG.modalId + " .wpe-dept-layout-pill input{margin:1px 0 0;}",
-      "#" + CFG.modalId + " .wpe-dept-layout-pill b{display:block;font-size:10px;line-height:1.15;color:#101828;}",
-      "#" + CFG.modalId + " .wpe-dept-layout-pill span span{display:block;margin-top:2px;font-size:9px;line-height:1.25;color:#667085;}",
-      "#" + CFG.modalId + " .wpe-dept-layout-pill.is-selected{border-color:#175cd3;background:#eef4ff;box-shadow:inset 0 0 0 1px rgba(23,92,211,.08),0 4px 12px rgba(23,92,211,.08);}",
       "#" + CFG.modalId + " .wpe-locked-panel{position:absolute;left:8%;right:8%;top:28%;z-index:6;border:1px dashed rgba(23,92,211,.30);border-radius:14px;background:rgba(255,255,255,.88);padding:18px;text-align:center;color:#344054;}",
       "#" + CFG.modalId + " .wpe-locked-panel b{display:block;margin-bottom:6px;font-size:16px;color:#101828;}",
       "#" + CFG.modalId + " .wpe-locked-panel p{margin:0 0 10px;font-size:12px;line-height:1.4;}",
@@ -2663,18 +2795,13 @@
       "#" + CFG.modalId + " .wpe-cost-preview-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
       "#" + CFG.modalId + " .wpe-cost-preview-price{text-align:right;font-weight:800;}",
       "#" + CFG.modalId + " .wpe-cost-preview-empty{font-size:10px;color:rgba(13,18,38,.42);font-style:italic;}",
-      "#" + CFG.modalId + " .wpe-dept-columns-grid{position:absolute;left:3.2%;right:3.2%;top:12%;bottom:14%;z-index:5;display:grid;grid-template-columns:1.05fr 1.1fr .85fr;gap:2.4%;align-items:start;}",
-      "#" + CFG.modalId + " .wpe-dept-columns-copy,.wpe-dept-columns-table,.wpe-dept-columns-note{min-width:0;display:grid;gap:7px;}",
-      "#" + CFG.modalId + " .wpe-dept-columns-copy .wpe-blurb{min-height:126px;}",
-      "#" + CFG.modalId + " .wpe-dept-columns-note{border-left:1px solid rgba(236,151,151,.55);padding-left:10px;font-size:clamp(9px,.84vw,11px);line-height:1.35;color:#475467;}",
-      "#" + CFG.modalId + " .wpe-dept-columns-note b{display:block;color:#0d1226;text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;}",
       "#" + CFG.modalId + " .wpe-thank-alt-title{position:absolute;left:5%;right:43%;bottom:17%;z-index:6;}",
       "#" + CFG.modalId + " .wpe-thank-alt-title textarea{text-align:left;color:#fffdf9;background:rgba(13,18,38,.38);border-color:rgba(255,255,255,.34);}",
       "#" + CFG.modalId + " .wpe-thank-alt-note{position:absolute;right:5%;bottom:18%;width:32%;z-index:6;background:rgba(13,18,38,.55);color:#fffdf9;border-color:rgba(255,255,255,.28);}",
       "#" + CFG.modalId + " .wpe-page-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;border:1px solid #d9e2ec;border-radius:12px;background:#fff;padding:7px 9px;}",
       "#" + CFG.modalId + " .wpe-note-box{position:absolute;left:8%;right:8%;bottom:16%;z-index:6;border:1px dashed rgba(23,92,211,.32);border-radius:12px;background:rgba(255,255,255,.82);padding:10px;font-size:11px;line-height:1.35;color:#475467;}",
       "#" + CFG.modalId + " .wpe-note-box.wpe-thank-alt-note{left:auto;right:5%;bottom:18%;width:32%;background:rgba(13,18,38,.55);color:#fffdf9;border-color:rgba(255,255,255,.28);}",
-      "@media(max-width:900px){#" + CFG.modalId + " .wpe-topbar{display:grid;}#" + CFG.modalId + " .wpe-proof{min-width:600px;}#" + CFG.modalId + " .wpe-canvas-shell{padding:8px;}#" + CFG.modalId + " .wpe-title-cover-options,#" + CFG.modalId + " .wpe-dept-layout-options{grid-template-columns:1fr;}}"
+      "@media(max-width:900px){#" + CFG.modalId + " .wpe-topbar{display:grid;}#" + CFG.modalId + " .wpe-proof{min-width:600px;}#" + CFG.modalId + " .wpe-canvas-shell{padding:8px;}#" + CFG.modalId + " .wpe-title-cover-options{grid-template-columns:1fr;}}"
     ].join("");
 
     $("head").append('<style id="' + id + '">' + css + "</style>");
@@ -2782,7 +2909,18 @@
     var headingMeta = parseHeadingBaseMeta(rawTitle);
     var technicalInfo = extractStoredPageMeta(getNodeTechnical(node));
     var titleInfo = splitEditableTitleSuffix(getNodeTitle(node));
-    var layoutId = resolveGenericLayoutId(tree, node, titleInfo.title || headingMeta.name, readGenericLayoutIdFromMeta(technicalInfo.meta));
+    var layoutId = resolveGenericLayoutId(tree, node, titleInfo.title || headingMeta.name);
+    var rendererDirectives = headingMeta.directives || {};
+    var rendererTitleDirective = headingMeta.rendererTitleDirective || "";
+    var rendererVariant = rendererDirectiveKey(rendererDirectives.variant || rendererDirectives["layout-variant"] || "");
+    if (layoutId === GENERIC_LAYOUTS.THANKYOU && rendererVariant === "alt") {
+      if (!titleInfo.suffix) titleInfo.suffix = " - Alt";
+      rendererTitleDirective = "";
+    }
+    if (layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
+      titleInfo.title = "Details";
+      titleInfo.suffix = "";
+    }
     var directRows = getDirectChildCustomNodes(tree, node);
     var directHeadings = getDirectChildHeadingNodes(tree, node);
     var totalChildItems = getDirectChildNodes(tree, node).filter(function (child) {
@@ -2797,7 +2935,6 @@
     var costingSummaryRows = costingTechnicalSummaryNode ? getDirectChildCustomNodes(tree, costingTechnicalSummaryNode).map(function (rowNode) { return readGenericRowState(rowNode, layoutId); }) : [];
     var costingUseRows = costingTechnicalUseNode ? getDirectChildCustomNodes(tree, costingTechnicalUseNode).map(function (rowNode) { return readGenericRowState(rowNode, layoutId); }) : [];
     var renderType = getGenericRenderTypeForStorage(headingMeta, titleInfo.title);
-    var canUseDeptLayout = isLabourDeptLayoutState({ layoutId: layoutId, renderType: renderType, title: titleInfo.title });
 
     return normaliseGenericState({
       mode: MODE_GENERIC,
@@ -2805,6 +2942,9 @@
       parentId: getParentHeadingDataId(tree, node),
       rawName: rawTitle,
       renderType: renderType,
+      rendererPrefixDirective: headingMeta.rendererPrefixDirective || "",
+      rendererTitleDirective: rendererTitleDirective,
+      rendererDirectives: rendererDirectives,
       hidden: !!headingMeta.hidden,
       additionalOptions: !!headingMeta.additionalOptions,
       title: titleInfo.title,
@@ -2812,7 +2952,7 @@
       blurb: getNodeDescription(node),
       technical: technicalInfo.baseText,
       layoutId: layoutId,
-      deptLayout: canUseDeptLayout ? (readGenericDeptLayoutFromMeta(technicalInfo.meta) || LAYOUT_IMAGE) : LAYOUT_IMAGE,
+      deptLayout: LAYOUT_IMAGE,
       layoutLabel: genericLayoutLabel(layoutId),
       sectionTitle: getNearestSectionTitleForGeneric(tree, node),
       flag: getNodeFlag(node),
@@ -3056,33 +3196,21 @@
     return "";
   }
 
-  function resolveGenericLayoutId(tree, node, title, preferredLayoutId) {
-    var storedLayoutId = normaliseGenericLayoutId(preferredLayoutId);
-    if (storedLayoutId) return storedLayoutId;
-
+  function resolveGenericLayoutId(tree, node, title) {
     var parsed = parseHeadingBaseMeta(getNodeRawTitle(node));
     var renderType = parsed.renderType;
     var t = normalizeGenericMatchText(title || parsed.name || getNodeTitle(node));
     var sectionTitle = normalizeGenericMatchText(getNearestSectionTitleForGeneric(tree, node));
-
-    if (t === "venue hero") return GENERIC_LAYOUTS.VENUE_HERO;
+    var directiveLayoutId = normaliseGenericLayoutId((parsed.directives || {}).layout || (parsed.directives || {})["layout-id"]);
+    if (directiveLayoutId) return directiveLayoutId;
 
     if (renderType === "section") {
-      if (t === "hero" || t === "hero page") return GENERIC_LAYOUTS.HERO;
       if (t === "details") return GENERIC_LAYOUTS.DETAILS_CONTAINER;
-      return GENERIC_LAYOUTS.SECTION_COVER;
+      return RENDERER_SECTION_LAYOUTS[t] || GENERIC_LAYOUTS.SECTION_COVER;
     }
 
     if (/^fpv(?:isual)?\b/i.test(String(title || ""))) return GENERIC_LAYOUTS.FPVISUAL;
-    if (t.indexOf("project manager") !== -1 || t.indexOf("dedicated project manager") !== -1) return GENERIC_LAYOUTS.PM;
-    if (t.indexOf("specialist team") !== -1 || t === "team" || t.indexOf("team") !== -1 && t.indexOf("specialist") !== -1) return GENERIC_LAYOUTS.TEAM;
-    if (t.indexOf("experience") !== -1 && t.indexOf("expertise") !== -1) return GENERIC_LAYOUTS.EXP;
-    if (t === "our experts" || t.indexOf("experts") !== -1) return GENERIC_LAYOUTS.EXPERTS;
-    if (t === "critical path") return GENERIC_LAYOUTS.CRITICAL_PATH;
-    if (t === "sustainability") return GENERIC_LAYOUTS.SUSTAINABILITY;
-    if (t === "about us") return GENERIC_LAYOUTS.ABOUT_US;
-    if (t === "thank you" || t.indexOf("thank you") !== -1) return GENERIC_LAYOUTS.THANKYOU;
-    if (t === "project total" || t === "proposal summary") return GENERIC_LAYOUTS.SUMMARY;
+    if (RENDERER_DEPT_LAYOUTS[t]) return RENDERER_DEPT_LAYOUTS[t];
     if (sectionTitle === "visual") return GENERIC_LAYOUTS.VISUAL;
     return GENERIC_LAYOUTS.DEPT_TABLE;
   }
@@ -3106,37 +3234,20 @@
     return "";
   }
 
-  function readGenericLayoutIdFromMeta(meta) {
-    meta = normaliseMeta(meta);
-    if (!meta || String(meta.editor || "") !== GENERIC_META_EDITOR) return "";
-    return normaliseGenericLayoutId(meta.layoutId);
-  }
-
   function buildGenericPageMeta(state, existingMeta) {
     var meta = normaliseMeta(existingMeta) || {};
     state = normaliseGenericState(state);
     meta.editor = GENERIC_META_EDITOR;
     meta.version = GENERIC_META_VERSION;
     meta.layoutId = state.layoutId;
-    if (isLabourDeptLayoutState(state)) {
-      meta.deptLayout = normaliseLayout(state.deptLayout);
-      meta.deptVariant = layoutToVariant(state.deptLayout);
-      meta.layout = meta.deptLayout;
-      meta.variant = meta.deptVariant;
-    } else {
-      delete meta.deptLayout;
-      delete meta.deptVariant;
-      delete meta.layout;
-      delete meta.variant;
-    }
+    meta.rendererContract = "heading-prefix-and-title";
+    // Do not write renderer-looking layout/variant fields here. The renderer
+    // resolves layouts from heading syntax, so memo metadata is editor-only.
+    delete meta.deptLayout;
+    delete meta.deptVariant;
+    delete meta.layout;
+    delete meta.variant;
     return meta;
-  }
-
-  function readGenericDeptLayoutFromMeta(meta) {
-    meta = normaliseMeta(meta);
-    if (!meta || String(meta.editor || "") !== GENERIC_META_EDITOR) return "";
-    if (!meta.deptLayout && !meta.deptVariant && !meta.layout && !meta.variant) return "";
-    return normaliseLayout(meta.deptLayout || meta.layout || meta.deptVariant || meta.variant || LAYOUT_IMAGE);
   }
 
   function genericLayoutLabel(layoutId) {
@@ -3372,6 +3483,9 @@
       parentId: String(state.parentId || "0"),
       rawName: String(state.rawName || ""),
       renderType: state.renderType === "section" ? "section" : (state.renderType === "normal" ? "normal" : "dept"),
+      rendererPrefixDirective: String(state.rendererPrefixDirective || ""),
+      rendererTitleDirective: String(state.rendererTitleDirective || ""),
+      rendererDirectives: state.rendererDirectives && typeof state.rendererDirectives === "object" ? state.rendererDirectives : {},
       hidden: !!state.hidden,
       additionalOptions: !!state.additionalOptions,
       cascadeAdditionalOptions: !!state.cascadeAdditionalOptions,
@@ -3469,11 +3583,14 @@
     if (isVenueHeroState(state)) {
       note = "The venue name is taken from the project details automatically. You can edit the description, image URL and hide setting only.";
     }
+    if (isLabourDeptLayoutState(state)) {
+      note = "Labour renders from the heading title, rows and any Day subheadings. The final renderer decides whether it becomes a split table or labour-days layout; this editor does not force that with metadata.";
+    }
     if (state.layoutId === GENERIC_LAYOUTS.PM || state.layoutId === GENERIC_LAYOUTS.TEAM) {
       note = "People on this page are managed from HireHop's native listed-item picker, not from manual fields in this editor.";
     }
     if (state.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
-      note = "Details is a locked container. Keep the heading named Details; use the suffix selector only, then select a nested page heading to edit the pages inside.";
+      note = "Details is a hidden container. Keep the heading named Details, then select a nested page heading to edit the pages inside.";
     }
     if (isGenericLockedLayout(state.layoutId)) {
       note = "This page is locked because its visible copy is controlled by the renderer.";
@@ -3501,9 +3618,6 @@
     if (state.layoutId === GENERIC_LAYOUTS.SECTION_COVER) {
       controls.push(sectionDeptPickerHtml(state));
     }
-    if (isLabourDeptLayoutState(state) && !isGenericCostingSupportState(state)) {
-      controls.push(genericDeptLayoutControlsHtml(state));
-    }
     if (state.layoutId !== GENERIC_LAYOUTS.DETAILS_CONTAINER) {
       controls.push('<label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="hidden"' + (state.hidden ? ' checked' : '') + '> Hide page //</label>');
       if (isOptionalItemsEligibleState(state)) {
@@ -3521,12 +3635,6 @@
       controls.push(genericSuffixSelectHtml(state.titleSuffix, [
         ["", "Default layout"],
         [" - Alt", "Alt layout"]
-      ]));
-    } else if (state.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
-      controls.push(genericSuffixSelectHtml(state.titleSuffix, [
-        ["", "Auto alternate"],
-        [" - Left", "First image left"],
-        [" - Right", "First image right"]
       ]));
     }
 
@@ -3582,37 +3690,8 @@
       '</div>';
   }
 
-  function genericDeptLayoutControlsHtml(state) {
-    var current = normaliseLayout(state.deptLayout || LAYOUT_IMAGE);
-
-    return '' +
-      '<div class="wpe-dept-layout-options">' +
-        genericDeptLayoutPillHtml(LAYOUT_IMAGE, current, "Table with half-page image", "Use one costing table with an image area on the right.") +
-        genericDeptLayoutPillHtml(LAYOUT_COLUMNS, current, "Three columns, no image", "Use columns when the page needs more text or rows, not a picture.") +
-      '</div>';
-  }
-
-  function genericDeptLayoutPillHtml(value, current, title, note) {
-    return '' +
-      '<label class="wpe-dept-layout-pill' + (value === current ? ' is-selected' : '') + '">' +
-        '<input type="radio" name="wpe-dept-layout" data-generic-field="deptLayout" value="' + attr(value) + '"' + (value === current ? ' checked' : '') + '>' +
-        '<span><b>' + esc(title) + '</b><span>' + esc(note) + '</span></span>' +
-      '</label>';
-  }
-
   function genericSuffixSelectHtml(current, options) {
     var html = '<label class="wpe-select-pill">Suffix <select data-generic-field="titleSuffix">';
-    for (var i = 0; i < options.length; i++) {
-      var value = options[i][0];
-      var label = options[i][1];
-      html += '<option value="' + attr(value) + '"' + (String(current || '') === value ? ' selected' : '') + '>' + esc(label) + '</option>';
-    }
-    html += '</select></label>';
-    return html;
-  }
-
-  function genericRenderTypeSelectHtml(current, options) {
-    var html = '<label class="wpe-select-pill">Open <select data-generic-field="renderType">';
     for (var i = 0; i < options.length; i++) {
       var value = options[i][0];
       var label = options[i][1];
@@ -3795,8 +3874,6 @@
   }
 
   function genericDeptTableHtml(state) {
-    if (isLabourDeptLayoutState(state) && normaliseLayout(state.deptLayout || LAYOUT_IMAGE) === LAYOUT_COLUMNS) return genericDeptColumnsHtml(state);
-
     var costPreview = genericCostPreviewHtml(state);
     return '' +
       '<div class="wpe-proof">' +
@@ -3924,24 +4001,6 @@
       '</div>';
   }
 
-  function genericDeptColumnsHtml(state) {
-    var costPreview = genericCostPreviewHtml(state);
-
-    return '' +
-      '<div class="wpe-proof is-dept-columns">' +
-        proofCommonHtml(false) +
-        '<div class="wpe-dept-columns-grid">' +
-          '<div class="wpe-dept-columns-copy">' +
-            '<div class="wpe-kicker">' + esc(state.sectionTitle || "Section") + '</div>' +
-            titleFieldHtml(state.title, "", "Dept title") +
-            blurbFieldHtml(state.blurb, "", "Short intro for this three-column page") +
-          '</div>' +
-          '<div class="wpe-dept-columns-table">' + costPreview + '</div>' +
-          '<div class="wpe-dept-columns-note"><b>No-image layout</b><span>This option tells the proposal renderer to use a three-column page instead of the half-image table layout.</span></div>' +
-        '</div>' +
-      '</div>';
-  }
-
   function genericTeamHtml(state) {
     return '' +
       '<div class="wpe-proof">' +
@@ -3957,19 +4016,6 @@
         '<b>' + esc(title) + ' is managed from native HireHop items</b>' +
         '<p>' + esc(text) + '</p>' +
         '<p>When you need to curate the people shown here, use the listed-item picker rather than typing names, roles, biographies or image URLs into this editor.</p>' +
-      '</div>';
-  }
-
-  function genericPersonCardHtml(person, index) {
-    person = normaliseGenericRow(person);
-    return '' +
-      '<div class="wpe-person-card" data-generic-row-uid="' + attr(person.uid) + '" data-row-id="' + attr(person.id) + '" data-row-kind="person" data-row-index="' + index + '">' +
-        imagePreviewHtml(person.imageUrl, "wpe-avatar") +
-        '<input class="wpe-field" data-generic-row-field="imageUrl" value="' + attr(person.imageUrl) + '" placeholder="Image URL">' +
-        '<input class="wpe-field" data-generic-row-field="altName" value="' + attr(person.altName || person.additional) + '" placeholder="Role">' +
-        '<input class="wpe-field" data-generic-row-field="name" value="' + attr(person.name) + '" placeholder="Name">' +
-        '<textarea class="wpe-field" data-generic-row-field="technical" placeholder="Short bio">' + esc(person.technical) + '</textarea>' +
-        '<div class="wpe-row-actions"><button type="button" class="wpe-mini-btn is-danger" data-weo-action="remove-generic-row" data-row-index="' + index + '">Remove</button></div>' +
       '</div>';
   }
 
@@ -4047,7 +4093,7 @@
         '<div class="wpe-locked-panel">' +
           '<b>Details is a container</b>' +
           '<p>Do not rename this heading or add an image URL here. Select one of the nested headings inside Details to edit the actual front proposal pages.</p>' +
-          '<p>The suffix selector above controls whether the first image-led nested page starts left or right.</p>' +
+          '<p>The renderer skips this hidden container and renders the nested pages beneath it.</p>' +
         '</div>' +
       '</div>';
   }
@@ -4062,7 +4108,6 @@
     var $technical = $body.find('[data-generic-field="technical"]').first();
     var $renderType = $body.find('[data-generic-field="renderType"]').first();
     var $titleSuffix = $body.find('[data-generic-field="titleSuffix"]').first();
-    var $deptLayout = $body.find('input[name="wpe-dept-layout"]:checked').first();
     var $hidden = $body.find('[data-generic-field="hidden"]').first();
     var $additionalOptions = $body.find('[data-generic-field="additionalOptions"]').first();
     var $cascadeAdditionalOptions = $body.find('[data-generic-field="cascadeAdditionalOptions"]').first();
@@ -4072,7 +4117,6 @@
     if ($technical.length) state.technical = $.trim(String($technical.val() || ""));
     if ($renderType.length) state.renderType = String($renderType.val() || state.renderType || "dept");
     if ($titleSuffix.length) state.titleSuffix = String($titleSuffix.val() || "");
-    if ($deptLayout.length) state.deptLayout = normaliseLayout($deptLayout.val() || state.deptLayout);
     if ($hidden.length) state.hidden = !!$hidden.prop("checked");
     if ($additionalOptions.length) state.additionalOptions = !!$additionalOptions.prop("checked");
     if ($cascadeAdditionalOptions.length) state.cascadeAdditionalOptions = !!$cascadeAdditionalOptions.prop("checked");
@@ -4082,6 +4126,7 @@
 
     if (state.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
       state.title = "Details";
+      state.titleSuffix = "";
       state.technical = prior.technical || "";
       state.blurb = prior.blurb || "";
       state.hidden = true;
@@ -4250,8 +4295,9 @@
 
     return JSON.stringify({
       layoutId: state.layoutId,
-      deptLayout: isLabourDeptLayoutState(state) ? normaliseLayout(state.deptLayout) : "",
       renderType: state.renderType,
+      rendererPrefixDirective: state.rendererPrefixDirective,
+      rendererTitleDirective: state.rendererTitleDirective,
       title: $.trim(String(state.title || "")),
       titleSuffix: String(state.titleSuffix || ""),
       hidden: !!state.hidden,
@@ -4434,6 +4480,7 @@
     var saved = normaliseGenericState(clone(state));
     if (saved.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
       saved.title = "Details";
+      saved.titleSuffix = "";
       saved.hidden = true;
       saved.additionalOptions = false;
       saved.cascadeAdditionalOptions = false;
@@ -4493,8 +4540,8 @@
     var prefix = "";
     if (state.hidden) prefix += "// ";
     if (state.additionalOptions) prefix += "$ ";
-    prefix += headingPrefixForRenderType(state.renderType);
-    return prefix + titleForStorage(state.title) + String(state.titleSuffix || "");
+    prefix += headingPrefixForRenderType(state.renderType, state.rendererPrefixDirective);
+    return prefix + titleForStorage(state.title) + String(state.titleSuffix || "") + String(state.rendererTitleDirective || "");
   }
 
   async function saveCostingRevenueRows(jobId, state) {
@@ -4671,7 +4718,7 @@
     var current = getParentHeadingNode(tree, node);
     while (current) {
       var parsed = parseHeadingBaseMeta(getNodeRawTitle(current));
-      if (parsed.renderType === "section" && resolveGenericLayoutId(tree, current, parsed.name || getNodeTitle(current), readGenericLayoutIdFromMeta(extractStoredPageMeta(getNodeTechnical(current)).meta)) === GENERIC_LAYOUTS.SECTION_COVER) {
+      if (parsed.renderType === "section" && resolveGenericLayoutId(tree, current, parsed.name || getNodeTitle(current)) === GENERIC_LAYOUTS.SECTION_COVER) {
         return current;
       }
       current = getParentHeadingNode(tree, current);
@@ -4683,7 +4730,7 @@
     if (!tree || !node || !node.data || Number(node.data.kind) !== 0) return false;
     var parsed = parseHeadingBaseMeta(getNodeRawTitle(node));
     if (parsed.renderType !== "dept") return false;
-    var layoutId = resolveGenericLayoutId(tree, node, parsed.name || getNodeTitle(node), readGenericLayoutIdFromMeta(extractStoredPageMeta(getNodeTechnical(node)).meta));
+    var layoutId = resolveGenericLayoutId(tree, node, parsed.name || getNodeTitle(node));
     return layoutId === GENERIC_LAYOUTS.DEPT_TABLE;
   }
 
@@ -4716,8 +4763,8 @@
     var prefix = "";
     if (parsed.hidden) prefix += "// ";
     if (enabled) prefix += "$ ";
-    prefix += headingPrefixForRenderType(parsed.renderType);
-    return prefix + titleForStorage(parsed.name || "");
+    prefix += headingPrefixForRenderType(parsed.renderType, parsed.rendererPrefixDirective);
+    return prefix + titleForStorage(parsed.name || "") + String(parsed.rendererTitleDirective || "");
   }
 
   async function ensureCostingSupportFolder(jobId, tree, rootNode, state, title, hidden) {
