@@ -5,7 +5,7 @@
   if (!$) return;
 
   var CFG = {
-    version: "2026-04-30.02-editor-preview-and-layout-navigation",
+    version: "2026-04-30.03-editor-preview-special-pages-and-safe-native-picker",
     buttonId: "wise-proposal-page-editor-button",
     stylesId: "wise-proposal-page-editor-styles",
     overlayId: "wise-proposal-page-editor-overlay",
@@ -613,7 +613,7 @@
 
   function closeEditor() {
     if (editor.saving) return;
-    detachEditorPreviewDock();
+    closeEditorPreviewPanel();
     $("#" + CFG.overlayId).hide();
     setStatus("", "");
   }
@@ -623,10 +623,11 @@
     editor.previewSuppressed = false;
     ensureEditorPreviewPanelOpen();
     attachEditorPreviewDockSoon();
+    refreshEditorPreviewForCurrentHeadingSoon();
   }
 
   function hideEditorOverlayForNativePopup() {
-    detachEditorPreviewDock();
+    closeEditorPreviewPanel();
     $("#" + CFG.overlayId).hide();
   }
 
@@ -700,8 +701,13 @@
   }
 
   function closeDockedPreviewFromEditor() {
+    closeEditorPreviewPanel();
+  }
+
+  function closeEditorPreviewPanel() {
     editor.previewSuppressed = true;
     detachEditorPreviewDock();
+    clearEditorPreviewSelectionOverride();
     setTimeout(function () {
       var $toggle = $("#wise-doc-preview-toggle").first();
       if ($toggle.length && isPreviewWindowOpen()) {
@@ -709,6 +715,40 @@
       }
       updateToolbarCompression();
     }, 0);
+  }
+
+  function setEditorPreviewSelectionOverride() {
+    var tree = getTree();
+    var node = editor.rootNode;
+    if (tree && node && getNodeDataId(node)) node = findHeadingNodeByDataId(tree, getNodeDataId(node)) || node;
+    if (tree && node && getNodeDataId(node)) selectTreeHeadingByDataId(tree, getNodeDataId(node));
+
+    if (node && node.id) {
+      window.wiseProposalEditorPreviewSelectionIds = [String(node.id)];
+      return;
+    }
+
+    clearEditorPreviewSelectionOverride();
+  }
+
+  function clearEditorPreviewSelectionOverride() {
+    try { delete window.wiseProposalEditorPreviewSelectionIds; } catch (e) { window.wiseProposalEditorPreviewSelectionIds = null; }
+  }
+
+  function refreshEditorPreviewForCurrentHeadingSoon() {
+    setEditorPreviewSelectionOverride();
+    setTimeout(refreshEditorPreviewForCurrentHeading, 260);
+    setTimeout(refreshEditorPreviewForCurrentHeading, 1100);
+  }
+
+  function refreshEditorPreviewForCurrentHeading() {
+    if (!$("#" + CFG.overlayId).is(":visible")) return;
+    setEditorPreviewSelectionOverride();
+
+    var $refresh = $("#wise-doc-preview-refresh").first();
+    if ($refresh.length && isPreviewWindowOpen()) {
+      try { $refresh.get(0).click(); } catch (e) {}
+    }
   }
 
   function detachEditorPreviewDock() {
@@ -746,7 +786,10 @@
 
     $("#" + CFG.bodyId).html(html);
     setSaveEnabled(true);
-    if ($("#" + CFG.overlayId).is(":visible")) attachEditorPreviewDockSoon();
+    if ($("#" + CFG.overlayId).is(":visible")) {
+      attachEditorPreviewDockSoon();
+      refreshEditorPreviewForCurrentHeadingSoon();
+    }
   }
 
   function normaliseVisualEditorState(state) {
@@ -1162,6 +1205,7 @@
       editor.current = clone(state);
       if (options.rerender !== false) renderEditor(editor.current);
       if (options.successMessage) setStatus(options.successMessage, "success");
+      if (options.refreshPreview !== false) refreshEditorPreviewForCurrentHeadingSoon();
       return { ok: true, changed: false, state: normaliseEditorState(state), tree: tree };
     }
 
@@ -1197,6 +1241,7 @@
         refreshSupplyingList();
         setTimeout(refreshSupplyingList, 900);
       }
+      if (options.refreshPreview !== false) refreshEditorPreviewForCurrentHeadingSoon();
       return { ok: true, changed: true, state: savedState, tree: tree };
     } catch (err) {
       warn("Event Overview save failed", err);
@@ -2539,6 +2584,10 @@
       "#" + CFG.modalId + " .wpe-full-image .wpe-image-preview{height:100%;border:0;border-radius:0;background:#0d1226;color:rgba(255,255,255,.5);}",
       "#" + CFG.modalId + " .wpe-venue-copy{position:absolute;left:5.1%;bottom:18%;width:31%;z-index:5;color:#fffdf9;}",
       "#" + CFG.modalId + " .wpe-venue-copy textarea{background:rgba(13,18,38,.42);border-color:rgba(255,255,255,.32);color:#fffdf9;}",
+      "#" + CFG.modalId + " .wpe-venue-copy textarea:focus{background:rgba(13,18,38,.62);border-color:rgba(255,255,255,.55);color:#fffdf9;box-shadow:0 0 0 3px rgba(255,255,255,.16);}",
+      "#" + CFG.modalId + " .wpe-venue-title-lock{border:1px dashed rgba(255,255,255,.34);border-radius:10px;background:rgba(13,18,38,.36);padding:7px 8px;color:#fffdf9;}",
+      "#" + CFG.modalId + " .wpe-venue-title-lock b{display:block;font-family:'Albra Sans',Lato,'Segoe UI',Arial,sans-serif;font-size:clamp(22px,2.7vw,36px);font-weight:400;line-height:.98;text-transform:uppercase;letter-spacing:.01em;}",
+      "#" + CFG.modalId + " .wpe-venue-title-lock span{display:block;margin-top:5px;font-size:10px;line-height:1.3;color:rgba(255,253,249,.72);}",
       "#" + CFG.modalId + " .wpe-visual-stage{position:absolute;inset:0;display:grid;grid-template-columns:25% 75%;z-index:2;}",
       "#" + CFG.modalId + " .wpe-visual-copy{display:flex;flex-direction:column;justify-content:flex-end;gap:7px;padding:0 8% 13%;}",
       "#" + CFG.modalId + " .wpe-visual-image{height:100%;border-radius:0;}",
@@ -2594,6 +2643,8 @@
       "#" + CFG.modalId + " .wpe-native-items-note{position:absolute;left:8%;right:8%;top:30%;z-index:6;border:1px dashed rgba(23,92,211,.30);border-radius:14px;background:rgba(255,255,255,.9);padding:18px;text-align:center;color:#344054;}",
       "#" + CFG.modalId + " .wpe-native-items-note b{display:block;margin-bottom:6px;font-size:16px;color:#101828;}",
       "#" + CFG.modalId + " .wpe-native-items-note p{margin:0 0 10px;font-size:12px;line-height:1.4;}",
+      "#" + CFG.modalId + " .wpe-separator-note{position:absolute;left:11%;right:11%;bottom:17%;z-index:6;border:1px dashed rgba(23,92,211,.30);border-radius:14px;background:rgba(255,255,255,.88);padding:12px;text-align:center;color:#344054;font-size:12px;line-height:1.4;}",
+      "#" + CFG.modalId + " .wpe-separator-note b{display:block;margin-bottom:5px;color:#101828;font-size:14px;}",
       "#" + CFG.modalId + " .wpe-costing-panel{display:grid;gap:8px;border:1px solid #d9e2ec;border-radius:12px;background:#fff;padding:9px;}",
       "#" + CFG.modalId + " .wpe-costing-head{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;}",
       "#" + CFG.modalId + " .wpe-costing-title{font-size:12px;font-weight:900;color:#101828;}",
@@ -2745,13 +2796,15 @@
     var costingTechnicalUseId = costingTechnicalUseNode ? getNodeDataId(costingTechnicalUseNode) : "";
     var costingSummaryRows = costingTechnicalSummaryNode ? getDirectChildCustomNodes(tree, costingTechnicalSummaryNode).map(function (rowNode) { return readGenericRowState(rowNode, layoutId); }) : [];
     var costingUseRows = costingTechnicalUseNode ? getDirectChildCustomNodes(tree, costingTechnicalUseNode).map(function (rowNode) { return readGenericRowState(rowNode, layoutId); }) : [];
+    var renderType = getGenericRenderTypeForStorage(headingMeta, titleInfo.title);
+    var canUseDeptLayout = isLabourDeptLayoutState({ layoutId: layoutId, renderType: renderType, title: titleInfo.title });
 
     return normaliseGenericState({
       mode: MODE_GENERIC,
       rootId: getNodeDataId(node),
       parentId: getParentHeadingDataId(tree, node),
       rawName: rawTitle,
-      renderType: getGenericRenderTypeForStorage(headingMeta, titleInfo.title),
+      renderType: renderType,
       hidden: !!headingMeta.hidden,
       additionalOptions: !!headingMeta.additionalOptions,
       title: titleInfo.title,
@@ -2759,7 +2812,7 @@
       blurb: getNodeDescription(node),
       technical: technicalInfo.baseText,
       layoutId: layoutId,
-      deptLayout: readGenericDeptLayoutFromMeta(technicalInfo.meta) || LAYOUT_IMAGE,
+      deptLayout: canUseDeptLayout ? (readGenericDeptLayoutFromMeta(technicalInfo.meta) || LAYOUT_IMAGE) : LAYOUT_IMAGE,
       layoutLabel: genericLayoutLabel(layoutId),
       sectionTitle: getNearestSectionTitleForGeneric(tree, node),
       flag: getNodeFlag(node),
@@ -3012,6 +3065,8 @@
     var t = normalizeGenericMatchText(title || parsed.name || getNodeTitle(node));
     var sectionTitle = normalizeGenericMatchText(getNearestSectionTitleForGeneric(tree, node));
 
+    if (t === "venue hero") return GENERIC_LAYOUTS.VENUE_HERO;
+
     if (renderType === "section") {
       if (t === "hero" || t === "hero page") return GENERIC_LAYOUTS.HERO;
       if (t === "details") return GENERIC_LAYOUTS.DETAILS_CONTAINER;
@@ -3019,7 +3074,6 @@
     }
 
     if (/^fpv(?:isual)?\b/i.test(String(title || ""))) return GENERIC_LAYOUTS.FPVISUAL;
-    if (t === "venue hero") return GENERIC_LAYOUTS.VENUE_HERO;
     if (t.indexOf("project manager") !== -1 || t.indexOf("dedicated project manager") !== -1) return GENERIC_LAYOUTS.PM;
     if (t.indexOf("specialist team") !== -1 || t === "team" || t.indexOf("team") !== -1 && t.indexOf("specialist") !== -1) return GENERIC_LAYOUTS.TEAM;
     if (t.indexOf("experience") !== -1 && t.indexOf("expertise") !== -1) return GENERIC_LAYOUTS.EXP;
@@ -3064,7 +3118,7 @@
     meta.editor = GENERIC_META_EDITOR;
     meta.version = GENERIC_META_VERSION;
     meta.layoutId = state.layoutId;
-    if (state.layoutId === GENERIC_LAYOUTS.DEPT_TABLE) {
+    if (isLabourDeptLayoutState(state)) {
       meta.deptLayout = normaliseLayout(state.deptLayout);
       meta.deptVariant = layoutToVariant(state.deptLayout);
       meta.layout = meta.deptLayout;
@@ -3106,6 +3160,20 @@
     return labels[layoutId] || "Proposal page";
   }
 
+  function isOurProposalSeparatorState(state) {
+    state = state || {};
+    return state.renderType === "section" && normalizeGenericMatchText(state.title) === "our proposal";
+  }
+
+  function isVenueHeroState(state) {
+    return !!(state && state.layoutId === GENERIC_LAYOUTS.VENUE_HERO);
+  }
+
+  function isLabourDeptLayoutState(state) {
+    if (!state || state.layoutId !== GENERIC_LAYOUTS.DEPT_TABLE || state.renderType !== "dept") return false;
+    return /^labou?r\b/.test(normalizeGenericMatchText(state.title));
+  }
+
   function isCostingSectionLayout(layoutId) {
     return layoutId === GENERIC_LAYOUTS.SECTION_COVER;
   }
@@ -3113,6 +3181,7 @@
   function isOptionalItemsEligibleState(state) {
     state = normaliseGenericState(state || {});
     if (state.renderType !== "section" && state.renderType !== "dept") return false;
+    if (isOurProposalSeparatorState(state)) return false;
     if (isGenericCostingSupportState(state)) return false;
     return isCostingSectionLayout(state.layoutId) || isCostingRowsLayout(state.layoutId);
   }
@@ -3377,7 +3446,10 @@
 
     $("#" + CFG.bodyId).html(html);
     setSaveEnabled(!isGenericLockedLayout(state.layoutId));
-    if ($("#" + CFG.overlayId).is(":visible")) attachEditorPreviewDockSoon();
+    if ($("#" + CFG.overlayId).is(":visible")) {
+      attachEditorPreviewDockSoon();
+      refreshEditorPreviewForCurrentHeadingSoon();
+    }
   }
 
   function genericTopbarHtml(state) {
@@ -3390,6 +3462,12 @@
 
     if (state.layoutId === GENERIC_LAYOUTS.SECTION_COVER) {
       note = "This title cover is the Section page. Use the Dept controls below to open an existing child costing page or create a new one inside this section.";
+    }
+    if (isOurProposalSeparatorState(state)) {
+      note = "Our Proposal is a fixed visual separator. The only editable setting is whether it is hidden from the proposal.";
+    }
+    if (isVenueHeroState(state)) {
+      note = "The venue name is taken from the project details automatically. You can edit the description, image URL and hide setting only.";
     }
     if (state.layoutId === GENERIC_LAYOUTS.PM || state.layoutId === GENERIC_LAYOUTS.TEAM) {
       note = "People on this page are managed from HireHop's native listed-item picker, not from manual fields in this editor.";
@@ -3417,10 +3495,13 @@
     if (isGenericLockedLayout(state.layoutId)) return '';
 
     var controls = [];
+    if (isOurProposalSeparatorState(state)) {
+      return '<div class="wpe-modifier-strip"><label class="wpe-toggle-pill"><input type="checkbox" data-generic-field="hidden"' + (state.hidden ? ' checked' : '') + '> Hide page //</label></div>';
+    }
     if (state.layoutId === GENERIC_LAYOUTS.SECTION_COVER) {
       controls.push(sectionDeptPickerHtml(state));
     }
-    if (state.layoutId === GENERIC_LAYOUTS.DEPT_TABLE && !isGenericCostingSupportState(state)) {
+    if (isLabourDeptLayoutState(state) && !isGenericCostingSupportState(state)) {
       controls.push(genericDeptLayoutControlsHtml(state));
     }
     if (state.layoutId !== GENERIC_LAYOUTS.DETAILS_CONTAINER) {
@@ -3542,6 +3623,7 @@
   }
 
   function genericActionsHtml(state) {
+    if (isOurProposalSeparatorState(state)) return '';
     if (state.layoutId === GENERIC_LAYOUTS.DEPT_TABLE) return genericCostingActionsHtml(state);
     if (isGenericLockedLayout(state.layoutId)) return '<div class="wpe-page-actions"><span>This renderer-controlled page is locked. Select another heading to edit.</span></div>';
 
@@ -3688,6 +3770,8 @@
   }
 
   function genericSectionCoverHtml(state) {
+    if (isOurProposalSeparatorState(state)) return genericOurProposalSeparatorHtml(state);
+
     var headingLabel = state.renderType === "dept" ? "Dept" : "Section";
     return '' +
       '<div class="wpe-proof">' +
@@ -3698,8 +3782,20 @@
       '</div>';
   }
 
+  function genericOurProposalSeparatorHtml(state) {
+    return '' +
+      '<div class="wpe-proof">' +
+        proofCommonHtml(false) +
+        '<div class="wpe-center-title"><div class="wpe-heading" style="font-size:clamp(34px,4.4vw,62px);line-height:.98;text-align:center;">OUR<br>PROPOSAL</div></div>' +
+        '<div class="wpe-separator-note">' +
+          '<b>Visual separator page</b>' +
+          '<span>This Section is controlled by the renderer. The only editable setting here is whether this separator is hidden from the proposal.</span>' +
+        '</div>' +
+      '</div>';
+  }
+
   function genericDeptTableHtml(state) {
-    if (normaliseLayout(state.deptLayout || LAYOUT_IMAGE) === LAYOUT_COLUMNS) return genericDeptColumnsHtml(state);
+    if (isLabourDeptLayoutState(state) && normaliseLayout(state.deptLayout || LAYOUT_IMAGE) === LAYOUT_COLUMNS) return genericDeptColumnsHtml(state);
 
     var costPreview = genericCostPreviewHtml(state);
     return '' +
@@ -3798,7 +3894,7 @@
         technicalFieldHtml(state.technical, "Venue background image") +
         '<div class="wpe-venue-copy">' +
           '<div class="wpe-kicker">Your venue</div>' +
-          titleFieldHtml(state.title, "", "Venue title") +
+          '<div class="wpe-venue-title-lock"><b>Venue name</b><span>The proposal renderer uses the venue from the project details, so this heading name is intentionally locked.</span></div>' +
           blurbFieldHtml(state.blurb, "", "Venue description") +
         '</div>' +
         proofCommonHtml(true) +
@@ -3981,14 +4077,14 @@
     if ($additionalOptions.length) state.additionalOptions = !!$additionalOptions.prop("checked");
     if ($cascadeAdditionalOptions.length) state.cascadeAdditionalOptions = !!$cascadeAdditionalOptions.prop("checked");
     if (!isOptionalItemsEligibleState(state)) state.additionalOptions = false;
-    if (!isCostingRowsLayout(state.layoutId)) state.deptLayout = LAYOUT_IMAGE;
+    if (!isLabourDeptLayoutState(state)) state.deptLayout = LAYOUT_IMAGE;
     state.cascadeAdditionalOptions = false;
 
     if (state.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
       state.title = "Details";
       state.technical = prior.technical || "";
       state.blurb = prior.blurb || "";
-      state.hidden = false;
+      state.hidden = true;
       state.additionalOptions = false;
       state.cascadeAdditionalOptions = false;
     }
@@ -4154,7 +4250,7 @@
 
     return JSON.stringify({
       layoutId: state.layoutId,
-      deptLayout: state.layoutId === GENERIC_LAYOUTS.DEPT_TABLE ? normaliseLayout(state.deptLayout) : "",
+      deptLayout: isLabourDeptLayoutState(state) ? normaliseLayout(state.deptLayout) : "",
       renderType: state.renderType,
       title: $.trim(String(state.title || "")),
       titleSuffix: String(state.titleSuffix || ""),
@@ -4221,6 +4317,7 @@
       editor.current = clone(state);
       if (options.rerender !== false) renderEditor(editor.current);
       if (options.successMessage) setStatus(options.successMessage, "success");
+      if (options.refreshPreview !== false) refreshEditorPreviewForCurrentHeadingSoon();
       return { ok: true, changed: false, state: normaliseGenericState(state), tree: tree };
     }
 
@@ -4244,6 +4341,7 @@
         refreshSupplyingList();
         setTimeout(refreshSupplyingList, 900);
       }
+      if (options.refreshPreview !== false) refreshEditorPreviewForCurrentHeadingSoon();
       return { ok: true, changed: true, state: saved, tree: tree };
     } catch (err) {
       warn("Generic page save failed", err);
@@ -4336,7 +4434,7 @@
     var saved = normaliseGenericState(clone(state));
     if (saved.layoutId === GENERIC_LAYOUTS.DETAILS_CONTAINER) {
       saved.title = "Details";
-      saved.hidden = false;
+      saved.hidden = true;
       saved.additionalOptions = false;
       saved.cascadeAdditionalOptions = false;
     }
@@ -4723,6 +4821,18 @@
 
   async function openTechnicalUsePicker(state) {
     state = normaliseGenericState(state || editor.current || {});
+
+    var persisted = await persistGenericStateIfNeeded({
+      savingMessage: "Saving client revenue lines before opening HireHop's listed-item picker...",
+      errorMessage: "Could not save the costing page before opening the listed-item picker.",
+      rerender: true,
+      refreshList: true,
+      successMessage: "Saved. Preparing // Technical Use..."
+    });
+    if (!persisted.ok) return;
+
+    state = normaliseGenericState(persisted.state || editor.current || state);
+
     var jobId = getCurrentJobId();
     if (!jobId || !state.rootId) {
       setStatus("Save this costing page first, then add listed internal items.", "warning");
