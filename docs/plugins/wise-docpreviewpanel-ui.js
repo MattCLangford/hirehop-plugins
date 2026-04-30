@@ -1127,11 +1127,27 @@
   }
 
   function getSelectedSupplyingNodeIds() {
+    var overrideIds = getProposalEditorPreviewSelectionOverride();
+    if (overrideIds.length) return overrideIds;
+
     var nodes = getSelectedSupplyingNodes();
     var ids = [];
 
     for (var i = 0; i < nodes.length; i++) {
       if (nodes[i].id) ids.push(nodes[i].id);
+    }
+
+    return ids;
+  }
+
+  function getProposalEditorPreviewSelectionOverride() {
+    var source = window.wiseProposalEditorPreviewSelectionIds;
+    if (!Array.isArray(source)) return [];
+
+    var ids = [];
+    for (var i = 0; i < source.length; i++) {
+      var id = $.trim(String(source[i] == null ? "" : source[i]));
+      if (id && ids.indexOf(id) === -1) ids.push(id);
     }
 
     return ids;
